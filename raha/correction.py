@@ -35,6 +35,9 @@ import raha
 
 
 ########################################
+
+from IPython.core.debugger import set_trace
+
 class Correction:
     """
     The main class.
@@ -331,8 +334,10 @@ class Correction:
             results_dictionary = {}
             if j != ed["column"] and cv in models[j][ed["column"]]:
                 sum_scores = sum(models[j][ed["column"]][cv].values())
+                set_trace()
                 for new_value in models[j][ed["column"]][cv]:
                     pr = models[j][ed["column"]][cv][new_value] / sum_scores
+                    set_trace()
                     if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                         results_dictionary[new_value] = pr
             results_list.append(results_dictionary)
@@ -463,6 +468,8 @@ class Correction:
         This method generates features for each data column in a parallel process.
         """
         d, cell = args
+
+        # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
         value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
         vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
@@ -475,6 +482,27 @@ class Correction:
                     corrections_features[correction] = numpy.zeros(len(models_corrections))
                 corrections_features[correction][mi] = model[correction]
         return corrections_features
+
+    def generate_features_synchronously(self, d):
+        """
+        Same as generate_features, but without the multiprocessing to make
+        my life easier understanding the code.
+        """
+        d.pair_features = {}
+        pairs_counter = 0
+        process_args_list = [[d, cell] for cell in d.detected_cells]
+        feature_generation_results = []
+        for args_list in process_args_list:
+            result = self._feature_generator_process(args_list)
+            feature_generation_results.append(result)
+        for ci, corrections_features in enumerate(feature_generation_results):
+            cell = process_args_list[ci][1]
+            d.pair_features[cell] = {}
+            for correction in corrections_features:
+                d.pair_features[cell][correction] = corrections_features[correction]
+                pairs_counter += 1
+        if self.VERBOSE:
+            print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
     def generate_features(self, d):
         """
@@ -585,7 +613,8 @@ class Correction:
             # else:
             #   In this case, user should label the tuple interactively as shown in the Jupyter notebook.
             self.update_models(d)
-            self.generate_features(d)
+            #self.generate_features(d)
+            self.generate_features_synchronously(d)
             self.predict_corrections(d)
             if self.VERBOSE:
                 print("------------------------------------------------------------------------")
