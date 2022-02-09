@@ -328,6 +328,16 @@ class Correction:
     def _vicinity_based_corrector(self, models, ed):
         """
         This method takes the vicinity-based models and an error dictionary to generate potential vicinity-based corrections.
+
+        Notizen:
+        ed: {   'column': column int,
+                'old_value': old error value,
+                'vicinity': row that contains the error, including the error
+        }
+        models: List[Dict[Dict[Dict]]]
+
+        - Der Index der Liste ist die Spalte
+        - Der Key des ersten Dicts ist die Spalte, von der
         """
         results_list = []
         for j, cv in enumerate(ed["vicinity"]):
@@ -380,11 +390,20 @@ class Correction:
             d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
             if self.VERBOSE:
                 print("The pretrained value-based models are loaded.")
+        # a dict with each column as key containing a dict for each column as key
         d.vicinity_models = {j: {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
         d.domain_models = {}
+
+        # Sieht so aus als würde hier die FD berechnet und in d.vicinity_models
+        # eingefügt werden.
         for row in d.dataframe.itertuples():
             i, row = row[0], row[1:]
+            # Das ist richtig cool: Jeder Wert des Tupels wird untersucht und
+            # es wird überprüft, ob dieser Wert ein aus Error Detection bekannter
+            # Fehler ist. Wenn dem so ist, wird der Wert durch das IGNORE_SIGN
+            # ersetzt.
             vicinity_list = [cv if (i, cj) not in d.detected_cells else self.IGNORE_SIGN for cj, cv in enumerate(row)]
+            set_trace()
             for j, value in enumerate(row):
                 if (i, j) not in d.detected_cells:
                     temp_vicinity_list = list(vicinity_list)
@@ -394,6 +413,7 @@ class Correction:
                         "new_value": value,
                         "vicinity": temp_vicinity_list
                     }
+                    set_trace()
                     self._vicinity_based_models_updater(d.vicinity_models, update_dictionary)
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
         if self.VERBOSE:
@@ -448,8 +468,12 @@ class Correction:
                 "old_value": d.dataframe.iloc[cell],
                 "new_value": cleaned_sampled_tuple[j],
             }
+
+            # if the value in that cell has been labelled an error...
             if d.labeled_cells[cell][0] == 1:
+                # and the cell hasn't been detected as an error...
                 if cell not in d.detected_cells:
+                    # add that cell to detected_cells and assign it IGNORE_SIGN
                     d.detected_cells[cell] = self.IGNORE_SIGN
                     self._to_model_adder(d.column_errors, cell[1], cell)
                 self._value_based_models_updater(d.value_models, update_dictionary)
@@ -459,7 +483,9 @@ class Correction:
             else:
                 update_dictionary["vicinity"] = [cv if j != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
+            set_trace()
             self._vicinity_based_models_updater(d.vicinity_models, update_dictionary)
+
         if self.VERBOSE:
             print("The error corrector models are updated with new labeled tuple {}.".format(d.sampled_tuple))
 
