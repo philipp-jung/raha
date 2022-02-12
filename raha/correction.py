@@ -188,6 +188,19 @@ class Correction:
             return json.dumps([unicodedata.category(c) for c in value])
 
     @staticmethod
+    def _to_model_constant(model, key, value):
+        """
+        This methods incrementally adds a key-value into a dictionary-implemented model.
+        Philipp hat es kaputt gemacht um zu testen, was passiert, wenn man die
+        Vicinity models auslässt.
+        """
+        if key not in model:
+            model[key] = {}
+        if value not in model[key]:
+            model[key][value] = 0.0
+        model[key][value] = 1.0
+
+    @staticmethod
     def _to_model_adder(model, key, value):
         """
         This methods incrementally adds a key-value into a dictionary-implemented model.
@@ -278,7 +291,8 @@ class Correction:
         """
         for j, cv in enumerate(ud["vicinity"]):
             if cv != self.IGNORE_SIGN:
-                self._to_model_adder(models[j][ud["column"]], cv, ud["new_value"])
+                self._to_model_constant(models[j][ud["column"]], cv, ud["new_value"])
+                # self._to_model_adder(models[j][ud["column"]], cv, ud["new_value"])
 
     def _domain_based_model_updater(self, model, ud):
         """
@@ -344,10 +358,8 @@ class Correction:
             results_dictionary = {}
             if j != ed["column"] and cv in models[j][ed["column"]]:
                 sum_scores = sum(models[j][ed["column"]][cv].values())
-                set_trace()
                 for new_value in models[j][ed["column"]][cv]:
                     pr = models[j][ed["column"]][cv][new_value] / sum_scores
-                    set_trace()
                     if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                         results_dictionary[new_value] = pr
             results_list.append(results_dictionary)
@@ -403,7 +415,6 @@ class Correction:
             # Fehler ist. Wenn dem so ist, wird der Wert durch das IGNORE_SIGN
             # ersetzt.
             vicinity_list = [cv if (i, cj) not in d.detected_cells else self.IGNORE_SIGN for cj, cv in enumerate(row)]
-            set_trace()
             for j, value in enumerate(row):
                 if (i, j) not in d.detected_cells:
                     temp_vicinity_list = list(vicinity_list)
@@ -413,7 +424,6 @@ class Correction:
                         "new_value": value,
                         "vicinity": temp_vicinity_list
                     }
-                    set_trace()
                     self._vicinity_based_models_updater(d.vicinity_models, update_dictionary)
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
         if self.VERBOSE:
@@ -483,7 +493,6 @@ class Correction:
             else:
                 update_dictionary["vicinity"] = [cv if j != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
-            set_trace()
             self._vicinity_based_models_updater(d.vicinity_models, update_dictionary)
 
         if self.VERBOSE:
