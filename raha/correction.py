@@ -185,6 +185,33 @@ class Correction:
             return json.dumps([unicodedata.category(c) for c in value])
 
     @staticmethod
+    def _to_model_constant(model, key, value):
+        """
+        This methods incrementally adds a key-value into a dictionary-implemented model.
+        Philipp hat es kaputt gemacht um zu testen, was passiert, wenn man die
+        Vicinity models statisch auf 1 setzt.
+        """
+        if key not in model:
+            model[key] = {}
+        if value not in model[key]:
+            model[key][value] = 0.0
+        model[key][value] = 1.0
+
+    @staticmethod
+    def _to_model_ente(model, key, value):
+        """
+        This methods incrementally adds a key-value into a dictionary-implemented model.
+        Philipp hat es kaputt gemacht um zu testen, was passiert, wenn man die
+        Vicinity models komplett auslässt.
+        """
+        value = 'ente'
+        if key not in model:
+            model[key] = {}
+        if value not in model[key]:
+            model[key][value] = 0.0
+        model[key][value] = 1.0
+
+    @staticmethod
     def _to_model_adder(model, key, value):
         """
         This methods incrementally adds a key-value into a dictionary-implemented model.
@@ -269,13 +296,20 @@ class Correction:
         if self.VERBOSE:
             print("The pretrained value-based models are stored in {}.".format(pretrained_models_path))
 
-    def _vicinity_based_models_updater(self, models, ud):
+    def _vicinity_based_models_updater(self, d, models, ud):
         """
         This method updates the vicinity-based error corrector models with a given update dictionary.
         """
         for j, cv in enumerate(ud["vicinity"]):
             if cv != self.IGNORE_SIGN:
-                self._to_model_adder(models[j][ud["column"]], cv, ud["new_value"])
+                if d.experiment == 'adder':
+                    self._to_model_adder(models[j][ud["column"]], cv, ud["new_value"])
+                elif d.experiment == 'constant':
+                    self._to_model_constant(models[j][ud["column"]], cv, ud["new_value"])
+                elif d.experiment == 'ente':
+                    self._to_model_ente(models[j][ud["column"]], cv, ud["new_value"])
+                elif d.experiment == 'disable_vicinity':
+                    pass
 
     def _domain_based_model_updater(self, model, ud):
         """
@@ -389,7 +423,7 @@ class Correction:
                         "new_value": value,
                         "vicinity": temp_vicinity_list
                     }
-                    self._vicinity_based_models_updater(d.vicinity_models, update_dictionary)
+                    self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
         if self.VERBOSE:
             print("The error corrector models are initialized.")
@@ -454,7 +488,7 @@ class Correction:
             else:
                 update_dictionary["vicinity"] = [cv if j != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
-            self._vicinity_based_models_updater(d.vicinity_models, update_dictionary)
+            self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
         if self.VERBOSE:
             print("The error corrector models are updated with new labeled tuple {}.".format(d.sampled_tuple))
 
