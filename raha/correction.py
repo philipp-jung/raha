@@ -31,6 +31,7 @@ import sklearn.naive_bayes
 import sklearn.linear_model
 
 import raha
+from IPython.core.debugger import set_trace
 ########################################
 
 
@@ -428,10 +429,11 @@ class Correction:
         if self.VERBOSE:
             print("The error corrector models are initialized.")
 
-    def sample_tuple(self, d):
+    def sample_tuple(self, d, random_seed):
         """
         This method samples a tuple.
         """
+        numpy.random.seed(random_seed)
         remaining_column_erroneous_cells = {}
         remaining_column_erroneous_values = {}
         for j in d.column_errors:
@@ -529,7 +531,7 @@ class Correction:
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
-    def predict_corrections(self, d):
+    def predict_corrections(self, d, random_seed):
         """
         This method predicts
         """
@@ -549,19 +551,19 @@ class Correction:
                             x_test.append(d.pair_features[cell][correction])
                             test_cell_correction_list.append([cell, correction])
             if self.CLASSIFICATION_MODEL == "ABC":
-                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100, random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "DTC":
-                classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini")
+                classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini", random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "GBC":
-                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100)
+                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100, random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "GNB":
-                classification_model = sklearn.naive_bayes.GaussianNB()
+                classification_model = sklearn.naive_bayes.GaussianNB(random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "KNC":
-                classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1)
+                classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1, random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "SGDC":
-                classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
+                classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2", random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "SVC":
-                classification_model = sklearn.svm.SVC(kernel="sigmoid")
+                classification_model = sklearn.svm.SVC(kernel="sigmoid", random_state=random_seed)
             if x_train and x_test:
                 if sum(y_train) == 0:
                     predicted_labels = numpy.zeros(len(x_test))
