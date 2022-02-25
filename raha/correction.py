@@ -29,6 +29,7 @@ import sklearn.svm
 import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
+import pandas as pd
 
 import raha
 from IPython.core.debugger import set_trace
@@ -357,7 +358,7 @@ class Correction:
                 results_list.append(results_dictionary)
         return results_list
 
-    def _vicinity_based_corrector(self, models, ed):
+    def _vicinity_based_corrector(self, models, ed, pdeps):
         """
         This method takes the vicinity-based models and an error dictionary to generate potential vicinity-based corrections.
         """
@@ -368,8 +369,9 @@ class Correction:
                 sum_scores = sum(models[j][ed["column"]][cv].values())
                 for new_value in models[j][ed["column"]][cv]:
                     pr = models[j][ed["column"]][cv][new_value] / sum_scores
-                    if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
-                        results_dictionary[new_value] = pr
+                    weighted_pr = pr * pdeps[j][ed["column"]]
+                    if weighted_pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
+                        results_dictionary[new_value] = weighted_pr
             results_list.append(results_dictionary)
         return results_list
 
@@ -401,11 +403,22 @@ class Correction:
         d.corrected_cells = {} if not hasattr(d, "corrected_cells") else d.corrected_cells
         return d
 
+    def _calc_pdep(self, d: dict, N: int, A: int, B: int):
+        counts_dict = d[A][B]
+        sum_components = []
+        for lhs_val, rhs_dict in counts_dict.items(): # lhs_val same as A_i
+            lhs_counts = sum(rhs_dict.values()) # same as a_i
+            for rhs_val, rhs_counts in rhs_dict.items(): # rhs_counts same as n_ij
+                sum_components.append(rhs_counts**2 / lhs_counts)
+        return sum(sum_components) / N
+
     def initialize_models(self, d):
         """
         This method initializes the error corrector models.
         """
         d.value_models = [{}, {}, {}, {}]
+        d.pdeps = {c: {cc: {} for cc in range(d.dataframe.shape[1])}
+         for c in range(d.dataframe.shape[1])}
         if os.path.exists(self.PRETRAINED_VALUE_BASED_MODELS_PATH):
             d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
             if self.VERBOSE:
@@ -426,6 +439,12 @@ class Correction:
                     }
                     self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
+        for lhs in d.pdeps:
+            for rhs in d.pdeps[lhs]:
+                d.pdeps[lhs][rhs] = self._calc_pdep(d.vicinity_models,
+                                    d.dataframe.shape[0],
+                                    lhs,
+                                    rhs)
         if self.VERBOSE:
             print("The error corrector models are initialized.")
 
@@ -501,7 +520,7 @@ class Correction:
         d, cell = args
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
         value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
-        vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
+        vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary, d.pdeps)
         domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
         models_corrections = value_corrections + vicinity_corrections + domain_corrections
         corrections_features = {}
