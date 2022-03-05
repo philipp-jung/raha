@@ -24,21 +24,30 @@ class Dataset:
     The dataset class.
     """
 
-    def __init__(self, dataset_dictionary):
+    def __init__(self, dataset_dictionary, n_rows=None):
         """
         The constructor creates a dataset.
+
+        If n_rows is specified, the dataset gets subsetted to the first
+        n_rows rows.
         """
         self.name = dataset_dictionary["name"]
         self.path = dataset_dictionary["path"]
         self.dataframe = self.read_csv_dataset(dataset_dictionary["path"])
+        if n_rows is not None:
+            self.dataframe = self.dataframe.iloc[:n_rows, :]
         if "clean_path" in dataset_dictionary:
             self.has_ground_truth = True
             self.clean_path = dataset_dictionary["clean_path"]
             self.clean_dataframe = self.read_csv_dataset(dataset_dictionary["clean_path"])
+            if n_rows is not None:
+                self.clean_dataframe = self.clean_dataframe.iloc[:n_rows, :]
         if "repaired_path" in dataset_dictionary:
             self.has_been_repaired = True
             self.repaired_path = dataset_dictionary["repaired_path"]
             self.repaired_dataframe = self.read_csv_dataset(dataset_dictionary["repaired_path"])
+            if n_rows is not None:
+                self.repaired_dataframe = self.repaired_dataframe.iloc[:n_rows, :]
 
     @staticmethod
     def value_normalizer(value):

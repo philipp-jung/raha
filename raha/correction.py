@@ -370,20 +370,18 @@ class Correction:
                 'old_value': old error value,
                 'vicinity': row that contains the error, including the error
         }
-        models: List[Dict[Dict[Dict]]]
+        models: Dict[Dict[Dict[Dict]]] [lhs][rhs][lhs_value][rhs_value]
 
-        - Der Index der Liste ist die Spalte
-        - Der Key des ersten Dicts ist die Spalte, von der
         """
         results_list = []
-        for j, cv in enumerate(ed["vicinity"]):
+        for lhs_col, cv in enumerate(ed["vicinity"]):
             results_dictionary = {}
-            if j != ed["column"] and cv in models[j][ed["column"]]:
-                sum_scores = sum(models[j][ed["column"]][cv].values())
-                for new_value in models[j][ed["column"]][cv]:
-                    pr = models[j][ed["column"]][cv][new_value] / sum_scores
+            if lhs_col != ed["column"] and cv in models[lhs_col][ed["column"]]:
+                sum_scores = sum(models[lhs_col][ed["column"]][cv].values())
+                for new_value in models[lhs_col][ed["column"]][cv]:
+                    pr = models[lhs_col][ed["column"]][cv][new_value] / sum_scores
                     if self.EXPERIMENT == 'pdep':  # weight the pr with pdep
-                        pr = pr * pdeps[j][ed["column"]]
+                        pr = pr * pdeps[lhs_col][ed["column"]]
                     if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                         results_dictionary[new_value] = pr
             results_list.append(results_dictionary)
@@ -689,15 +687,14 @@ class Correction:
                   "--------------Iterative Tuple Sampling, Labeling, and Learning----------\n"
                   "------------------------------------------------------------------------")
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
-            self.sample_tuple(d)
+            self.sample_tuple(d, random_seed=0)
             if d.has_ground_truth:
                 self.label_with_ground_truth(d)
             # else:
             #   In this case, user should label the tuple interactively as shown in the Jupyter notebook.
             self.update_models(d)
-            #self.generate_features(d)
-            self.generate_features_synchronously(d)
-            self.predict_corrections(d)
+            self.generate_features(d)
+            self.predict_corrections(d, random_seed=0)
             if self.VERBOSE:
                 print("------------------------------------------------------------------------")
         if self.SAVE_RESULTS:
