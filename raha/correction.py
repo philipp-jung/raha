@@ -31,6 +31,7 @@ import sklearn.naive_bayes
 import sklearn.linear_model
 
 import raha
+from IPython.core.debugger import set_trace
 ########################################
 
 
@@ -59,6 +60,7 @@ class Correction:
         self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
         self.REVISION_WINDOW_SIZE = 5
+        self.EXPERIMENT = 'adder'
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -305,12 +307,14 @@ class Correction:
         """
         for j, cv in enumerate(ud["vicinity"]):
             if cv != self.IGNORE_SIGN:
-                if d.experiment == 'adder':
+                if self.EXPERIMENT == 'adder' or self.EXPERIMENT == 'pdep':
                     self._to_model_adder(models[j][ud["column"]], cv, ud["new_value"])
-                elif d.experiment == 'constant':
+                elif self.EXPERIMENT == 'constant':
                     self._to_model_constant(models[j][ud["column"]], cv, ud["new_value"])
-                elif d.experiment == 'ente':
+                elif self.EXPERIMENT == 'ente':
                     self._to_model_ente(models[j][ud["column"]], cv, ud["new_value"])
+                elif self.EXPERIMENT == 'disable_vicinity':
+                    pass
 
     def _domain_based_model_updater(self, model, ud):
         """
@@ -357,7 +361,7 @@ class Correction:
                 results_list.append(results_dictionary)
         return results_list
 
-    def _vicinity_based_corrector(self, models, ed):
+    def _vicinity_based_corrector(self, models, ed, pdeps):
         """
         This method takes the vicinity-based models and an error dictionary to generate potential vicinity-based corrections.
 
@@ -378,6 +382,8 @@ class Correction:
                 sum_scores = sum(models[j][ed["column"]][cv].values())
                 for new_value in models[j][ed["column"]][cv]:
                     pr = models[j][ed["column"]][cv][new_value] / sum_scores
+                    if self.EXPERIMENT == 'pdep':  # weight the pr with pdep
+                        pr = pr * pdeps[j][ed["column"]]
                     if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                         results_dictionary[new_value] = pr
             results_list.append(results_dictionary)
@@ -411,11 +417,22 @@ class Correction:
         d.corrected_cells = {} if not hasattr(d, "corrected_cells") else d.corrected_cells
         return d
 
+    def _calc_pdep(self, d: dict, N: int, A: int, B: int):
+        counts_dict = d[A][B]
+        sum_components = []
+        for lhs_val, rhs_dict in counts_dict.items(): # lhs_val same as A_i
+            lhs_counts = sum(rhs_dict.values()) # same as a_i
+            for rhs_val, rhs_counts in rhs_dict.items(): # rhs_counts same as n_ij
+                sum_components.append(rhs_counts**2 / lhs_counts)
+        return sum(sum_components) / N
+
     def initialize_models(self, d):
         """
         This method initializes the error corrector models.
         """
         d.value_models = [{}, {}, {}, {}]
+        d.pdeps = {c: {cc: {} for cc in range(d.dataframe.shape[1])}
+         for c in range(d.dataframe.shape[1])}
         if os.path.exists(self.PRETRAINED_VALUE_BASED_MODELS_PATH):
             d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
             if self.VERBOSE:
@@ -444,6 +461,12 @@ class Correction:
                     }
                     self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
+        for lhs in d.pdeps:
+            for rhs in d.pdeps[lhs]:
+                d.pdeps[lhs][rhs] = self._calc_pdep(d.vicinity_models,
+                                    d.dataframe.shape[0],
+                                    lhs,
+                                    rhs)
         if self.VERBOSE:
             print("The error corrector models are initialized.")
 
@@ -453,7 +476,7 @@ class Correction:
         Philipp extended this with a random_seed to make runs (more?) reprodu-
         cible.
         """
-        numpy.random.seed(random_seed)
+        rng = numpy.random.default_rng(seed=random_seed)
         remaining_column_erroneous_cells = {}
         remaining_column_erroneous_values = {}
         for j in d.column_errors:
@@ -469,7 +492,7 @@ class Correction:
                 column_score = math.exp(len(remaining_column_erroneous_cells[j]) / len(d.column_errors[j]))
                 cell_score = math.exp(remaining_column_erroneous_values[j][value] / len(remaining_column_erroneous_cells[j]))
                 tuple_score[cell[0]] *= column_score * cell_score
-        d.sampled_tuple = numpy.random.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
+        d.sampled_tuple = rng.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
         if self.VERBOSE:
             print("Tuple {} is sampled.".format(d.sampled_tuple))
 
@@ -515,7 +538,6 @@ class Correction:
                 update_dictionary["vicinity"] = [cv if j != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
             self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
-
         if self.VERBOSE:
             print("The error corrector models are updated with new labeled tuple {}.".format(d.sampled_tuple))
 
@@ -528,7 +550,7 @@ class Correction:
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
         value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
-        vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
+        vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary, d.pdeps)
         domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
         models_corrections = value_corrections + vicinity_corrections + domain_corrections
         corrections_features = {}
@@ -607,20 +629,15 @@ class Correction:
             if self.CLASSIFICATION_MODEL == "DTC":
                 classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini", random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "GBC":
-                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100,
-                        random_state=random_seed)
+                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100, random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "GNB":
                 classification_model = sklearn.naive_bayes.GaussianNB(random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "KNC":
-                classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1,
-                        random_state=random_seed)
+                classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1, random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "SGDC":
-                classification_model = sklearn.linear_model.SGDClassifier(loss="hinge",
-                        penalty="l2",
-                        random_state=random_seed)
+                classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2", random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "SVC":
-                classification_model = sklearn.svm.SVC(kernel="sigmoid")
-            breakpoint()
+                classification_model = sklearn.svm.SVC(kernel="sigmoid", random_state=random_seed)
             if x_train and x_test:
                 if sum(y_train) == 0:
                     predicted_labels = numpy.zeros(len(x_test))
