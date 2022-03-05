@@ -61,6 +61,7 @@ class Correction:
         self.MAX_VALUE_LENGTH = 50
         self.REVISION_WINDOW_SIZE = 5
         self.EXPERIMENT = 'adder'
+        self.VICINITY_ONLY = False
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -550,7 +551,12 @@ class Correction:
         value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
         vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary, d.pdeps)
         domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
-        models_corrections = value_corrections + vicinity_corrections + domain_corrections
+
+        if self.VICINITY_ONLY == True:
+            models_corrections = vicinity_corrections
+        else:
+            models_corrections = value_corrections + vicinity_corrections + domain_corrections
+
         corrections_features = {}
         for mi, model in enumerate(models_corrections):
             for correction in model:
@@ -622,20 +628,19 @@ class Correction:
                             x_test.append(d.pair_features[cell][correction])
                             test_cell_correction_list.append([cell, correction])
             if self.CLASSIFICATION_MODEL == "ABC":
-                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100,
-                        random_state=random_seed)
+                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
             if self.CLASSIFICATION_MODEL == "DTC":
                 classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini", random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "GBC":
-                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100, random_state=random_seed)
+                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100)
             if self.CLASSIFICATION_MODEL == "GNB":
-                classification_model = sklearn.naive_bayes.GaussianNB(random_state=random_seed)
+                classification_model = sklearn.naive_bayes.GaussianNB()
             if self.CLASSIFICATION_MODEL == "KNC":
-                classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1, random_state=random_seed)
+                classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1)
             if self.CLASSIFICATION_MODEL == "SGDC":
-                classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2", random_state=random_seed)
+                classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
             if self.CLASSIFICATION_MODEL == "SVC":
-                classification_model = sklearn.svm.SVC(kernel="sigmoid", random_state=random_seed)
+                classification_model = sklearn.svm.SVC(kernel="sigmoid")
             if x_train and x_test:
                 if sum(y_train) == 0:
                     predicted_labels = numpy.zeros(len(x_test))
