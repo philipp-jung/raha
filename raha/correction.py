@@ -31,7 +31,9 @@ import sklearn.naive_bayes
 import sklearn.linear_model
 
 import raha
+
 from IPython.core.debugger import set_trace
+from itertools import combinations
 ########################################
 
 
@@ -62,6 +64,7 @@ class Correction:
         self.REVISION_WINDOW_SIZE = 5
         self.EXPERIMENT = 'adder'
         self.VICINITY_ONLY = False
+        self.SECOND_ORDER_VICINITY = False
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -388,6 +391,34 @@ class Correction:
             results_list.append(results_dictionary)
         return results_list
 
+
+    def _vicinity_based_corrector_order_two(self, models, ed):
+        """
+        This method takes the vicinity-based models and an error dictionary to generate potential vicinity-based corrections.
+
+        Notizen:
+        ed: {   'column': column int,
+                'old_value': old error value,
+                'vicinity': row that contains the error, including the error
+        }
+        models: Dict[Dict[Dict[Dict]]] [lhs][rhs][lhs_value][rhs_value]
+
+        """
+        rhs_col = ed["column"]
+        results_list = []
+        results_dictionary = {}
+        for lhs_cols in combinations(list(range(len(ed['vicinity']))), 2):
+            for lhs_vals in combinations(ed["vicinity"], 2):
+                results_dictionary = {}
+                if rhs_col not in lhs_cols and lhs_vals in models[lhs_cols][rhs_col]:
+                    sum_scores = sum(models[lhs_cols][rhs_col][lhs_vals].values())
+                    for rhs_val in models[lhs_cols][rhs_col][lhs_vals]:
+                        pr = models[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
+                        if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
+                            results_dictionary[rhs_val] = pr
+            results_list.append(results_dictionary)
+        return results_list
+
     def _domain_based_corrector(self, model, ed):
         """
         This method takes a domain-based model and an error dictionary to generate potential domain-based corrections.
@@ -425,6 +456,7 @@ class Correction:
                 sum_components.append(rhs_counts**2 / lhs_counts)
         return sum(sum_components) / N
 
+
     def initialize_models(self, d):
         """
         This method initializes the error corrector models.
@@ -438,10 +470,11 @@ class Correction:
                 print("The pretrained value-based models are loaded.")
         # a dict with each column as key containing a dict for each column as key
         d.vicinity_models = {j: {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
+        d.vicinity_models_order_two = {comb: {cc: {} for cc in range(d.dataframe.shape[1])}
+         for comb in combinations(list(range(d.dataframe.shape[1])), 2)}
+
         d.domain_models = {}
 
-        # Sieht so aus als würde hier die FD berechnet und in d.vicinity_models
-        # eingefügt werden.
         for row in d.dataframe.itertuples():
             i, row = row[0], row[1:]
             # Das ist richtig cool: Jeder Wert des Tupels wird untersucht und
@@ -450,6 +483,7 @@ class Correction:
             # ersetzt.
             vicinity_list = [cv if (i, cj) not in d.detected_cells else self.IGNORE_SIGN for cj, cv in enumerate(row)]
             for j, value in enumerate(row):
+                # if rhs_value's position is not a known error
                 if (i, j) not in d.detected_cells:
                     temp_vicinity_list = list(vicinity_list)
                     temp_vicinity_list[j] = self.IGNORE_SIGN
@@ -460,12 +494,31 @@ class Correction:
                     }
                     self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
+
+        # BEGIN Philipp's changes
+            for lhs_cols in combinations(list(range(d.dataframe.shape[1])), 2):
+                for rhs_col in range(d.dataframe.shape[1]):
+                    if rhs_col not in lhs_cols:
+                        lhs_vals = tuple(vicinity_list[lhs_col] for lhs_col in lhs_cols)
+                        # if lhs_value doesn't contain known errors
+                        if self.IGNORE_SIGN not in lhs_vals:
+                            if d.vicinity_models_order_two[lhs_cols][rhs_col].get(lhs_vals) is None:
+                                d.vicinity_models_order_two[lhs_cols][rhs_col][lhs_vals] = {}
+                            rhs_val = vicinity_list[rhs_col]
+                            # if rhs_value's position is not a known error
+                            if (i, rhs_col) not in d.detected_cells:
+                                if d.vicinity_models_order_two[lhs_cols][rhs_col][lhs_vals].get(rhs_val) is None:
+                                    d.vicinity_models_order_two[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
+                                else:
+                                    d.vicinity_models_order_two[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
+
         for lhs in d.pdeps:
             for rhs in d.pdeps[lhs]:
                 d.pdeps[lhs][rhs] = self._calc_pdep(d.vicinity_models,
                                     d.dataframe.shape[0],
                                     lhs,
                                     rhs)
+        # END Philipp's changes
         if self.VERBOSE:
             print("The error corrector models are initialized.")
 
@@ -527,6 +580,8 @@ class Correction:
                 # and the cell hasn't been detected as an error...
                 if cell not in d.detected_cells:
                     # add that cell to detected_cells and assign it IGNORE_SIGN
+                    # komisch wirklich, wann ist das denn bitteschön der Fall?
+                    # Dass man eine Zelle labelt, die nicht in detected_cells ist?
                     d.detected_cells[cell] = self.IGNORE_SIGN
                     self._to_model_adder(d.column_errors, cell[1], cell)
                 self._value_based_models_updater(d.value_models, update_dictionary)
@@ -537,6 +592,20 @@ class Correction:
                 update_dictionary["vicinity"] = [cv if j != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
             self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
+
+        # BEGIN Philipp's changes
+        for lhs_cols in combinations(list(range(d.dataframe.shape[1])), 2):
+            for rhs_col in range(d.dataframe.shape[1]):
+                lhs_vals = tuple(cleaned_sampled_tuple[lhs_col] for lhs_col in lhs_cols)
+                if d.vicinity_models_order_two[lhs_cols][rhs_col].get(lhs_vals) is None:
+                    d.vicinity_models_order_two[lhs_cols][rhs_col][lhs_vals] = {}
+                rhs_val = cleaned_sampled_tuple[rhs_col]
+                if d.vicinity_models_order_two[lhs_cols][rhs_col][lhs_vals].get(rhs_val) is None:
+                    d.vicinity_models_order_two[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
+                else:
+                    d.vicinity_models_order_two[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
+        # END Philipp's changes
+
         if self.VERBOSE:
             print("The error corrector models are updated with new labeled tuple {}.".format(d.sampled_tuple))
 
@@ -548,14 +617,19 @@ class Correction:
 
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
-        value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
-        vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary, d.pdeps)
-        domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
 
-        if self.VICINITY_ONLY == True:
-            models_corrections = vicinity_corrections
-        else:
-            models_corrections = value_corrections + vicinity_corrections + domain_corrections
+        vicinity_corrections, vc_order_two, value_corrections, domain_corrections = [], [], [], []
+
+        vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary, d.pdeps)
+
+        if self.SECOND_ORDER_VICINITY:  # takes a lot of resources to compute
+            vc_order_two = self._vicinity_based_corrector_order_two(d.vicinity_models_order_two, error_dictionary)
+
+        if not self.VICINITY_ONLY:  # skip if not required for experiment
+            value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
+            domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
+
+        models_corrections = value_corrections + vicinity_corrections + vc_order_two + domain_corrections
 
         corrections_features = {}
         for mi, model in enumerate(models_corrections):
