@@ -31,8 +31,8 @@ import sklearn.naive_bayes
 import sklearn.linear_model
 
 import raha
+from raha import imputer
 
-from IPython.core.debugger import set_trace
 from itertools import combinations
 ########################################
 
@@ -65,6 +65,7 @@ class Correction:
         self.EXPERIMENT = 'adder'
         self.VICINITY_ONLY = False
         self.SECOND_ORDER_VICINITY = False
+        self.IMPUTER_FEATURE_GENERATOR = False
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -617,20 +618,16 @@ class Correction:
 
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
-
         vicinity_corrections, vc_order_two, value_corrections, domain_corrections = [], [], [], []
-
         vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary, d.pdeps)
 
         if self.SECOND_ORDER_VICINITY:  # takes a lot of resources to compute
             vc_order_two = self._vicinity_based_corrector_order_two(d.vicinity_models_order_two, error_dictionary)
-
         if not self.VICINITY_ONLY:  # skip if not required for experiment
             value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
 
         models_corrections = value_corrections + vicinity_corrections + vc_order_two + domain_corrections
-
         corrections_features = {}
         for mi, model in enumerate(models_corrections):
             for correction in model:
@@ -657,6 +654,10 @@ class Correction:
             for correction in corrections_features:
                 d.pair_features[cell][correction] = corrections_features[correction]
                 pairs_counter += 1
+
+        if self.IMPUTER_FEATURE_GENERATOR:
+            self.imputer_feature_generator(d)  # TODO parallelize this
+
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
@@ -670,12 +671,17 @@ class Correction:
         pool = multiprocessing.Pool()
         feature_generation_results = pool.map(self._feature_generator_process, process_args_list)
         pool.close()
+
         for ci, corrections_features in enumerate(feature_generation_results):
             cell = process_args_list[ci][1]
             d.pair_features[cell] = {}
             for correction in corrections_features:
                 d.pair_features[cell][correction] = corrections_features[correction]
                 pairs_counter += 1
+
+        if self.IMPUTER_FEATURE_GENERATOR:
+            self.imputer_feature_generator(d)  # TODO parallelize this
+
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
@@ -691,7 +697,7 @@ class Correction:
             y_train = []
             x_test = []
             test_cell_correction_list = []
-            for k, cell in enumerate(d.column_errors[j]):
+            for _, cell in enumerate(d.column_errors[j]):
                 if cell in d.pair_features:
                     for correction in d.pair_features[cell]:
                         if cell in d.labeled_cells and d.labeled_cells[cell][0] == 1:
@@ -702,7 +708,7 @@ class Correction:
                             x_test.append(d.pair_features[cell][correction])
                             test_cell_correction_list.append([cell, correction])
             if self.CLASSIFICATION_MODEL == "ABC":
-                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100, random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "DTC":
                 classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini", random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "GBC":
@@ -735,6 +741,23 @@ class Correction:
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(100 * len(d.corrected_cells) / len(d.detected_cells),
                                                                            len(d.corrected_cells), len(d.detected_cells)))
+
+    def imputer_feature_generator(self, d):
+        """
+        After the Baran-style cleaning has been finished, train an imputer
+        model on top of it to try and improve performance a bit.
+        """
+        d.create_repaired_dataset(d.corrected_cells)
+        imputer_corrections = imputer.imputation_based_corrector(d)
+        for i_column in imputer_corrections:
+            for imputer_correction in imputer_corrections[i_column]:
+                for error_cell in d.pair_features:
+                    for correction in d.pair_features[error_cell]:
+                        if correction == list(imputer_correction.keys())[0]:
+                            p = 1
+                        else:
+                            p = 0
+                        d.pair_features[error_cell][correction] = numpy.append(d.pair_features[error_cell][correction], p)
 
     def store_results(self, d):
         """

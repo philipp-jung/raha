@@ -96,6 +96,12 @@ class Dataset:
         for cell in correction_dictionary:
             self.repaired_dataframe.iloc[cell] = self.value_normalizer(correction_dictionary[cell])
 
+    def get_df_from_labeled_tuples(self):
+        """
+        Added by Philipp. Turns the labeled tuples into a dataframe.
+        """
+        return self.clean_dataframe.iloc[list(self.labeled_tuples.keys()), :]
+
     def get_actual_errors_dictionary(self):
         """
         This method compares the clean and dirty versions of a dataset.
