@@ -164,7 +164,7 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
     return results_list
 
 
-def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df):
+def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df, n_best_pdeps):
     """
     Leverage gpdep to avoid having correction suggestions grow at (n-1)^2 / 2,
     only take the 5 highest-scoring dependencies to draw corrections from.
@@ -178,9 +178,11 @@ def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df):
     """
     lhss = set([x for x in counts_dict.keys()])
     rhss = list(range(df.shape[1]))
+    pdeps = {lhs: {} for lhs in lhss}
     gpdeps = {lhs: {} for lhs in lhss}
     for lhs in lhss:
         for rhs in rhss:
+            pdeps[lhs][rhs] = calc_pdep(df, counts_dict, lhs, rhs)
             gpdeps[lhs][rhs] = calc_gpdep(df, counts_dict, lhs, rhs)
     inverse_gpdeps = {rhs: {} for rhs in range(df.shape[1])}
 
@@ -195,22 +197,26 @@ def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df):
 
     top_ten_pdeps = {rhs: [] for rhs in range(df.shape[1])}
     for rhs in inverse_gpdeps:
-        top_ten_pdeps[rhs] = list(inverse_gpdeps[rhs].items())[:10]
+        i = 0
+        j = 0
+        while i < n_best_pdeps:
+            lhs, gpdep_score = list(inverse_gpdeps[rhs].items())[j]
+            if rhs not in lhs:
+                top_ten_pdeps[rhs].append((lhs, gpdep_score))
+                i = i+1
+            j = j+1
 
     rhs_col = ed["column"]
     results_list = []
-    results_dictionary = {}
-
     # Only add correction if lhs is in top_10 for a given rhs.
     for lhs_cols, gpdep_score in top_ten_pdeps[rhs_col]:
         for lhs_vals in combinations(ed["vicinity"], len(lhs_cols)):
-            results_dictionary = {}
-            set_trace()
             if rhs_col not in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
+                results_dictionary = {}
                 sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
                 for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
                     pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
                     if pr >= probability_threshold:
                         results_dictionary[rhs_val] = pr
-            results_list.append(results_dictionary)
+                results_list.append(results_dictionary)
     return results_list
