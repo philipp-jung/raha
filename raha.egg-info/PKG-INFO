@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 1.1
 Name: raha
 Version: 1.25
 Summary: Raha and Baran: An End-to-End Data Cleaning System
@@ -7,9 +7,6 @@ Author: Mohammad Mahdavi
 Author-email: moh.mahdavi.l@gmail.com
 License: Apache 2.0
 Download-URL: https://github.com/BigDaMa/raha/archive/v1.25.tar.gz
+Description: UNKNOWN
 Keywords: Data Cleaning,Machine Learning,Error Detection,Error Correction,Data Repairing
 Platform: UNKNOWN
-License-File: LICENSE.md
-
-UNKNOWN
-
