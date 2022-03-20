@@ -447,7 +447,7 @@ class Correction:
             d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
             if self.VERBOSE:
                 print("The pretrained value-based models are loaded.")
-        # d.vicinity_models = {j: {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
+        d.vicinity_models = {j: {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
 
         d.domain_models = {}
 
@@ -468,13 +468,8 @@ class Correction:
                         "new_value": value,
                         "vicinity": temp_vicinity_list
                     }
-                    # self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
+                    self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
-        d.vicinity_models = pdep.calculate_counts_dict(
-                                        df=d.dataframe,
-                                        detected_cells=d.detected_cells,
-                                        order=1,
-                                        ignore_sign=self.IGNORE_SIGN)
         # BEGIN Philipp's changes
         if self.HIGHER_ORDER_FEATURE_GENERATOR != '':
             d.pdep_counts_dict = pdep.calculate_counts_dict(
@@ -555,11 +550,7 @@ class Correction:
             else:
                 update_dictionary["vicinity"] = [cv if j != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
-            #self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
-            pdep.update_counts_dict(d.dataframe,
-                    d.vicinity_models,
-                    1,
-                    cleaned_sampled_tuple)
+            self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
 
         # BEGIN Philipp's changes
         if self.HIGHER_ORDER_FEATURE_GENERATOR != '':
@@ -581,11 +572,7 @@ class Correction:
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
         vicinity_corrections, vc_order_n, value_corrections, domain_corrections = [], [], [], []
-        #vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary, d.pdeps)
-        vicinity_corrections = pdep.vicinity_based_corrector_order_n(d.vicinity_models,
-                error_dictionary,
-                self.MIN_CORRECTION_CANDIDATE_PROBABILITY
-                )
+        vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
 
 
         if self.HIGHER_ORDER_FEATURE_GENERATOR == 'pdep':
@@ -606,7 +593,6 @@ class Correction:
 
         models_corrections = value_corrections + vicinity_corrections + vc_order_n + domain_corrections
         corrections_features = {}
-        # set_trace()
         for mi, model in enumerate(models_corrections):
             for correction in model:
                 if correction not in corrections_features:

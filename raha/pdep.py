@@ -178,11 +178,9 @@ def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df, n_
     """
     lhss = set([x for x in counts_dict.keys()])
     rhss = list(range(df.shape[1]))
-    pdeps = {lhs: {} for lhs in lhss}
     gpdeps = {lhs: {} for lhs in lhss}
     for lhs in lhss:
         for rhs in rhss:
-            pdeps[lhs][rhs] = calc_pdep(df, counts_dict, lhs, rhs)
             gpdeps[lhs][rhs] = calc_gpdep(df, counts_dict, lhs, rhs)
     inverse_gpdeps = {rhs: {} for rhs in range(df.shape[1])}
 
