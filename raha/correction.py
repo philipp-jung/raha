@@ -33,8 +33,6 @@ import sklearn.linear_model
 import raha
 from raha import imputer
 from raha import pdep
-
-from itertools import combinations
 ########################################
 
 
@@ -320,11 +318,11 @@ class Correction:
         for j, cv in enumerate(ud["vicinity"]):
             if cv != self.IGNORE_SIGN:
                 if self.EXPERIMENT == 'adder' or self.EXPERIMENT == 'pdep':
-                    self._to_model_adder(models[j][ud["column"]], cv, ud["new_value"])
+                    self._to_model_adder(models[tuple([j])][ud["column"]], cv, ud["new_value"])
                 elif self.EXPERIMENT == 'constant':
-                    self._to_model_constant(models[j][ud["column"]], cv, ud["new_value"])
+                    self._to_model_constant(models[tuple([j])][ud["column"]], cv, ud["new_value"])
                 elif self.EXPERIMENT == 'ente':
-                    self._to_model_ente(models[j][ud["column"]], cv, ud["new_value"])
+                    self._to_model_ente(models[tuple([j])][ud["column"]], cv, ud["new_value"])
                 elif self.EXPERIMENT == 'disable_vicinity':
                     pass
 
@@ -388,10 +386,10 @@ class Correction:
         results_list = []
         for lhs_col, cv in enumerate(ed["vicinity"]):
             results_dictionary = {}
-            if lhs_col != ed["column"] and cv in models[lhs_col][ed["column"]]:
-                sum_scores = sum(models[lhs_col][ed["column"]][cv].values())
-                for new_value in models[lhs_col][ed["column"]][cv]:
-                    pr = models[lhs_col][ed["column"]][cv][new_value] / sum_scores
+            if lhs_col != ed["column"] and cv in models[tuple([lhs_col])][ed["column"]]:
+                sum_scores = sum(models[tuple([lhs_col])][ed["column"]][cv].values())
+                for new_value in models[tuple([lhs_col])][ed["column"]][cv]:
+                    pr = models[tuple([lhs_col])][ed["column"]][cv][new_value] / sum_scores
                     if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                         results_dictionary[new_value] = pr
             results_list.append(results_dictionary)
@@ -447,7 +445,8 @@ class Correction:
             d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
             if self.VERBOSE:
                 print("The pretrained value-based models are loaded.")
-        d.vicinity_models = {j: {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
+        #d.vicinity_models = {j: {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
+        d.vicinity_models = {tuple([j]): {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
 
         d.domain_models = {}
 
@@ -573,7 +572,6 @@ class Correction:
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
         vicinity_corrections, vc_order_n, value_corrections, domain_corrections = [], [], [], []
         vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
-
 
         if self.HIGHER_ORDER_FEATURE_GENERATOR == 'pdep':
             d.create_repaired_dataset(d.corrected_cells)
