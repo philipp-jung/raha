@@ -445,7 +445,6 @@ class Correction:
             d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
             if self.VERBOSE:
                 print("The pretrained value-based models are loaded.")
-        #d.vicinity_models = {j: {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
         d.vicinity_models = {tuple([j]): {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
 
         d.domain_models = {}
@@ -469,7 +468,13 @@ class Correction:
                     }
                     self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
+
         # BEGIN Philipp's changes
+        d.new_vicinity_models = pdep.calculate_counts_dict(
+                                    df=d.dataframe,
+                                    detected_cells=d.detected_cells,
+                                    order=self.VICINITY_ORDER,
+                                    ignore_sign=self.IGNORE_SIGN)
         if self.HIGHER_ORDER_FEATURE_GENERATOR != '':
             d.pdep_counts_dict = pdep.calculate_counts_dict(
                                         df=d.dataframe,
@@ -477,6 +482,7 @@ class Correction:
                                         order=self.VICINITY_ORDER,
                                         ignore_sign=self.IGNORE_SIGN)
         # END philipps changes
+
         if self.VERBOSE:
             print("The error corrector models are initialized.")
 
@@ -552,6 +558,7 @@ class Correction:
             self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
 
         # BEGIN Philipp's changes
+        pdep.update_counts_dict(d.dataframe, d.new_vicinity_models, 1, cleaned_sampled_tuple)
         if self.HIGHER_ORDER_FEATURE_GENERATOR != '':
             pdep.update_counts_dict(d.dataframe,
                     d.pdep_counts_dict,
@@ -573,6 +580,12 @@ class Correction:
         vicinity_corrections, vc_order_n, value_corrections, domain_corrections = [], [], [], []
         vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
 
+        # Begin Philipps Changes
+        d.vicinity_corrections = vicinity_corrections
+        d.new_vicinity_corrections = pdep.vicinity_based_corrector_order_n(d.new_vicinity_models,
+                error_dictionary,
+                self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
+
         if self.HIGHER_ORDER_FEATURE_GENERATOR == 'pdep':
             d.create_repaired_dataset(d.corrected_cells)
             vc_order_n = pdep.pdep_vicinity_based_corrector(d.pdep_counts_dict,
@@ -590,6 +603,8 @@ class Correction:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
 
         models_corrections = value_corrections + vicinity_corrections + vc_order_n + domain_corrections
+        # End Philipps Changes
+
         corrections_features = {}
         for mi, model in enumerate(models_corrections):
             for correction in model:

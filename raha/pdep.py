@@ -46,15 +46,14 @@ def calculate_counts_dict(df: pd.DataFrame,
             for rhs_col in i_cols:
                 if rhs_col not in lhs_cols:
                     lhs_vals = tuple(row[lhs_col] for lhs_col in lhs_cols)
-                    if ignore_sign not in lhs_vals:
+                    if ignore_sign not in lhs_vals and (i_row, rhs_col) not in detected_cells:
                         if d[lhs_cols][rhs_col].get(lhs_vals) is None:
                             d[lhs_cols][rhs_col][lhs_vals] = {}
                         rhs_val = row[rhs_col]
-                        if (i_row, rhs_col) not in detected_cells:
-                            if d[lhs_cols][rhs_col][lhs_vals].get(rhs_val) is None:
-                                d[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
-                            else:
-                                d[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
+                        if d[lhs_cols][rhs_col][lhs_vals].get(rhs_val) is None:
+                            d[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
+                        else:
+                            d[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
     return d
 
 def update_counts_dict(df: pd.DataFrame,
@@ -70,13 +69,14 @@ def update_counts_dict(df: pd.DataFrame,
         for rhs_col in i_cols:
             lhs_vals = tuple(cleaned_sampled_tuple[lhs_col] for lhs_col
                     in lhs_cols)
-            if counts_dict[lhs_cols][rhs_col].get(lhs_vals) is None:
-                counts_dict[lhs_cols][rhs_col][lhs_vals] = {}
-            rhs_val = cleaned_sampled_tuple[rhs_col]
-            if counts_dict[lhs_cols][rhs_col][lhs_vals].get(rhs_val) is None:
-                counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
-            else:
-                counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
+            if rhs_col not in lhs_cols:
+                if counts_dict[lhs_cols][rhs_col].get(lhs_vals) is None:
+                    counts_dict[lhs_cols][rhs_col][lhs_vals] = {}
+                rhs_val = cleaned_sampled_tuple[rhs_col]
+                if counts_dict[lhs_cols][rhs_col][lhs_vals].get(rhs_val) is None:
+                    counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
+                else:
+                    counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
 
 def expected_pdep(df, counts_dict: dict, A: Tuple[List[int]], B: int):
     pdep_B = calc_pdep(df, counts_dict, tuple([B]))
@@ -150,10 +150,10 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
     """
     rhs_col = ed["column"]
     results_list = []
-    results_dictionary = {}
+
     for lhs_cols in list(counts_dict.keys()):
+        results_dictionary = {}
         for lhs_vals in combinations(ed["vicinity"], len(lhs_cols)):
-            results_dictionary = {}
             if rhs_col not in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
                 sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
                 for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
