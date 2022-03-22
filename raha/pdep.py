@@ -167,7 +167,7 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
 def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df, n_best_pdeps):
     """
     Leverage gpdep to avoid having correction suggestions grow at (n-1)^2 / 2,
-    only take the 5 highest-scoring dependencies to draw corrections from.
+    only take the `n_best_pdeps` highest-scoring dependencies to draw corrections from.
 
     ed: {   'column': column int,
             'old_value': old error value,
@@ -210,6 +210,7 @@ def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df, n_
     for lhs_cols, gpdep_score in top_ten_pdeps[rhs_col]:
         for lhs_vals in combinations(ed["vicinity"], len(lhs_cols)):
             if rhs_col not in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
+                # set_trace()
                 results_dictionary = {}
                 sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
                 for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
@@ -217,4 +218,5 @@ def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df, n_
                     if pr >= probability_threshold:
                         results_dictionary[rhs_val] = pr
                 results_list.append(results_dictionary)
+    # set_trace()
     return results_list

@@ -63,7 +63,6 @@ class Correction:
         self.REVISION_WINDOW_SIZE = 5
 
         # Philipps changes
-        self.EXPERIMENT = 'adder'
         self.VICINITY_ONLY = False
         self.IMPUTER_FEATURE_GENERATOR = False
         self.VICINITY_ORDER = 1 # >= 1
@@ -311,21 +310,6 @@ class Correction:
         if self.VERBOSE:
             print("The pretrained value-based models are stored in {}.".format(pretrained_models_path))
 
-    def _vicinity_based_models_updater(self, d, models, ud):
-        """
-        This method updates the vicinity-based error corrector models with a given update dictionary.
-        """
-        for j, cv in enumerate(ud["vicinity"]):
-            if cv != self.IGNORE_SIGN:
-                if self.EXPERIMENT == 'adder' or self.EXPERIMENT == 'pdep':
-                    self._to_model_adder(models[tuple([j])][ud["column"]], cv, ud["new_value"])
-                elif self.EXPERIMENT == 'constant':
-                    self._to_model_constant(models[tuple([j])][ud["column"]], cv, ud["new_value"])
-                elif self.EXPERIMENT == 'ente':
-                    self._to_model_ente(models[tuple([j])][ud["column"]], cv, ud["new_value"])
-                elif self.EXPERIMENT == 'disable_vicinity':
-                    pass
-
     def _domain_based_model_updater(self, model, ud):
         """
         This method updates the domain-based error corrector model with a given update dictionary.
@@ -369,30 +353,6 @@ class Correction:
                             if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                 results_dictionary[new_value] = pr
                 results_list.append(results_dictionary)
-        return results_list
-
-    def _vicinity_based_corrector(self, models, ed):
-        """
-        This method takes the vicinity-based models and an error dictionary to generate potential vicinity-based corrections.
-
-        Notizen:
-        ed: {   'column': column int,
-                'old_value': old error value,
-                'vicinity': row that contains the error, including the error
-        }
-        models: Dict[Dict[Dict[Dict]]] [lhs][rhs][lhs_value][rhs_value]
-
-        """
-        results_list = []
-        for lhs_col, cv in enumerate(ed["vicinity"]):
-            results_dictionary = {}
-            if lhs_col != ed["column"] and cv in models[tuple([lhs_col])][ed["column"]]:
-                sum_scores = sum(models[tuple([lhs_col])][ed["column"]][cv].values())
-                for new_value in models[tuple([lhs_col])][ed["column"]][cv]:
-                    pr = models[tuple([lhs_col])][ed["column"]][cv][new_value] / sum_scores
-                    if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
-                        results_dictionary[new_value] = pr
-            results_list.append(results_dictionary)
         return results_list
 
 
@@ -445,7 +405,6 @@ class Correction:
             d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
             if self.VERBOSE:
                 print("The pretrained value-based models are loaded.")
-        d.vicinity_models = {tuple([j]): {jj: {} for jj in range(d.dataframe.shape[1])} for j in range(d.dataframe.shape[1])}
 
         d.domain_models = {}
 
@@ -466,15 +425,15 @@ class Correction:
                         "new_value": value,
                         "vicinity": temp_vicinity_list
                     }
-                    self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
 
         # BEGIN Philipp's changes
-        d.new_vicinity_models = pdep.calculate_counts_dict(
+        d.vicinity_models = pdep.calculate_counts_dict(
                                     df=d.dataframe,
                                     detected_cells=d.detected_cells,
-                                    order=self.VICINITY_ORDER,
+                                    order=1,  # equivalent to Baran's original vicinity model
                                     ignore_sign=self.IGNORE_SIGN)
+
         if self.HIGHER_ORDER_FEATURE_GENERATOR != '':
             d.pdep_counts_dict = pdep.calculate_counts_dict(
                                         df=d.dataframe,
@@ -555,10 +514,9 @@ class Correction:
             else:
                 update_dictionary["vicinity"] = [cv if j != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
-            self._vicinity_based_models_updater(d, d.vicinity_models, update_dictionary)
 
         # BEGIN Philipp's changes
-        pdep.update_counts_dict(d.dataframe, d.new_vicinity_models, 1, cleaned_sampled_tuple)
+        pdep.update_counts_dict(d.dataframe, d.vicinity_models, 1, cleaned_sampled_tuple)
         if self.HIGHER_ORDER_FEATURE_GENERATOR != '':
             pdep.update_counts_dict(d.dataframe,
                     d.pdep_counts_dict,
@@ -578,11 +536,10 @@ class Correction:
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
         vicinity_corrections, vc_order_n, value_corrections, domain_corrections = [], [], [], []
-        vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
 
         # Begin Philipps Changes
-        d.vicinity_corrections = vicinity_corrections
-        d.new_vicinity_corrections = pdep.vicinity_based_corrector_order_n(d.new_vicinity_models,
+        vicinity_corrections = pdep.vicinity_based_corrector_order_n(
+                d.vicinity_models,
                 error_dictionary,
                 self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
 
@@ -593,6 +550,14 @@ class Correction:
                     self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
                     d.repaired_dataframe,
                     n_best_pdeps = self.N_BEST_PDEPDS)
+
+            vicinity_corrections = pdep.pdep_vicinity_based_corrector(
+                    d.vicinity_models,
+                    error_dictionary,
+                    self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
+                    d.repaired_dataframe,
+                    n_best_pdeps = self.N_BEST_PDEPDS)
+
         elif self.HIGHER_ORDER_FEATURE_GENERATOR == 'naive':
             vc_order_n = pdep.vicinity_based_corrector_order_n(d.pdep_counts_dict,
                     error_dictionary,
@@ -602,6 +567,8 @@ class Correction:
             value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
 
+        d.vicinity_corrections = vicinity_corrections
+        d.vc_order_n_corrections = vc_order_n
         models_corrections = value_corrections + vicinity_corrections + vc_order_n + domain_corrections
         # End Philipps Changes
 
