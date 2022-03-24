@@ -67,7 +67,7 @@ class Correction:
         self.IMPUTER_FEATURE_GENERATOR = False
         self.VICINITY_ORDER = 1 # >= 1
         self.HIGHER_ORDER_FEATURE_GENERATOR = "naive"  # "naive" or "pdep"
-        self.N_BEST_PDEPDS = 2  # recommend up to 10
+        self.N_BEST_PDEPS = None  # recommend up to 10
         # self.PDEP_FEATURE_GENERATOR = False
         # self.PDEP_ORDER = 1
 
@@ -549,14 +549,16 @@ class Correction:
                     error_dictionary,
                     self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
                     d.repaired_dataframe,
-                    n_best_pdeps = self.N_BEST_PDEPDS)
+                    gpdeps=d.gpdeps,
+                    n_best_pdeps = self.N_BEST_PDEPS)
 
             vicinity_corrections = pdep.pdep_vicinity_based_corrector(
                     d.vicinity_models,
                     error_dictionary,
                     self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
                     d.repaired_dataframe,
-                    n_best_pdeps = self.N_BEST_PDEPDS)
+                    gpdeps=d.vicinity_gpdeps,
+                    n_best_pdeps = self.N_BEST_PDEPS)
 
         elif self.HIGHER_ORDER_FEATURE_GENERATOR == 'naive':
             vc_order_n = pdep.vicinity_based_corrector_order_n(d.pdep_counts_dict,
@@ -585,6 +587,13 @@ class Correction:
         Same as generate_features, but without the multiprocessing to make
         my life easier understanding the code.
         """
+        d.create_repaired_dataset(d.corrected_cells)
+
+        d.vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models,
+                d.repaired_dataframe)
+        d.gpdeps = pdep.calc_all_gpdeps(d.pdep_counts_dict,
+                d.repaired_dataframe)
+
         d.pair_features = {}
         pairs_counter = 0
         process_args_list = [[d, cell] for cell in d.detected_cells]
@@ -609,6 +618,13 @@ class Correction:
         """
         This method generates a feature vector for each pair of a data error and a potential correction.
         """
+        d.create_repaired_dataset(d.corrected_cells)
+
+        d.vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models,
+                d.repaired_dataframe)
+        d.gpdeps = pdep.calc_all_gpdeps(d.pdep_counts_dict,
+                d.repaired_dataframe)
+
         d.pair_features = {}
         pairs_counter = 0
         process_args_list = [[d, cell] for cell in d.detected_cells]

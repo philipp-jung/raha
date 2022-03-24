@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 from itertools import combinations
 from IPython.core.debugger import set_trace
 
@@ -122,7 +122,10 @@ def calc_pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int =
                          'B should be name of a column or None. If B is none,'
                          ' order must be 1.')
 
-def calc_gpdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int):
+def calc_gpdep(df: pd.DataFrame,
+        counts_dict: dict,
+        A: Tuple[List[int]],
+        B: int) -> float:
     """
     Calculates the *genuine* probabilistic dependence (gpdep) between
     a left hand side A, which consists of one or more attributes, and
@@ -164,24 +167,29 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
     return results_list
 
 
-def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df, n_best_pdeps):
+def calc_all_gpdeps(counts_dict: dict, df: pd.DataFrame) -> Dict[Tuple, Dict[int, float]]:
     """
-    Leverage gpdep to avoid having correction suggestions grow at (n-1)^2 / 2,
-    only take the `n_best_pdeps` highest-scoring dependencies to draw corrections from.
-
-    ed: {   'column': column int,
-            'old_value': old error value,
-            'vicinity': row that contains the error, including the error
-    }
-    counts_dict: Dict[Dict[Dict[Dict]]] [lhs][rhs][lhs_value][rhs_value]
-
+    Calculate all gpdeps in dataframe df, with an order implied by the depth
+    of counts_dict.
     """
+
     lhss = set([x for x in counts_dict.keys()])
     rhss = list(range(df.shape[1]))
     gpdeps = {lhs: {} for lhs in lhss}
     for lhs in lhss:
         for rhs in rhss:
             gpdeps[lhs][rhs] = calc_gpdep(df, counts_dict, lhs, rhs)
+    return gpdeps
+
+
+def invert_n_sort_gpdeps(df: pd.DataFrame,
+        gpdeps: Dict[Tuple, Dict[int, float]]
+        ) -> Dict[int, Dict[Tuple, float]]:
+    """
+    Invert the gpdeps dict and sort it. Results in a dict whose first key is
+    the rhs, second key is the lhs, value of that is the gpdep score. The second
+    key is sorted in descendingly by the gpdep score.
+    """
     inverse_gpdeps = {rhs: {} for rhs in range(df.shape[1])}
 
     for lhs in gpdeps:
@@ -192,6 +200,34 @@ def pdep_vicinity_based_corrector(counts_dict, ed, probability_threshold, df, n_
         inverse_gpdeps[rhs] = {k: v for k, v in sorted(inverse_gpdeps[rhs].items(),
             key=lambda item: item[1],
             reverse=True)}
+    return inverse_gpdeps
+
+
+
+def pdep_vicinity_based_corrector(counts_dict,
+        ed,
+        probability_threshold,
+        df,
+        gpdeps,
+        n_best_pdeps=None,
+        ):
+    """
+    Leverage gpdep to avoid having correction suggestions grow at (n-1)^2 / 2,
+    only take the `n_best_pdeps` highest-scoring dependencies to draw corrections from.
+    If `n_best_pdeps` is None, create as many features as the dataframe has
+    columns.
+
+    ed: {   'column': column int,
+            'old_value': old error value,
+            'vicinity': row that contains the error, including the error
+    }
+    counts_dict: Dict[Dict[Dict[Dict]]] [lhs][rhs][lhs_value][rhs_value]
+
+    """
+    if n_best_pdeps is None:
+        n_best_pdeps = df.shape[1]
+
+    inverse_gpdeps = invert_n_sort_gpdeps(df, gpdeps)
 
     top_ten_pdeps = {rhs: [] for rhs in range(df.shape[1])}
     for rhs in inverse_gpdeps:
