@@ -39,7 +39,7 @@ def train_cleaning_model(df_dirty: pd.DataFrame,
                     # hyperparameter_tune_kwargs=kwargs.get('hyperparameter_tune_kwargs', None),
                     # preset='best_quality'
                     )
-    except TargetColumnException:
+    except:
         print(f"Failed to train an imputer model for column {label}")
         print(TargetColumnException)
         imputer = None

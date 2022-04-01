@@ -122,10 +122,7 @@ def calc_pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int =
                          'B should be name of a column or None. If B is none,'
                          ' order must be 1.')
 
-def calc_gpdep(df: pd.DataFrame,
-        counts_dict: dict,
-        A: Tuple[List[int]],
-        B: int) -> float:
+def calc_gpdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int):
     """
     Calculates the *genuine* probabilistic dependence (gpdep) between
     a left hand side A, which consists of one or more attributes, and
@@ -167,12 +164,11 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
     return results_list
 
 
-def calc_all_gpdeps(counts_dict: dict, df: pd.DataFrame) -> Dict[Tuple, Dict[int, float]]:
+def calc_all_gpdeps(counts_dict: dict, df: pd.DataFrame, d) -> Dict[Tuple, Dict[int, float]]:
     """
     Calculate all gpdeps in dataframe df, with an order implied by the depth
     of counts_dict.
     """
-
     lhss = set([x for x in counts_dict.keys()])
     rhss = list(range(df.shape[1]))
     gpdeps = {lhs: {} for lhs in lhss}
@@ -182,7 +178,7 @@ def calc_all_gpdeps(counts_dict: dict, df: pd.DataFrame) -> Dict[Tuple, Dict[int
     return gpdeps
 
 
-def invert_n_sort_gpdeps(df: pd.DataFrame,
+def invert_and_sort_gpdeps(df: pd.DataFrame,
         gpdeps: Dict[Tuple, Dict[int, float]]
         ) -> Dict[int, Dict[Tuple, float]]:
     """
@@ -190,7 +186,7 @@ def invert_n_sort_gpdeps(df: pd.DataFrame,
     the rhs, second key is the lhs, value of that is the gpdep score. The second
     key is sorted in descendingly by the gpdep score.
     """
-    inverse_gpdeps = {rhs: {} for rhs in range(df.shape[1])}
+    inverse_gpdeps = {rhs: {} for rhs in list(gpdeps.items())[0][1]}
 
     for lhs in gpdeps:
         for rhs in gpdeps[lhs]:
@@ -202,15 +198,12 @@ def invert_n_sort_gpdeps(df: pd.DataFrame,
             reverse=True)}
     return inverse_gpdeps
 
-
-
-def pdep_vicinity_based_corrector(counts_dict,
+def pdep_vicinity_based_corrector(
+        inverse_sorted_gpdeps,
+        counts_dict,
         ed,
         probability_threshold,
-        df,
-        gpdeps,
-        n_best_pdeps=None,
-        ):
+        n_best_pdeps=None):
     """
     Leverage gpdep to avoid having correction suggestions grow at (n-1)^2 / 2,
     only take the `n_best_pdeps` highest-scoring dependencies to draw corrections from.
@@ -225,28 +218,30 @@ def pdep_vicinity_based_corrector(counts_dict,
 
     """
     if n_best_pdeps is None:
-        n_best_pdeps = df.shape[1]
+        n_best_pdeps = len(ed['vicinity'])
 
-    inverse_gpdeps = invert_n_sort_gpdeps(df, gpdeps)
+    best_pdeps = {rhs: [] for rhs in range(len(ed['vicinity']))}
 
-    top_ten_pdeps = {rhs: [] for rhs in range(df.shape[1])}
-    for rhs in inverse_gpdeps:
+    for rhs in inverse_sorted_gpdeps:
         i = 0
         j = 0
         while i < n_best_pdeps:
-            lhs, gpdep_score = list(inverse_gpdeps[rhs].items())[j]
+            lhs, gpdep_score = list(inverse_sorted_gpdeps[rhs].items())[j]
             if rhs not in lhs:
-                top_ten_pdeps[rhs].append((lhs, gpdep_score))
+                best_pdeps[rhs].append((lhs, gpdep_score))
                 i = i+1
             j = j+1
 
     rhs_col = ed["column"]
     results_list = []
-    # Only add correction if lhs is in top_10 for a given rhs.
-    for lhs_cols, gpdep_score in top_ten_pdeps[rhs_col]:
-        for lhs_vals in combinations(ed["vicinity"], len(lhs_cols)):
-            if rhs_col not in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
-                # set_trace()
+
+    # TODO: Macht das so Sinn?
+    for lhs_cols, gpdep_score in inverse_sorted_gpdeps[rhs_col].items():
+        lhs_vals = tuple([ed['vicinity'][x] for x in lhs_cols])
+
+        if not rhs_col in lhs_cols and \
+        lhs_vals in counts_dict[lhs_cols][rhs_col] and \
+        len(results_list) < n_best_pdeps:
                 results_dictionary = {}
                 sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
                 for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
@@ -254,5 +249,14 @@ def pdep_vicinity_based_corrector(counts_dict,
                     if pr >= probability_threshold:
                         results_dictionary[rhs_val] = pr
                 results_list.append(results_dictionary)
-    # set_trace()
+
+    # Es kommt vor, dass lhs_vals so selten in counts_dict[lhs_cols][rhs_cols]
+    # enthalten sind, dass weniger results_dictinaries erstellt werden, als
+    # mit n_best_pdeps gefordert wird.
+    #
+    # In dem Fall fülle ich die results_list mit leeren dictionaries auf. Das
+    # entspricht der Aussage, dass kein Reinigungsergebnis erstellt werden
+    # kann. Das scheint mir sinnvoll.
+    while len(results_list) < n_best_pdeps:
+        results_list.append({})
     return results_list

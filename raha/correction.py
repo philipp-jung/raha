@@ -66,10 +66,8 @@ class Correction:
         self.VICINITY_ONLY = False
         self.IMPUTER_FEATURE_GENERATOR = False
         self.VICINITY_ORDER = 1 # >= 1
-        self.HIGHER_ORDER_FEATURE_GENERATOR = "naive"  # "naive" or "pdep"
+        self.HIGHER_ORDER_FEATURE_GENERATOR = "naive"  # "naive" or "pdep", disable with ''
         self.N_BEST_PDEPS = None  # recommend up to 10
-        # self.PDEP_FEATURE_GENERATOR = False
-        # self.PDEP_ORDER = 1
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -361,11 +359,13 @@ class Correction:
         This method takes a domain-based model and an error dictionary to generate potential domain-based corrections.
         """
         results_dictionary = {}
-        sum_scores = sum(model[ed["column"]].values())
-        for new_value in model[ed["column"]]:
-            pr = model[ed["column"]][new_value] / sum_scores
-            if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
-                results_dictionary[new_value] = pr
+        value_counts = model.get(ed["column"])
+        if value_counts is not None:
+            sum_scores = sum(model[ed["column"]].values())
+            for new_value in model[ed["column"]]:
+                pr = model[ed["column"]][new_value] / sum_scores
+                if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
+                    results_dictionary[new_value] = pr
         return [results_dictionary]
 
     def initialize_dataset(self, d):
@@ -467,6 +467,9 @@ class Correction:
                 column_score = math.exp(len(remaining_column_erroneous_cells[j]) / len(d.column_errors[j]))
                 cell_score = math.exp(remaining_column_erroneous_values[j][value] / len(remaining_column_erroneous_cells[j]))
                 tuple_score[cell[0]] *= column_score * cell_score
+        # Nützlich, um tuple-sampling zu debuggen: Zeigt die Tupel, aus denen
+        # zufällig gewählt wird.
+        # print(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
         d.sampled_tuple = rng.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
         if self.VERBOSE:
             print("Tuple {} is sampled.".format(d.sampled_tuple))
@@ -538,26 +541,25 @@ class Correction:
         vicinity_corrections, vc_order_n, value_corrections, domain_corrections = [], [], [], []
 
         # Begin Philipps Changes
-        vicinity_corrections = pdep.vicinity_based_corrector_order_n(
-                d.vicinity_models,
-                error_dictionary,
-                self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
+        if self.HIGHER_ORDER_FEATURE_GENERATOR != 'pdep':
+            vicinity_corrections = pdep.vicinity_based_corrector_order_n(
+                    counts_dict=d.vicinity_models,
+                    ed=error_dictionary,
+                    probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
 
         if self.HIGHER_ORDER_FEATURE_GENERATOR == 'pdep':
-            d.create_repaired_dataset(d.corrected_cells)
-            vc_order_n = pdep.pdep_vicinity_based_corrector(d.pdep_counts_dict,
-                    error_dictionary,
-                    self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
-                    d.repaired_dataframe,
-                    gpdeps=d.gpdeps,
+            vc_order_n = pdep.pdep_vicinity_based_corrector(
+                    inverse_sorted_gpdeps=d.inv_nth_order_gpdeps,
+                    counts_dict=d.pdep_counts_dict,
+                    ed=error_dictionary,
+                    probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
                     n_best_pdeps = self.N_BEST_PDEPS)
 
             vicinity_corrections = pdep.pdep_vicinity_based_corrector(
+                    d.inv_vicinity_gpdeps,
                     d.vicinity_models,
                     error_dictionary,
                     self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
-                    d.repaired_dataframe,
-                    gpdeps=d.vicinity_gpdeps,
                     n_best_pdeps = self.N_BEST_PDEPS)
 
         elif self.HIGHER_ORDER_FEATURE_GENERATOR == 'naive':
@@ -569,8 +571,10 @@ class Correction:
             value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
 
+        # for debugging purposes
         d.vicinity_corrections = vicinity_corrections
         d.vc_order_n_corrections = vc_order_n
+
         models_corrections = value_corrections + vicinity_corrections + vc_order_n + domain_corrections
         # End Philipps Changes
 
@@ -582,55 +586,34 @@ class Correction:
                 corrections_features[correction][mi] = model[correction]
         return corrections_features
 
-    def generate_features_synchronously(self, d):
+    def generate_features(self, d, synchronous=False):
         """
-        Same as generate_features, but without the multiprocessing to make
-        my life easier understanding the code.
+        This method generates a feature vector for each pair of a data error
+        and a potential correction.
+        Philipp added a `synchronous` parameter to make debugging easier.
         """
         d.create_repaired_dataset(d.corrected_cells)
 
-        d.vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models,
-                d.repaired_dataframe)
-        d.gpdeps = pdep.calc_all_gpdeps(d.pdep_counts_dict,
-                d.repaired_dataframe)
+        # Calculate gpdeps and append them do d
+        vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models, d.repaired_dataframe, d)
+        d.inv_vicinity_gpdeps = pdep.invert_and_sort_gpdeps(d.repaired_dataframe, vicinity_gpdeps)
+
+        if self.HIGHER_ORDER_FEATURE_GENERATOR != '':  # only for advanced feature generation
+            nth_order_gpdeps = pdep.calc_all_gpdeps(d.pdep_counts_dict, d.repaired_dataframe, d)
+            d.inv_nth_order_gpdeps = pdep.invert_and_sort_gpdeps(d.repaired_dataframe, nth_order_gpdeps)
 
         d.pair_features = {}
         pairs_counter = 0
         process_args_list = [[d, cell] for cell in d.detected_cells]
-        feature_generation_results = []
-        for args_list in process_args_list:
-            result = self._feature_generator_process(args_list)
-            feature_generation_results.append(result)
-        for ci, corrections_features in enumerate(feature_generation_results):
-            cell = process_args_list[ci][1]
-            d.pair_features[cell] = {}
-            for correction in corrections_features:
-                d.pair_features[cell][correction] = corrections_features[correction]
-                pairs_counter += 1
-
-        if self.IMPUTER_FEATURE_GENERATOR:
-            self.imputer_feature_generator(d)  # TODO parallelize this
-
-        if self.VERBOSE:
-            print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
-
-    def generate_features(self, d):
-        """
-        This method generates a feature vector for each pair of a data error and a potential correction.
-        """
-        d.create_repaired_dataset(d.corrected_cells)
-
-        d.vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models,
-                d.repaired_dataframe)
-        d.gpdeps = pdep.calc_all_gpdeps(d.pdep_counts_dict,
-                d.repaired_dataframe)
-
-        d.pair_features = {}
-        pairs_counter = 0
-        process_args_list = [[d, cell] for cell in d.detected_cells]
-        pool = multiprocessing.Pool()
-        feature_generation_results = pool.map(self._feature_generator_process, process_args_list)
-        pool.close()
+        if not synchronous:
+            pool = multiprocessing.Pool()
+            feature_generation_results = pool.map(self._feature_generator_process, process_args_list)
+            pool.close()
+        else:
+            feature_generation_results = []
+            for args_list in process_args_list:
+                result = self._feature_generator_process(args_list)
+                feature_generation_results.append(result)
 
         for ci, corrections_features in enumerate(feature_generation_results):
             cell = process_args_list[ci][1]
