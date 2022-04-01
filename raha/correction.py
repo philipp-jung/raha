@@ -65,8 +65,8 @@ class Correction:
         # Philipps changes
         self.VICINITY_ONLY = False
         self.IMPUTER_FEATURE_GENERATOR = False
-        self.VICINITY_ORDER = 1 # >= 1
-        self.HIGHER_ORDER_FEATURE_GENERATOR = "naive"  # "naive" or "pdep", disable with ''
+        self.VICINITY_ORDERS = [1]  # Baran default
+        self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep"
         self.N_BEST_PDEPS = None  # recommend up to 10
 
     @staticmethod
@@ -428,20 +428,13 @@ class Correction:
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
 
         # BEGIN Philipp's changes
-        d.vicinity_models = pdep.calculate_counts_dict(
+        d.vicinity_models = {}
+        for o in self.VICINITY_ORDERS:
+            d.vicinity_models[o] = pdep.calculate_counts_dict(
                                     df=d.dataframe,
                                     detected_cells=d.detected_cells,
-                                    order=1,  # equivalent to Baran's original vicinity model
+                                    order=o,
                                     ignore_sign=self.IGNORE_SIGN)
-
-        if self.HIGHER_ORDER_FEATURE_GENERATOR != '':
-            d.pdep_counts_dict = pdep.calculate_counts_dict(
-                                        df=d.dataframe,
-                                        detected_cells=d.detected_cells,
-                                        order=self.VICINITY_ORDER,
-                                        ignore_sign=self.IGNORE_SIGN)
-        # END philipps changes
-
         if self.VERBOSE:
             print("The error corrector models are initialized.")
 
@@ -519,12 +512,11 @@ class Correction:
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
 
         # BEGIN Philipp's changes
-        pdep.update_counts_dict(d.dataframe, d.vicinity_models, 1, cleaned_sampled_tuple)
-        if self.HIGHER_ORDER_FEATURE_GENERATOR != '':
+        for o in self.VICINITY_ORDERS:
             pdep.update_counts_dict(d.dataframe,
-                    d.pdep_counts_dict,
-                    self.VICINITY_ORDER,
-                    cleaned_sampled_tuple)
+                                    d.vicinity_models[o],
+                                    o,
+                                    cleaned_sampled_tuple)
         # END Philipp's changes
 
         if self.VERBOSE:
@@ -532,50 +524,49 @@ class Correction:
 
     def _feature_generator_process(self, args):
         """
-        This method generates features for each data column in a parallel process.
+        This method generates features for each data column. Depending on the
+        config of `generate_features()`, it will run in parallel or not. This
+        gets called once for each error cell.
         """
         d, cell = args
 
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
-        vicinity_corrections, vc_order_n, value_corrections, domain_corrections = [], [], [], []
+        naive_vicinity_corrections, pdep_vicinity_corrections, value_corrections, domain_corrections = [], [], [], []
 
         # Begin Philipps Changes
-        if self.HIGHER_ORDER_FEATURE_GENERATOR != 'pdep':
-            vicinity_corrections = pdep.vicinity_based_corrector_order_n(
-                    counts_dict=d.vicinity_models,
+        if self.VICINITY_FEATURE_GENERATOR == 'naive':
+            for o in self.VICINITY_ORDERS:
+                naive_corrections = pdep.vicinity_based_corrector_order_n(
+                    counts_dict = d.vicinity_models[o],
                     ed=error_dictionary,
                     probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
+                naive_vicinity_corrections.append(naive_corrections)
 
-        if self.HIGHER_ORDER_FEATURE_GENERATOR == 'pdep':
-            vc_order_n = pdep.pdep_vicinity_based_corrector(
-                    inverse_sorted_gpdeps=d.inv_nth_order_gpdeps,
-                    counts_dict=d.pdep_counts_dict,
-                    ed=error_dictionary,
-                    probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
-                    n_best_pdeps = self.N_BEST_PDEPS)
-
-            vicinity_corrections = pdep.pdep_vicinity_based_corrector(
-                    d.inv_vicinity_gpdeps,
-                    d.vicinity_models,
-                    error_dictionary,
-                    self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
-                    n_best_pdeps = self.N_BEST_PDEPS)
-
-        elif self.HIGHER_ORDER_FEATURE_GENERATOR == 'naive':
-            vc_order_n = pdep.vicinity_based_corrector_order_n(d.pdep_counts_dict,
-                    error_dictionary,
-                    self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
+        elif self.VICINITY_FEATURE_GENERATOR == 'pdep':
+            for o in self.VICINITY_ORDERS:
+                pdep_corrections = pdep.pdep_vicinity_based_corrector(
+                        inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
+                        counts_dict=d.vicinity_models[o],
+                        ed=error_dictionary,
+                        probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
+                        n_best_pdeps = self.N_BEST_PDEPS)
+                pdep_vicinity_corrections.append(pdep_corrections)
+        else:
+            raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR'
+                    f'{self.VICINITY_FEATURE_GENERATOR}')
 
         if not self.VICINITY_ONLY:  # skip if not required for experiment
             value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
 
         # for debugging purposes
-        d.vicinity_corrections = vicinity_corrections
-        d.vc_order_n_corrections = vc_order_n
+        d.naive_vicinity_corrections = naive_vicinity_corrections
+        d.pdep_vicinity_corrections = pdep_vicinity_corrections
 
-        models_corrections = value_corrections + vicinity_corrections + vc_order_n + domain_corrections
+        models_corrections = value_corrections + domain_corrections \
+        + [corrections for order in naive_vicinity_corrections for corrections in order] \
+        + [corrections for order in pdep_vicinity_corrections for corrections in order]
         # End Philipps Changes
 
         corrections_features = {}
@@ -595,12 +586,12 @@ class Correction:
         d.create_repaired_dataset(d.corrected_cells)
 
         # Calculate gpdeps and append them do d
-        vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models, d.repaired_dataframe, d)
-        d.inv_vicinity_gpdeps = pdep.invert_and_sort_gpdeps(d.repaired_dataframe, vicinity_gpdeps)
-
-        if self.HIGHER_ORDER_FEATURE_GENERATOR != '':  # only for advanced feature generation
-            nth_order_gpdeps = pdep.calc_all_gpdeps(d.pdep_counts_dict, d.repaired_dataframe, d)
-            d.inv_nth_order_gpdeps = pdep.invert_and_sort_gpdeps(d.repaired_dataframe, nth_order_gpdeps)
+        if self.VICINITY_FEATURE_GENERATOR == 'pdep':
+            d.inv_vicinity_gpdeps = {}
+            for o in self.VICINITY_ORDERS:
+                vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models[o],
+                        d.repaired_dataframe)
+                d.inv_vicinity_gpdeps[o] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
         d.pair_features = {}
         pairs_counter = 0

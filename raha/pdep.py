@@ -164,7 +164,7 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
     return results_list
 
 
-def calc_all_gpdeps(counts_dict: dict, df: pd.DataFrame, d) -> Dict[Tuple, Dict[int, float]]:
+def calc_all_gpdeps(counts_dict: dict, df: pd.DataFrame) -> Dict[Tuple, Dict[int, float]]:
     """
     Calculate all gpdeps in dataframe df, with an order implied by the depth
     of counts_dict.
@@ -178,8 +178,7 @@ def calc_all_gpdeps(counts_dict: dict, df: pd.DataFrame, d) -> Dict[Tuple, Dict[
     return gpdeps
 
 
-def invert_and_sort_gpdeps(df: pd.DataFrame,
-        gpdeps: Dict[Tuple, Dict[int, float]]
+def invert_and_sort_gpdeps(gpdeps: Dict[Tuple, Dict[int, float]]
         ) -> Dict[int, Dict[Tuple, float]]:
     """
     Invert the gpdeps dict and sort it. Results in a dict whose first key is
@@ -235,7 +234,6 @@ def pdep_vicinity_based_corrector(
     rhs_col = ed["column"]
     results_list = []
 
-    # TODO: Macht das so Sinn?
     for lhs_cols, gpdep_score in inverse_sorted_gpdeps[rhs_col].items():
         lhs_vals = tuple([ed['vicinity'][x] for x in lhs_cols])
 
