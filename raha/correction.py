@@ -67,7 +67,8 @@ class Correction:
         self.IMPUTER_FEATURE_GENERATOR = False
         self.VICINITY_ORDERS = [1]  # Baran default
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep"
-        self.N_BEST_PDEPS = None  # recommend up to 10
+        self.N_BEST_PDEPS = None  # recommend up to 10. Ignored when using
+        # naive feature generator.
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
