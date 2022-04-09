@@ -31,6 +31,7 @@ import sklearn.naive_bayes
 import sklearn.linear_model
 
 import raha
+from IPython.core.debugger import set_trace
 ########################################
 
 
@@ -601,7 +602,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "flights"
+    dataset_name = "rayyan"
     dataset_dictionary = {
         "name": dataset_name,
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),

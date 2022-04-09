@@ -1,0 +1,3 @@
+[submodule "datawig"]
+	path = datawig
+	url = https://github.com/philipp-jung/datawig/tree/autowig
