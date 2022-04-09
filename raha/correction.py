@@ -395,10 +395,11 @@ class Correction:
         if self.VERBOSE:
             print("The error corrector models are initialized.")
 
-    def sample_tuple(self, d):
+    def sample_tuple(self, d, random_seed):
         """
         This method samples a tuple.
         """
+        rng = numpy.random.default_rng(seed=random_seed)
         remaining_column_erroneous_cells = {}
         remaining_column_erroneous_values = {}
         for j in d.column_errors:
@@ -414,7 +415,12 @@ class Correction:
                 column_score = math.exp(len(remaining_column_erroneous_cells[j]) / len(d.column_errors[j]))
                 cell_score = math.exp(remaining_column_erroneous_values[j][value] / len(remaining_column_erroneous_cells[j]))
                 tuple_score[cell[0]] *= column_score * cell_score
-        d.sampled_tuple = numpy.random.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
+
+        # Nützlich, um tuple-sampling zu debuggen: Zeigt die Tupel, aus denen
+        # zufällig gewählt wird.
+        print(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
+        set_trace()
+        d.sampled_tuple = rng.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
         if self.VERBOSE:
             print("Tuple {} is sampled.".format(d.sampled_tuple))
 
@@ -496,7 +502,7 @@ class Correction:
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
-    def predict_corrections(self, d):
+    def predict_corrections(self, d, random_seed):
         """
         This method predicts
         """
@@ -516,11 +522,11 @@ class Correction:
                             x_test.append(d.pair_features[cell][correction])
                             test_cell_correction_list.append([cell, correction])
             if self.CLASSIFICATION_MODEL == "ABC":
-                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100, random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "DTC":
-                classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini")
+                classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini", random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "GBC":
-                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100)
+                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100, random_state=random_seed)
             if self.CLASSIFICATION_MODEL == "GNB":
                 classification_model = sklearn.naive_bayes.GaussianNB()
             if self.CLASSIFICATION_MODEL == "KNC":
@@ -580,14 +586,14 @@ class Correction:
                   "--------------Iterative Tuple Sampling, Labeling, and Learning----------\n"
                   "------------------------------------------------------------------------")
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
-            self.sample_tuple(d)
+            self.sample_tuple(d, random_seed=0)
             if d.has_ground_truth:
                 self.label_with_ground_truth(d)
             # else:
             #   In this case, user should label the tuple interactively as shown in the Jupyter notebook.
             self.update_models(d)
             self.generate_features(d)
-            self.predict_corrections(d)
+            self.predict_corrections(d, random_seed=0)
             if self.VERBOSE:
                 print("------------------------------------------------------------------------")
         if self.SAVE_RESULTS:
