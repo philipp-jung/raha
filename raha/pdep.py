@@ -217,7 +217,8 @@ def pdep_vicinity_based_corrector(
 
     """
     if n_best_pdeps is None:
-        n_best_pdeps = len(ed['vicinity'])
+        # highest number of vicinity models possible is n_cols - 1
+        n_best_pdeps = len(ed['vicinity']) - 1
 
     best_pdeps = {rhs: [] for rhs in range(len(ed['vicinity']))}
 

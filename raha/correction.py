@@ -66,9 +66,10 @@ class Correction:
         self.VICINITY_ONLY = False
         self.IMPUTER_FEATURE_GENERATOR = False
         self.VICINITY_ORDERS = [1]  # Baran default
-        self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep"
+        self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive", "pdep" or None
         self.N_BEST_PDEPS = None  # recommend up to 10. Ignored when using
-        # naive feature generator.
+        # 'naive' feature generator. That one always generates features for all
+        # possible column combinations.
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -442,8 +443,7 @@ class Correction:
     def sample_tuple(self, d, random_seed):
         """
         This method samples a tuple.
-        Philipp extended this with a random_seed to make runs (more?) reprodu-
-        cible.
+        Philipp extended this with a random_seed to make runs reproducible.
         """
         rng = numpy.random.default_rng(seed=random_seed)
         remaining_column_erroneous_cells = {}
@@ -471,10 +471,13 @@ class Correction:
     def label_with_ground_truth(self, d):
         """
         This method labels a tuple with ground truth.
+        Takes the sampled row from d.sampled_tuple, iterates over each cell
+        in that row taken from the clean data, and then adds {(row, col):
+        [is_error, clean_value_from_clean_dataframe] to
         """
         d.labeled_tuples[d.sampled_tuple] = 1
-        for j in range(d.dataframe.shape[1]):
-            cell = (d.sampled_tuple, j)
+        for col in range(d.dataframe.shape[1]):
+            cell = (d.sampled_tuple, col)
             error_label = 0
             if d.dataframe.iloc[cell] != d.clean_dataframe.iloc[cell]:
                 error_label = 1
@@ -486,30 +489,39 @@ class Correction:
         """
         This method updates the error corrector models with a new labeled tuple.
         """
-        cleaned_sampled_tuple = [d.labeled_cells[(d.sampled_tuple, j)][1] for j in range(d.dataframe.shape[1])]
-        for j in range(d.dataframe.shape[1]):
-            cell = (d.sampled_tuple, j)
+        cleaned_sampled_tuple = []
+        for column in range(d.dataframe.shape[1]):
+            clean_cell = d.labeled_cells[(d.sampled_tuple, column)][1]
+            cleaned_sampled_tuple.append(clean_cell)
+
+        for column in range(d.dataframe.shape[1]):
+            cell = (d.sampled_tuple, column)
             update_dictionary = {
-                "column": cell[1],
+                "column": column,
                 "old_value": d.dataframe.iloc[cell],
-                "new_value": cleaned_sampled_tuple[j],
+                "new_value": cleaned_sampled_tuple[column],
             }
 
-            # if the value in that cell has been labelled an error...
+            # if the value in that cell has been labelled an error
             if d.labeled_cells[cell][0] == 1:
-                # and the cell hasn't been detected as an error...
-                if cell not in d.detected_cells:
-                    # add that cell to detected_cells and assign it IGNORE_SIGN
-                    # komisch wirklich, wann ist das denn bitteschön der Fall?
-                    # Dass man eine Zelle labelt, die nicht in detected_cells ist?
-                    d.detected_cells[cell] = self.IGNORE_SIGN
-                    self._to_model_adder(d.column_errors, cell[1], cell)
+                # update value and vicinity models.
+                # set_trace()
                 self._value_based_models_updater(d.value_models, update_dictionary)
                 self._domain_based_model_updater(d.domain_models, update_dictionary)
-                update_dictionary["vicinity"] = [cv if j != cj else self.IGNORE_SIGN
+                update_dictionary["vicinity"] = [cv if column != cj else self.IGNORE_SIGN
                                                  for cj, cv in enumerate(cleaned_sampled_tuple)]
+
+                # and the cell hasn't been detected as an error
+                if cell not in d.detected_cells:
+                    # add that cell to detected_cells and assign it IGNORE_SIGN
+                    # --> das passiert, wenn die Error Detection nicht perfekt
+                    # war, dass man einen Fehler labelt, der vorher noch nicht
+                    # gelabelt war.
+                    d.detected_cells[cell] = self.IGNORE_SIGN
+                    self._to_model_adder(d.column_errors, cell[1], cell)
+
             else:
-                update_dictionary["vicinity"] = [cv if j != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
+                update_dictionary["vicinity"] = [cv if column != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
 
         # BEGIN Philipp's changes
@@ -553,6 +565,8 @@ class Correction:
                         probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
                         n_best_pdeps = self.N_BEST_PDEPS)
                 pdep_vicinity_corrections.append(pdep_corrections)
+        elif self.VICINITY_FEATURE_GENERATOR is None:
+            pass
         else:
             raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR'
                     f'{self.VICINITY_FEATURE_GENERATOR}')
