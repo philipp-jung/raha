@@ -31,7 +31,6 @@ import sklearn.naive_bayes
 import sklearn.linear_model
 
 import raha
-from IPython.core.debugger import set_trace
 ########################################
 
 
@@ -419,7 +418,7 @@ class Correction:
         # Nützlich, um tuple-sampling zu debuggen: Zeigt die Tupel, aus denen
         # zufällig gewählt wird.
         print(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
-        set_trace()
+        print(f"{len(d.corrected_cells)} corrected cells")
         d.sampled_tuple = rng.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
         if self.VERBOSE:
             print("Tuple {} is sampled.".format(d.sampled_tuple))
@@ -567,7 +566,7 @@ class Correction:
         if self.VERBOSE:
             print("The results are stored in {}.".format(os.path.join(ec_folder_path, "correction.dataset")))
 
-    def run(self, d):
+    def run(self, d, seed):
         """
         This method runs Baran on an input dataset to correct data errors.
         """
@@ -586,14 +585,14 @@ class Correction:
                   "--------------Iterative Tuple Sampling, Labeling, and Learning----------\n"
                   "------------------------------------------------------------------------")
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
-            self.sample_tuple(d, random_seed=0)
+            self.sample_tuple(d, random_seed=seed)
             if d.has_ground_truth:
                 self.label_with_ground_truth(d)
             # else:
             #   In this case, user should label the tuple interactively as shown in the Jupyter notebook.
             self.update_models(d)
             self.generate_features(d)
-            self.predict_corrections(d, random_seed=0)
+            self.predict_corrections(d, random_seed=seed)
             if self.VERBOSE:
                 print("------------------------------------------------------------------------")
         if self.SAVE_RESULTS:
@@ -608,7 +607,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "rayyan"
+    dataset_name = "hospital"
     dataset_dictionary = {
         "name": dataset_name,
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
@@ -617,7 +616,10 @@ if __name__ == "__main__":
     data = raha.dataset.Dataset(dataset_dictionary)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
-    correction_dictionary = app.run(data)
+    app.LABELING_BUDGET = 20
+    # s = 2  # really bad on hospital
+    s = 4  # really good on hospital
+    correction_dictionary = app.run(data, seed=s)
     p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
     print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
     # --------------------
