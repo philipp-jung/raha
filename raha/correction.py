@@ -417,8 +417,8 @@ class Correction:
 
         # Nützlich, um tuple-sampling zu debuggen: Zeigt die Tupel, aus denen
         # zufällig gewählt wird.
-        print(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
-        print(f"{len(d.corrected_cells)} corrected cells")
+        # print(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
+        # print(f"{len(d.corrected_cells)} corrected cells")
         d.sampled_tuple = rng.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
         if self.VERBOSE:
             print("Tuple {} is sampled.".format(d.sampled_tuple))
