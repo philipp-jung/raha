@@ -63,10 +63,10 @@ class Correction:
         self.REVISION_WINDOW_SIZE = 5
 
         # Philipps changes
-        self.VICINITY_ONLY = False
-        self.IMPUTER_FEATURE_GENERATOR = False
+        # choose from "value", "domain", "vicinity", "imputer". Default is Baran's original configuration.
+        self.FEATURE_GENERATORS = ["value", "domain", "vicinity"]
         self.VICINITY_ORDERS = [1]  # Baran default
-        self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive", "pdep" or None
+        self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.N_BEST_PDEPS = None  # recommend up to 10. Ignored when using
         # 'naive' feature generator. That one always generates features for all
         # possible column combinations.
@@ -410,6 +410,9 @@ class Correction:
 
         d.domain_models = {}
 
+        # for debugging purposes
+        d.value_corrections = []
+
         for row in d.dataframe.itertuples():
             i, row = row[0], row[1:]
             # Das ist richtig cool: Jeder Wert des Tupels wird untersucht und
@@ -450,7 +453,8 @@ class Correction:
         remaining_column_erroneous_values = {}
         for j in d.column_errors:
             for cell in d.column_errors[j]:
-                if cell not in d.corrected_cells:
+                # if cell not in d.corrected_cells:  # debug sampling?
+                if True:
                     self._to_model_adder(remaining_column_erroneous_cells, j, cell)
                     self._to_model_adder(remaining_column_erroneous_values, j, d.dataframe.iloc[cell])
         tuple_score = numpy.ones(d.dataframe.shape[0])
@@ -505,7 +509,6 @@ class Correction:
             # if the value in that cell has been labelled an error
             if d.labeled_cells[cell][0] == 1:
                 # update value and vicinity models.
-                # set_trace()
                 self._value_based_models_updater(d.value_models, update_dictionary)
                 self._domain_based_model_updater(d.domain_models, update_dictionary)
                 update_dictionary["vicinity"] = [cv if column != cj else self.IGNORE_SIGN
@@ -548,36 +551,32 @@ class Correction:
         naive_vicinity_corrections, pdep_vicinity_corrections, value_corrections, domain_corrections = [], [], [], []
 
         # Begin Philipps Changes
-        if self.VICINITY_FEATURE_GENERATOR == 'naive':
-            for o in self.VICINITY_ORDERS:
-                naive_corrections = pdep.vicinity_based_corrector_order_n(
-                    counts_dict = d.vicinity_models[o],
-                    ed=error_dictionary,
-                    probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
-                naive_vicinity_corrections.append(naive_corrections)
-
-        elif self.VICINITY_FEATURE_GENERATOR == 'pdep':
-            for o in self.VICINITY_ORDERS:
-                pdep_corrections = pdep.pdep_vicinity_based_corrector(
-                        inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
-                        counts_dict=d.vicinity_models[o],
+        if "vicinity" in self.FEATURE_GENERATORS:
+            if self.VICINITY_FEATURE_GENERATOR == 'naive':
+                for o in self.VICINITY_ORDERS:
+                    naive_corrections = pdep.vicinity_based_corrector_order_n(
+                        counts_dict = d.vicinity_models[o],
                         ed=error_dictionary,
-                        probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
-                        n_best_pdeps = self.N_BEST_PDEPS)
-                pdep_vicinity_corrections.append(pdep_corrections)
-        elif self.VICINITY_FEATURE_GENERATOR is None:
-            pass
-        else:
-            raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR'
-                    f'{self.VICINITY_FEATURE_GENERATOR}')
+                        probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
+                    naive_vicinity_corrections.append(naive_corrections)
 
-        if not self.VICINITY_ONLY:  # skip if not required for experiment
+            elif self.VICINITY_FEATURE_GENERATOR == 'pdep':
+                for o in self.VICINITY_ORDERS:
+                    pdep_corrections = pdep.pdep_vicinity_based_corrector(
+                            inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
+                            counts_dict=d.vicinity_models[o],
+                            ed=error_dictionary,
+                            probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
+                            n_best_pdeps = self.N_BEST_PDEPS)
+                    pdep_vicinity_corrections.append(pdep_corrections)
+            else:
+                raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR'
+                        f'{self.VICINITY_FEATURE_GENERATOR}')
+
+        if "value" in self.FEATURE_GENERATORS:
             value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
+        if "domain" in self.FEATURE_GENERATORS:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
-
-        # for debugging purposes
-        d.naive_vicinity_corrections = naive_vicinity_corrections
-        d.pdep_vicinity_corrections = pdep_vicinity_corrections
 
         models_corrections = value_corrections + domain_corrections \
         + [corrections for order in naive_vicinity_corrections for corrections in order] \
@@ -628,7 +627,7 @@ class Correction:
                 d.pair_features[cell][correction] = corrections_features[correction]
                 pairs_counter += 1
 
-        if self.IMPUTER_FEATURE_GENERATOR:
+        if "imputer" in self.FEATURE_GENERATORS:
             self.imputer_feature_generator(d)  # TODO parallelize this
 
         if self.VERBOSE:
@@ -719,7 +718,7 @@ class Correction:
         if self.VERBOSE:
             print("The results are stored in {}.".format(os.path.join(ec_folder_path, "correction.dataset")))
 
-    def run(self, d):
+    def run(self, d, random_seed):
         """
         This method runs Baran on an input dataset to correct data errors.
         """
@@ -738,29 +737,24 @@ class Correction:
                   "--------------Iterative Tuple Sampling, Labeling, and Learning----------\n"
                   "------------------------------------------------------------------------")
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
-            self.sample_tuple(d, random_seed=0)
+            self.sample_tuple(d, random_seed=random_seed)
             if d.has_ground_truth:
                 self.label_with_ground_truth(d)
-            # else:
-            #   In this case, user should label the tuple interactively as shown in the Jupyter notebook.
+            else:
+                ValueError('go label tuples manually in a jupyter notebook.')
             self.update_models(d)
-            self.generate_features(d)
-            self.predict_corrections(d, random_seed=0)
-            if self.VERBOSE:
-                print("------------------------------------------------------------------------")
-        if self.SAVE_RESULTS:
-            if self.VERBOSE:
-                print("------------------------------------------------------------------------\n"
-                      "---------------------------Storing the Results--------------------------\n"
-                      "------------------------------------------------------------------------")
-            self.store_results(d)
+            self.generate_features(d, synchronous=True)
+            self.predict_corrections(d, random_seed=random_seed)
+            p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
+            print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
+
         return d.corrected_cells
 ########################################
 
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "flights"
+    dataset_name = "hospital"
     dataset_dictionary = {
         "name": dataset_name,
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
@@ -769,9 +763,18 @@ if __name__ == "__main__":
     data = raha.dataset.Dataset(dataset_dictionary)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
-    correction_dictionary = app.run(data)
-    p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
-    print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
+    app.LABELING_BUDGET = 20
+
+    app.VICINITY_ORDERS = [1]
+    app.VICINITY_FEATURE_GENERATOR = "naive"
+    app.N_BEST_PDEPS = 3
+    app.SAVE_RESULTS = False
+
+    seed = 3
+    correction_dictionary = app.run(data, seed)
+    # p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
+    # print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
+
     # --------------------
     # app.extract_revisions(wikipedia_dumps_folder="../wikipedia-data")
     # app.pretrain_value_based_models(revision_data_folder="../wikipedia-data/revision-data")
