@@ -38,8 +38,6 @@ from raha import pdep
 
 ########################################
 
-from IPython.core.debugger import set_trace
-
 class Correction:
     """
     The main class.
@@ -402,16 +400,13 @@ class Correction:
         """
         d.value_models = [{}, {}, {}, {}]
         d.pdeps = {c: {cc: {} for cc in range(d.dataframe.shape[1])}
-         for c in range(d.dataframe.shape[1])}
+                   for c in range(d.dataframe.shape[1])}
         if os.path.exists(self.PRETRAINED_VALUE_BASED_MODELS_PATH):
             d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
             if self.VERBOSE:
                 print("The pretrained value-based models are loaded.")
 
         d.domain_models = {}
-
-        # for debugging purposes
-        d.value_corrections = []
 
         for row in d.dataframe.itertuples():
             i, row = row[0], row[1:]
@@ -692,20 +687,27 @@ class Correction:
 
     def imputer_feature_generator(self, d):
         """
-        After the Baran-style cleaning has been finished, train an imputer
-        model on top of it to try and improve performance a bit.
+        Train an imputer model on clean data to generate corrections.
         """
-        d.create_repaired_dataset(d.corrected_cells)
-        imputer_corrections = imputer.imputation_based_corrector(d)
-        for i_column in imputer_corrections:
-            for imputer_correction in imputer_corrections[i_column]:
-                for error_cell in d.pair_features:
-                    for correction in d.pair_features[error_cell]:
-                        if correction == list(imputer_correction.keys())[0]:
-                            p = 1
-                        else:
-                            p = 0
-                        d.pair_features[error_cell][correction] = numpy.append(d.pair_features[error_cell][correction], p)
+        df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
+        imputer_corrections = imputer.imputation_based_corrector(d.dataframe, df_clean_subset, d.detected_cells)
+
+        # this is crap: If the imputer feature generator makes a suggestion that isn't part of
+        # what the other feature generators came up with, the feature vector will have length
+        # 1, although the other feature vectors might be longer.
+        for error_cell in d.detected_cells:
+            imputer_c = imputer_corrections[error_cell]
+            if d.pair_features[error_cell].get(imputer_c) is None:  # correction hasn't been suggested yet
+                # this should have the length of the other feature vectors.
+                d.pair_features[error_cell][imputer_c] = numpy.array([1])
+            else:
+                for correction in d.pair_features[error_cell]:
+                    if correction == imputer_corrections[error_cell]:
+                        p = 1
+                    else:
+                        p = 0
+                    d.pair_features[error_cell][correction] = numpy.append(d.pair_features[error_cell][correction], p)
+        return True
 
     def store_results(self, d):
         """
@@ -760,7 +762,7 @@ if __name__ == "__main__":
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
         "clean_path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "clean.csv"))
     }
-    data = raha.dataset.Dataset(dataset_dictionary)
+    data = raha.dataset.Dataset(dataset_dictionary, n_rows=2500)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
     app.LABELING_BUDGET = 20
@@ -769,6 +771,7 @@ if __name__ == "__main__":
     app.VICINITY_FEATURE_GENERATOR = "naive"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
+    app.FEATURE_GENERATORS = ['imputer']
 
     seed = 3
     correction_dictionary = app.run(data, seed)
