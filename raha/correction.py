@@ -29,7 +29,9 @@ import sklearn.svm
 import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
+from typing import Dict
 
+import datawig
 import raha
 from raha import imputer
 from raha import pdep
@@ -353,6 +355,29 @@ class Correction:
                 results_list.append(results_dictionary)
         return results_list
 
+    def _imputer_based_corrector(self, model: Dict[int, datawig.AutoGluonImputer], ed: dict) -> list:
+        """
+        Use an AutoGluon imputer to generate corrections.
+
+        @param model: Dictionary with an AutoGluonImputer per column.
+        @param ed: Error Dictionary with information on the error and its vicinity.
+        @return: list of corrections.
+        """
+        import pandas as pd
+        imputer = model[ed['column']]
+        if imputer is None:
+            return []
+        row = pd.DataFrame([ed['vicinity']], columns=imputer.columns)
+        probas = imputer.predict_proba(row)
+
+        prob_d = {key: probas.to_dict()[key][0] for key in probas.to_dict()}
+        prob_d_sorted = {key: value for key, value in sorted(prob_d.items(), key=lambda x: x[1])}
+        most_probable = list(prob_d_sorted)[-1]
+
+        if most_probable[0] == ed['old_value']:  # make sure that suggested correction isn't the wrong value
+            most_probable = list(prob_d_sorted)[-2]  # take second best correction in that case
+
+        return [{most_probable: 1.0}]  # TODO maybe pass class probability instead?
 
     def _domain_based_corrector(self, model, ed):
         """
@@ -435,6 +460,8 @@ class Correction:
                                     detected_cells=d.detected_cells,
                                     order=o,
                                     ignore_sign=self.IGNORE_SIGN)
+        d.imputer_models = {}
+
         if self.VERBOSE:
             print("The error corrector models are initialized.")
 
@@ -543,7 +570,11 @@ class Correction:
 
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
-        naive_vicinity_corrections, pdep_vicinity_corrections, value_corrections, domain_corrections = [], [], [], []
+        naive_vicinity_corrections = []
+        pdep_vicinity_corrections = []
+        value_corrections = []
+        domain_corrections = []
+        imputer_corrections = []
 
         # Begin Philipps Changes
         if "vicinity" in self.FEATURE_GENERATORS:
@@ -573,9 +604,13 @@ class Correction:
         if "domain" in self.FEATURE_GENERATORS:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
 
+        if "imputer" in self.FEATURE_GENERATORS:
+            imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
+
         models_corrections = value_corrections + domain_corrections \
         + [corrections for order in naive_vicinity_corrections for corrections in order] \
-        + [corrections for order in pdep_vicinity_corrections for corrections in order]
+        + [corrections for order in pdep_vicinity_corrections for corrections in order] \
+        + imputer_corrections
         # End Philipps Changes
 
         corrections_features = {}
@@ -594,13 +629,20 @@ class Correction:
         """
         d.create_repaired_dataset(d.corrected_cells)
 
-        # Calculate gpdeps and append them do d
+        # Calculate gpdeps and append them to d
         if self.VICINITY_FEATURE_GENERATOR == 'pdep':
             d.inv_vicinity_gpdeps = {}
             for o in self.VICINITY_ORDERS:
                 vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models[o],
                         d.repaired_dataframe)
                 d.inv_vicinity_gpdeps[o] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
+
+        # train imputer model for each column
+        if 'imputer' in self.FEATURE_GENERATORS:
+            df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
+            for i_col, col in enumerate(df_clean_subset.columns):
+                imp = imputer.train_cleaning_model(df_clean_subset, label=i_col, time_limit=10)
+                d.imputer_models[i_col] = imp
 
         d.pair_features = {}
         pairs_counter = 0
@@ -621,9 +663,6 @@ class Correction:
             for correction in corrections_features:
                 d.pair_features[cell][correction] = corrections_features[correction]
                 pairs_counter += 1
-
-        if "imputer" in self.FEATURE_GENERATORS:
-            self.imputer_feature_generator(d)  # TODO parallelize this
 
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
@@ -762,7 +801,7 @@ if __name__ == "__main__":
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
         "clean_path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "clean.csv"))
     }
-    data = raha.dataset.Dataset(dataset_dictionary, n_rows=2500)
+    data = raha.dataset.Dataset(dataset_dictionary)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
     app.LABELING_BUDGET = 20

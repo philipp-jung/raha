@@ -10,7 +10,6 @@ from IPython.core.debugger import set_trace
 
 def train_cleaning_model(df: pd.DataFrame,
                          label: int,
-                         df_test: pd.DataFrame = None,
                          time_limit=90,
                          verbosity: int = 0) -> Union[datawig.AutoGluonImputer, None]:
     """
@@ -23,14 +22,15 @@ def train_cleaning_model(df: pd.DataFrame,
     del lhs[label - 1]
     rhs = df.columns[label]
 
-    # This possibly needs to be removed, because it doesn't scale well with
-    # dataset size. AutoGluon does sophisticated train-test-splits internally.
-    # I currently keep this to have full control over the data.
+    # Splitting here maybe needs to be removed, because it doesn't scale well with
+    # dataset size. AutoGluon does smart train-test-splits internally, might be reasonable
+    # leveraging them. I currently keep this to have control over the data in one place.
     df_train, df_test = train_test_split(df, test_size=.1)
 
     try:
         imputer = datawig.AutoGluonImputer(
             model_name=f'{label}-imputing-model',
+            columns=df.columns,
             input_columns=lhs,
             output_column=rhs,
             verbosity=verbosity,
