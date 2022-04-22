@@ -364,7 +364,7 @@ class Correction:
         @return: list of corrections.
         """
         import pandas as pd
-        imputer = model[ed['column']]
+        imputer = model.get(ed['column'])
         if imputer is None:
             return []
         row = pd.DataFrame([ed['vicinity']], columns=imputer.columns)
@@ -604,6 +604,7 @@ class Correction:
         if "domain" in self.FEATURE_GENERATORS:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
 
+        # super expensive computation, so only run in the last feature loop iteration.
         if "imputer" in self.FEATURE_GENERATORS:
             imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
 
@@ -638,10 +639,11 @@ class Correction:
                 d.inv_vicinity_gpdeps[o] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
         # train imputer model for each column
-        if 'imputer' in self.FEATURE_GENERATORS:
+        # super expensive computation, so only run in the last feature loop iteration.
+        if 'imputer' in self.FEATURE_GENERATORS and (len(d.labeled_tuples) == self.LABELING_BUDGET - 1):
             df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
             for i_col, col in enumerate(df_clean_subset.columns):
-                imp = imputer.train_cleaning_model(df_clean_subset, label=i_col, time_limit=10)
+                imp = imputer.train_cleaning_model(df_clean_subset, label=i_col, time_limit=30)
                 d.imputer_models[i_col] = imp
 
         d.pair_features = {}
@@ -795,7 +797,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "hospital"
+    dataset_name = "letter"
     dataset_dictionary = {
         "name": dataset_name,
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
@@ -808,11 +810,11 @@ if __name__ == "__main__":
 
     app.VICINITY_ORDERS = [1]
     app.VICINITY_FEATURE_GENERATOR = "naive"
-    app.N_BEST_PDEPS = 3
+    app.N_BEST_PDEPS = 4
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['imputer']
 
-    seed = 3
+    seed = None
     correction_dictionary = app.run(data, seed)
     # p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
     # print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))

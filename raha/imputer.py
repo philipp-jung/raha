@@ -40,7 +40,8 @@ def train_cleaning_model(df: pd.DataFrame,
                     test_df=df_test,
                     time_limit=time_limit)
     except TargetColumnException:
-        print(f'Could not train an imputer for rhs {label}: Target class has less than 10 occurrences.')
+        if verbosity > 0:
+            print(f'Could not train an imputer for rhs {label}: Target class has less than 10 occurrences.')
         return None
     return imputer
 
