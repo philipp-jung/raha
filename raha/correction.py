@@ -30,6 +30,7 @@ import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
 from typing import Dict
+import pandas as pd
 
 import datawig
 import raha
@@ -355,7 +356,7 @@ class Correction:
                 results_list.append(results_dictionary)
         return results_list
 
-    def _imputer_based_corrector(self, model: Dict[int, datawig.AutoGluonImputer], ed: dict) -> list:
+    def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
         """
         Use an AutoGluon imputer to generate corrections.
 
@@ -363,14 +364,14 @@ class Correction:
         @param ed: Error Dictionary with information on the error and its vicinity.
         @return: list of corrections.
         """
-        import pandas as pd
-        imputer = model.get(ed['column'])
-        if imputer is None:
+        df_probas = model.get(ed['column'])
+        if df_probas is None:
             return []
-        row = pd.DataFrame([ed['vicinity']], columns=imputer.columns)
-        probas = imputer.predict_proba(row)
+        probas = df_probas.iloc[ed['row']]
+        # row = pd.DataFrame([ed['vicinity']], columns=imputer.columns)
+        # probas = imputer.predict_proba(row)
 
-        prob_d = {key: probas.to_dict()[key][0] for key in probas.to_dict()}
+        prob_d = {key: probas.to_dict()[key] for key in probas.to_dict()}
         prob_d_sorted = {key: value for key, value in sorted(prob_d.items(), key=lambda x: x[1])}
         most_probable = list(prob_d_sorted)[-1]
 
@@ -569,7 +570,10 @@ class Correction:
         d, cell = args
 
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
-        error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
+        error_dictionary = {"column": cell[1],
+                            "old_value": d.dataframe.iloc[cell],
+                            "vicinity": list(d.dataframe.iloc[cell[0], :]),
+                            "row": cell[0]}
         naive_vicinity_corrections = []
         pdep_vicinity_corrections = []
         value_corrections = []
@@ -603,8 +607,6 @@ class Correction:
             value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
         if "domain" in self.FEATURE_GENERATORS:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
-
-        # super expensive computation, so only run in the last feature loop iteration.
         if "imputer" in self.FEATURE_GENERATORS:
             imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
 
@@ -638,13 +640,16 @@ class Correction:
                         d.repaired_dataframe)
                 d.inv_vicinity_gpdeps[o] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
-        # train imputer model for each column
-        # super expensive computation, so only run in the last feature loop iteration.
+        # train imputer model for each column. super expensive computation, only run in the last
+        # feature loop iteration.
         if 'imputer' in self.FEATURE_GENERATORS and (len(d.labeled_tuples) == self.LABELING_BUDGET - 1):
             df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
             for i_col, col in enumerate(df_clean_subset.columns):
                 imp = imputer.train_cleaning_model(df_clean_subset, label=i_col, time_limit=30)
-                d.imputer_models[i_col] = imp
+                if imp is not None:
+                    d.imputer_models[i_col] = imp.predict_proba(d.dataframe)
+                else:
+                    d.imputer_models[i_col] = None
 
         d.pair_features = {}
         pairs_counter = 0
