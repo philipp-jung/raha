@@ -72,6 +72,8 @@ class Correction:
         # 'naive' feature generator. That one always generates features for all
         # possible column combinations.
 
+        self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
+
     @staticmethod
     def _wikitext_segmenter(wikitext):
         """
@@ -368,15 +370,13 @@ class Correction:
         if df_probas is None:
             return []
         probas = df_probas.iloc[ed['row']]
-        # row = pd.DataFrame([ed['vicinity']], columns=imputer.columns)
-        # probas = imputer.predict_proba(row)
 
         prob_d = {key: probas.to_dict()[key] for key in probas.to_dict()}
         prob_d_sorted = {key: value for key, value in sorted(prob_d.items(), key=lambda x: x[1])}
-        most_probable = list(prob_d_sorted)[-1]
+        most_probable = list(prob_d_sorted.keys())[-1]
 
-        if most_probable[0] == ed['old_value']:  # make sure that suggested correction isn't the wrong value
-            most_probable = list(prob_d_sorted)[-2]  # take second best correction in that case
+        if most_probable == ed['old_value']:  # make sure that suggested correction isn't the wrong value
+            most_probable = list(prob_d_sorted.keys())[-2]  # take second best correction in that case
 
         return [{most_probable: 1.0}]  # TODO maybe pass class probability instead?
 
@@ -476,8 +476,7 @@ class Correction:
         remaining_column_erroneous_values = {}
         for j in d.column_errors:
             for cell in d.column_errors[j]:
-                # if cell not in d.corrected_cells:  # debug sampling?
-                if True:
+                if cell not in d.corrected_cells:  # debug sampling?
                     self._to_model_adder(remaining_column_erroneous_cells, j, cell)
                     self._to_model_adder(remaining_column_erroneous_values, j, d.dataframe.iloc[cell])
         tuple_score = numpy.ones(d.dataframe.shape[0])
@@ -645,7 +644,11 @@ class Correction:
         if 'imputer' in self.FEATURE_GENERATORS and (len(d.labeled_tuples) == self.LABELING_BUDGET - 1):
             df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
             for i_col, col in enumerate(df_clean_subset.columns):
-                imp = imputer.train_cleaning_model(df_clean_subset, label=i_col, time_limit=30)
+                imp = imputer.train_cleaning_model(df_clean_subset,
+                                                   d.name,
+                                                   label=i_col,
+                                                   time_limit=30,
+                                                   use_cache=self.IMPUTER_CACHE_MODEL)
                 if imp is not None:
                     d.imputer_models[i_col] = imp.predict_proba(d.dataframe)
                 else:
@@ -730,31 +733,6 @@ class Correction:
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(100 * len(d.corrected_cells) / len(d.detected_cells),
                                                                            len(d.corrected_cells), len(d.detected_cells)))
-
-    def imputer_feature_generator(self, d):
-        """
-        Train an imputer model on clean data to generate corrections.
-        """
-        df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
-        imputer_corrections = imputer.imputation_based_corrector(d.dataframe, df_clean_subset, d.detected_cells)
-
-        # this is crap: If the imputer feature generator makes a suggestion that isn't part of
-        # what the other feature generators came up with, the feature vector will have length
-        # 1, although the other feature vectors might be longer.
-        for error_cell in d.detected_cells:
-            imputer_c = imputer_corrections[error_cell]
-            if d.pair_features[error_cell].get(imputer_c) is None:  # correction hasn't been suggested yet
-                # this should have the length of the other feature vectors.
-                d.pair_features[error_cell][imputer_c] = numpy.array([1])
-            else:
-                for correction in d.pair_features[error_cell]:
-                    if correction == imputer_corrections[error_cell]:
-                        p = 1
-                    else:
-                        p = 0
-                    d.pair_features[error_cell][correction] = numpy.append(d.pair_features[error_cell][correction], p)
-        return True
-
     def store_results(self, d):
         """
         This method stores the results.
@@ -791,7 +769,7 @@ class Correction:
             else:
                 ValueError('go label tuples manually in a jupyter notebook.')
             self.update_models(d)
-            self.generate_features(d, synchronous=True)
+            self.generate_features(d, synchronous=False)
             self.predict_corrections(d, random_seed=random_seed)
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
@@ -818,6 +796,7 @@ if __name__ == "__main__":
     app.N_BEST_PDEPS = 4
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['imputer']
+    app.IMPUTER_CACHE_MODEL = True
 
     seed = None
     correction_dictionary = app.run(data, seed)

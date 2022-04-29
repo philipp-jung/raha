@@ -4,3 +4,5 @@ raha/.idea/
 __pycache__/
 *.egg-info/
 agModels/
+
+*/datawigModels/

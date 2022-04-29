@@ -9,18 +9,33 @@ from IPython.core.debugger import set_trace
 
 
 def train_cleaning_model(df: pd.DataFrame,
+                         dataset_name: str,
                          label: int,
-                         time_limit=90,
+                         time_limit : int = 90,
+                         use_cache: bool = True,
+                         row_threshold: int = 50,
                          verbosity: int = 0) -> Union[datawig.AutoGluonImputer, None]:
     """
     Train an autogluon model for the purpose of cleaning data.
     Optionally, you can set verbosity to control how much output AutoGluon
     produces during training.
     Returns a predictor object.
+    @param df: Dataframe to clean the imputer model on.
+    @param dataset_name: used for storing the imputer model on the drive & caching.
+    @param label: index of the column to be imputed.
+    @param time_limit: autogluon time limit training the imputer model.
+    @param use_cache: Instead of training models, use cached models for the same dataset_name & label if it exists.
+    @param row_threshold: Minimal row count of the dataframe to train a model with.
+    @param verbosity: integer between 0 and 2 to control autogluon's verbosity.
+    @return: AutoGluonImputer, capable of imputing values in the label column.
     """
+
+    if df.shape[0] < row_threshold or df.shape[0] == 0:  # too few rows to train an imputer model with.
+        return None
     lhs = list(df.columns)
     del lhs[label - 1]
     rhs = df.columns[label]
+    model_name = f'{dataset_name}-{label}-imputer-model'
 
     # Splitting here maybe needs to be removed, because it doesn't scale well with
     # dataset size. AutoGluon does smart train-test-splits internally, might be reasonable
@@ -28,21 +43,27 @@ def train_cleaning_model(df: pd.DataFrame,
     df_train, df_test = train_test_split(df, test_size=.1)
 
     try:
-        imputer = datawig.AutoGluonImputer(
-            model_name=f'{label}-imputing-model',
-            columns=df.columns,
-            input_columns=lhs,
-            output_column=rhs,
-            verbosity=verbosity,
-        )
+        if not use_cache:
+            raise FileNotFoundError
+        imputer = datawig.AutoGluonImputer.load(output_path='./', model_name=model_name)
+    except FileNotFoundError:
+        try:
+            imputer = datawig.AutoGluonImputer(
+                model_name=model_name,
+                columns=df.columns,
+                input_columns=lhs,
+                output_column=rhs,
+                verbosity=verbosity,
+            )
+            imputer.fit(train_df=df_train,
+                        test_df=df_test,
+                        time_limit=time_limit)
 
-        imputer.fit(train_df=df_train,
-                    test_df=df_test,
-                    time_limit=time_limit)
-    except TargetColumnException:
-        if verbosity > 0:
-            print(f'Could not train an imputer for rhs {label}: Target class has less than 10 occurrences.')
-        return None
+        except TargetColumnException:
+            if verbosity > 0:
+                print(f'Could not train an imputer for rhs {label}: Target class has less than 10 occurrences.')
+            return None
+    imputer.save()
     return imputer
 
 
