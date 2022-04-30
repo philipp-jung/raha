@@ -58,7 +58,7 @@ class Correction:
         self.SAVE_RESULTS = True
         self.ONLINE_PHASE = False
         self.LABELING_BUDGET = 20
-        self.MIN_CORRECTION_CANDIDATE_PROBABILITY = 0.0
+        self.MIN_CORRECTION_CANDIDATE_PROBABILITY = 0.00
         self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
         self.REVISION_WINDOW_SIZE = 5
@@ -68,11 +68,16 @@ class Correction:
         self.FEATURE_GENERATORS = ["value", "domain", "vicinity"]
         self.VICINITY_ORDERS = [1]  # Baran default
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
-        self.N_BEST_PDEPS = None  # recommend up to 10. Ignored when using
-        # 'naive' feature generator. That one always generates features for all
-        # possible column combinations.
-
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
+
+        # conditional probability * gpdep_score needs to be higher than this threshold
+        # for a correction candidate to get turned in to a feature.
+        self.GPDEP_CORRECTION_SCORE_THRESHOLD = 0.05
+
+        # recommend up to 10. Ignored when using 'naive' feature generator. That one
+        # always generates features for all possible column combinations.
+        self.N_BEST_PDEPS = None
+
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -410,16 +415,6 @@ class Correction:
         d.corrected_cells = {} if not hasattr(d, "corrected_cells") else d.corrected_cells
         return d
 
-    def _calc_pdep(self, d: dict, N: int, A: int, B: int):
-        counts_dict = d[A][B]
-        sum_components = []
-        for lhs_val, rhs_dict in counts_dict.items(): # lhs_val same as A_i
-            lhs_counts = sum(rhs_dict.values()) # same as a_i
-            for rhs_val, rhs_counts in rhs_dict.items(): # rhs_counts same as n_ij
-                sum_components.append(rhs_counts**2 / lhs_counts)
-        return sum(sum_components) / N
-
-
     def initialize_models(self, d):
         """
         This method initializes the error corrector models.
@@ -562,9 +557,11 @@ class Correction:
 
     def _feature_generator_process(self, args):
         """
-        This method generates features for each data column. Depending on the
-        config of `generate_features()`, it will run in parallel or not. This
-        gets called once for each error cell.
+        This method generates cleaning suggestions that get turned into features for the
+        classifier in predict_corrections(). It gets called once for each each error cell.
+
+        Depending of the value of `synchronous` in `generate_features()`, the method will
+        be executed in parallel or not.
         """
         d, cell = args
 
@@ -584,7 +581,7 @@ class Correction:
             if self.VICINITY_FEATURE_GENERATOR == 'naive':
                 for o in self.VICINITY_ORDERS:
                     naive_corrections = pdep.vicinity_based_corrector_order_n(
-                        counts_dict = d.vicinity_models[o],
+                        counts_dict=d.vicinity_models[o],
                         ed=error_dictionary,
                         probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
                     naive_vicinity_corrections.append(naive_corrections)
@@ -595,8 +592,8 @@ class Correction:
                             inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
                             counts_dict=d.vicinity_models[o],
                             ed=error_dictionary,
-                            probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY,
-                            n_best_pdeps = self.N_BEST_PDEPS)
+                            score_threshold=self.GPDEP_CORRECTION_SCORE_THRESHOLD,
+                            n_best_pdeps=self.N_BEST_PDEPS)
                     pdep_vicinity_corrections.append(pdep_corrections)
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR'
@@ -616,6 +613,9 @@ class Correction:
         # End Philipps Changes
 
         corrections_features = {}
+        # Warum kann ein Modell für einen Fehler nur einen Korrekturvorschlag machen?
+        # Warum kann ein Modell nicht für einen Fehler mehrere Korrekturvorschläge
+        # akzeptieren mit unterschiedlich großen Scores?
         for mi, model in enumerate(models_corrections):
             for correction in model:
                 if correction not in corrections_features:
@@ -769,7 +769,7 @@ class Correction:
             else:
                 ValueError('go label tuples manually in a jupyter notebook.')
             self.update_models(d)
-            self.generate_features(d, synchronous=False)
+            self.generate_features(d, synchronous=True)
             self.predict_corrections(d, random_seed=random_seed)
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
@@ -792,11 +792,10 @@ if __name__ == "__main__":
     app.LABELING_BUDGET = 20
 
     app.VICINITY_ORDERS = [1]
-    app.VICINITY_FEATURE_GENERATOR = "naive"
-    app.N_BEST_PDEPS = 4
+    app.VICINITY_FEATURE_GENERATOR = "pdep"
+    app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['imputer']
-    app.IMPUTER_CACHE_MODEL = True
+    app.FEATURE_GENERATORS = ['vicinity', 'domain', 'value']
 
     seed = None
     correction_dictionary = app.run(data, seed)

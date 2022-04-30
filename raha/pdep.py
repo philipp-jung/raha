@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Union, Any
 from itertools import combinations
 from IPython.core.debugger import set_trace
 
@@ -198,64 +198,41 @@ def invert_and_sort_gpdeps(gpdeps: Dict[Tuple, Dict[int, float]]
     return inverse_gpdeps
 
 def pdep_vicinity_based_corrector(
-        inverse_sorted_gpdeps,
+        inverse_sorted_gpdeps: Dict[int, Dict[tuple, float]],
         counts_dict,
         ed,
-        probability_threshold,
-        n_best_pdeps=None):
+        score_threshold: float = 0.05,
+        n_best_pdeps: int = 5) -> List[Dict[str, float]]:
     """
-    Leverage gpdep to avoid having correction suggestions grow at (n-1)^2 / 2,
-    only take the `n_best_pdeps` highest-scoring dependencies to draw corrections from.
-    If `n_best_pdeps` is None, create as many features as the dataframe has
-    columns.
-
-    ed: {   'column': column int,
-            'old_value': old error value,
-            'vicinity': row that contains the error, including the error
-    }
-    counts_dict: Dict[Dict[Dict[Dict]]] [lhs][rhs][lhs_value][rhs_value]
-
+    Leverage gpdep to avoid having correction suggestion feature columns
+    grow in number at (n-1)^2 / 2 pace. Only take the `n_best_pdeps`
+    highest-scoring dependencies to draw corrections from.
     """
-    if n_best_pdeps is None:
-        # highest number of vicinity models possible is n_cols - 1
-        n_best_pdeps = len(ed['vicinity']) - 1
-
-    best_pdeps = {rhs: [] for rhs in range(len(ed['vicinity']))}
-
-    for rhs in inverse_sorted_gpdeps:
-        i = 0
-        j = 0
-        while i < n_best_pdeps:
-            lhs, gpdep_score = list(inverse_sorted_gpdeps[rhs].items())[j]
-            if rhs not in lhs:
-                best_pdeps[rhs].append((lhs, gpdep_score))
-                i = i+1
-            j = j+1
-
     rhs_col = ed["column"]
+    gpdeps = inverse_sorted_gpdeps[rhs_col]
+    gpdeps_subset = {lhs: gpdeps[lhs] for i, lhs in enumerate(gpdeps) if i < n_best_pdeps}
     results_list = []
 
-    for lhs_cols, gpdep_score in inverse_sorted_gpdeps[rhs_col].items():
+    for lhs_cols, gpdep_score in gpdeps_subset.items():
         lhs_vals = tuple([ed['vicinity'][x] for x in lhs_cols])
 
         if not rhs_col in lhs_cols and \
-        lhs_vals in counts_dict[lhs_cols][rhs_col] and \
-        len(results_list) < n_best_pdeps:
-                results_dictionary = {}
-                sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
-                for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
-                    pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
-                    if pr >= probability_threshold:
-                        results_dictionary[rhs_val] = pr
-                results_list.append(results_dictionary)
+        lhs_vals in counts_dict[lhs_cols][rhs_col]:
+            sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
+            for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
+                pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
+                score = pr * gpdep_score
+                if score > score_threshold:
+                    results_list.append({'correction': rhs_val,
+                                         'score': score})
 
-    # Es kommt vor, dass lhs_vals so selten in counts_dict[lhs_cols][rhs_cols]
-    # enthalten sind, dass weniger results_dictinaries erstellt werden, als
-    # mit n_best_pdeps gefordert wird.
-    #
-    # In dem Fall fülle ich die results_list mit leeren dictionaries auf. Das
-    # entspricht der Aussage, dass kein Reinigungsergebnis erstellt werden
-    # kann. Das scheint mir sinnvoll.
-    while len(results_list) < n_best_pdeps:
-        results_list.append({})
-    return results_list
+    sorted_results = sorted(results_list, key=lambda x: x['score'], reverse=True)
+    correction_suggestions = {}
+
+    # Having a sorted dict allows us to only return the highest score per
+    # correction by iterating over all generated corrections like this.
+    for d in sorted_results:
+        if correction_suggestions.get(d['correction']) is None:
+            correction_suggestions[d['correction']] = d['score']
+
+    return [correction_suggestions]
