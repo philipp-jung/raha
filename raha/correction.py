@@ -378,12 +378,14 @@ class Correction:
 
         prob_d = {key: probas.to_dict()[key] for key in probas.to_dict()}
         prob_d_sorted = {key: value for key, value in sorted(prob_d.items(), key=lambda x: x[1])}
-        most_probable = list(prob_d_sorted.keys())[-1]
 
-        if most_probable == ed['old_value']:  # make sure that suggested correction isn't the wrong value
-            most_probable = list(prob_d_sorted.keys())[-2]  # take second best correction in that case
-
-        return [{most_probable: 1.0}]  # TODO maybe pass class probability instead?
+        result = {}
+        for correction, probability in prob_d_sorted.items():
+            # make sure that suggested correction is likely and isn't the old error
+            if probability > 0 and correction != ed['old_value']:
+                result[correction] = probability
+        # TODO normalize probabilities when old error gets deleted
+        return [result]
 
     def _domain_based_corrector(self, model, ed):
         """
@@ -641,7 +643,7 @@ class Correction:
 
         # train imputer model for each column. super expensive computation, only run in the last
         # feature loop iteration.
-        if 'imputer' in self.FEATURE_GENERATORS and (len(d.labeled_tuples) == self.LABELING_BUDGET - 1):
+        if 'imputer' in self.FEATURE_GENERATORS:  #and (len(d.labeled_tuples) == self.LABELING_BUDGET - 1):
             df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
             for i_col, col in enumerate(df_clean_subset.columns):
                 imp = imputer.train_cleaning_model(df_clean_subset,
@@ -780,7 +782,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "letter"
+    dataset_name = "hospital"
     dataset_dictionary = {
         "name": dataset_name,
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
@@ -795,7 +797,8 @@ if __name__ == "__main__":
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['vicinity', 'domain', 'value']
+    app.FEATURE_GENERATORS = ['value', 'domain', 'imputer']
+    app.IMPUTER_CACHE_MODEL = True
 
     seed = None
     correction_dictionary = app.run(data, seed)
