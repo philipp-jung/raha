@@ -641,9 +641,8 @@ class Correction:
                         d.repaired_dataframe)
                 d.inv_vicinity_gpdeps[o] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
-        # train imputer model for each column. super expensive computation, only run in the last
-        # feature loop iteration.
-        if 'imputer' in self.FEATURE_GENERATORS:  #and (len(d.labeled_tuples) == self.LABELING_BUDGET - 1):
+        # train imputer model for each column.
+        if 'imputer' in self.FEATURE_GENERATORS:
             df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
             for i_col, col in enumerate(df_clean_subset.columns):
                 imp = imputer.train_cleaning_model(df_clean_subset,
@@ -782,22 +781,23 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "hospital"
+    dataset_name = "cars_1"
     dataset_dictionary = {
         "name": dataset_name,
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
         "clean_path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "clean.csv"))
     }
-    data = raha.dataset.Dataset(dataset_dictionary)
+    data = raha.dataset.Dataset(dataset_dictionary, n_rows=500)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
     app.LABELING_BUDGET = 20
 
-    app.VICINITY_ORDERS = [1]
+    app.VICINITY_ORDERS = [2]
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
+    app.GPDEP_CORRECTION_SCORE_THRESHOLD = 0.03
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['value', 'domain', 'imputer']
+    app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
     app.IMPUTER_CACHE_MODEL = True
 
     seed = None
