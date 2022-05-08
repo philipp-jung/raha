@@ -32,6 +32,8 @@ import sklearn.linear_model
 from typing import Dict
 import pandas as pd
 
+from IPython.core.debugger import set_trace
+
 import datawig
 import raha
 from raha import imputer
@@ -648,7 +650,7 @@ class Correction:
                 imp = imputer.train_cleaning_model(df_clean_subset,
                                                    d.name,
                                                    label=i_col,
-                                                   time_limit=30,
+                                                   time_limit=45,
                                                    use_cache=self.IMPUTER_CACHE_MODEL)
                 if imp is not None:
                     d.imputer_models[i_col] = imp.predict_proba(d.dataframe)
@@ -682,8 +684,8 @@ class Correction:
         """
         This method predicts
 
-        Philipp added a random state for an experiment to all classification
-        models.
+        Philipp added support for a random_seed to all classifiers. When the random_seed is set,
+        we measure a steep decline in cleaning performance. So not a recommended feature.
         """
         for j in d.column_errors:
             x_train = []
@@ -714,7 +716,8 @@ class Correction:
                 classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
             if self.CLASSIFICATION_MODEL == "SVC":
                 classification_model = sklearn.svm.SVC(kernel="sigmoid")
-            if x_train and x_test:
+
+            if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:
                     predicted_labels = numpy.zeros(len(x_test))
                 elif sum(y_train) == len(y_train):
@@ -722,15 +725,19 @@ class Correction:
                 else:
                     classification_model.fit(x_train, y_train)
                     predicted_labels = classification_model.predict(x_test)
-                # predicted_probabilities = classification_model.predict_proba(x_test)
-                # correction_confidence = {}
+
                 for index, predicted_label in enumerate(predicted_labels):
                     cell, predicted_correction = test_cell_correction_list[index]
-                    # confidence = predicted_probabilities[index][1]
                     if predicted_label:
-                        # if cell not in correction_confidence or confidence > correction_confidence[cell]:
-                        #     correction_confidence[cell] = confidence
                         d.corrected_cells[cell] = predicted_correction
+
+            elif len(d.labeled_tuples) == 0:  # no training data because no user labels
+                for cell in d.pair_features:
+                    correction_dict = d.pair_features[cell]
+                    if len(correction_dict) > 0:
+                        max_proba_feature = sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
+                        d.corrected_cells[cell] = max_proba_feature[0]
+
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(100 * len(d.corrected_cells) / len(d.detected_cells),
                                                                            len(d.corrected_cells), len(d.detected_cells)))
@@ -781,13 +788,13 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "cars_1"
+    dataset_name = "beers"
     dataset_dictionary = {
         "name": dataset_name,
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
         "clean_path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "clean.csv"))
     }
-    data = raha.dataset.Dataset(dataset_dictionary, n_rows=500)
+    data = raha.dataset.Dataset(dataset_dictionary)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
     app.LABELING_BUDGET = 20
