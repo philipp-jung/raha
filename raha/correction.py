@@ -32,6 +32,8 @@ import sklearn.linear_model
 from typing import Dict
 import pandas as pd
 
+from IPython.core.debugger import set_trace
+
 import datawig
 import raha
 from raha import imputer
@@ -378,12 +380,14 @@ class Correction:
 
         prob_d = {key: probas.to_dict()[key] for key in probas.to_dict()}
         prob_d_sorted = {key: value for key, value in sorted(prob_d.items(), key=lambda x: x[1])}
-        most_probable = list(prob_d_sorted.keys())[-1]
 
-        if most_probable == ed['old_value']:  # make sure that suggested correction isn't the wrong value
-            most_probable = list(prob_d_sorted.keys())[-2]  # take second best correction in that case
-
-        return [{most_probable: 1.0}]  # TODO maybe pass class probability instead?
+        result = {}
+        for correction, probability in prob_d_sorted.items():
+            # make sure that suggested correction is likely and isn't the old error
+            if probability > 0 and correction != ed['old_value']:
+                result[correction] = probability
+        # TODO normalize probabilities when old error gets deleted
+        return [result]
 
     def _domain_based_corrector(self, model, ed):
         """
@@ -639,15 +643,14 @@ class Correction:
                         d.repaired_dataframe)
                 d.inv_vicinity_gpdeps[o] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
-        # train imputer model for each column. super expensive computation, only run in the last
-        # feature loop iteration.
-        if 'imputer' in self.FEATURE_GENERATORS and (len(d.labeled_tuples) == self.LABELING_BUDGET - 1):
+        # train imputer model for each column.
+        if 'imputer' in self.FEATURE_GENERATORS:
             df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
             for i_col, col in enumerate(df_clean_subset.columns):
                 imp = imputer.train_cleaning_model(df_clean_subset,
                                                    d.name,
                                                    label=i_col,
-                                                   time_limit=30,
+                                                   time_limit=45,
                                                    use_cache=self.IMPUTER_CACHE_MODEL)
                 if imp is not None:
                     d.imputer_models[i_col] = imp.predict_proba(d.dataframe)
@@ -681,8 +684,8 @@ class Correction:
         """
         This method predicts
 
-        Philipp added a random state for an experiment to all classification
-        models.
+        Philipp added support for a random_seed to all classifiers. When the random_seed is set,
+        we measure a steep decline in cleaning performance. So not a recommended feature.
         """
         for j in d.column_errors:
             x_train = []
@@ -713,7 +716,8 @@ class Correction:
                 classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
             if self.CLASSIFICATION_MODEL == "SVC":
                 classification_model = sklearn.svm.SVC(kernel="sigmoid")
-            if x_train and x_test:
+
+            if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:
                     predicted_labels = numpy.zeros(len(x_test))
                 elif sum(y_train) == len(y_train):
@@ -721,15 +725,19 @@ class Correction:
                 else:
                     classification_model.fit(x_train, y_train)
                     predicted_labels = classification_model.predict(x_test)
-                # predicted_probabilities = classification_model.predict_proba(x_test)
-                # correction_confidence = {}
+
                 for index, predicted_label in enumerate(predicted_labels):
                     cell, predicted_correction = test_cell_correction_list[index]
-                    # confidence = predicted_probabilities[index][1]
                     if predicted_label:
-                        # if cell not in correction_confidence or confidence > correction_confidence[cell]:
-                        #     correction_confidence[cell] = confidence
                         d.corrected_cells[cell] = predicted_correction
+
+            elif len(d.labeled_tuples) == 0:  # no training data because no user labels
+                for cell in d.pair_features:
+                    correction_dict = d.pair_features[cell]
+                    if len(correction_dict) > 0:
+                        max_proba_feature = sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
+                        d.corrected_cells[cell] = max_proba_feature[0]
+
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(100 * len(d.corrected_cells) / len(d.detected_cells),
                                                                            len(d.corrected_cells), len(d.detected_cells)))
@@ -780,7 +788,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "letter"
+    dataset_name = "beers"
     dataset_dictionary = {
         "name": dataset_name,
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
@@ -791,11 +799,13 @@ if __name__ == "__main__":
     app = Correction()
     app.LABELING_BUDGET = 20
 
-    app.VICINITY_ORDERS = [1]
+    app.VICINITY_ORDERS = [2]
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
+    app.GPDEP_CORRECTION_SCORE_THRESHOLD = 0.03
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['vicinity', 'domain', 'value']
+    app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
+    app.IMPUTER_CACHE_MODEL = True
 
     seed = None
     correction_dictionary = app.run(data, seed)

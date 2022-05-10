@@ -63,6 +63,14 @@ def train_cleaning_model(df: pd.DataFrame,
             if verbosity > 0:
                 print(f'Could not train an imputer for rhs {label}: Target class has less than 10 occurrences.')
             return None
+        except IndexError:
+            if verbosity > 0:
+                print(f'Could not traind an imputer for rhs {label}: Something went wrong calibrating class probabilities.')
+            return None
+        except ValueError:
+            if verbosity > 0:
+                print(f'Could not traind an imputer for rhs {label}: AutoGluon did not train a single model successfully.')
+            return None
     imputer.save()
     return imputer
 

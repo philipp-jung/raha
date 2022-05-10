@@ -199,8 +199,8 @@ def invert_and_sort_gpdeps(gpdeps: Dict[Tuple, Dict[int, float]]
 
 def pdep_vicinity_based_corrector(
         inverse_sorted_gpdeps: Dict[int, Dict[tuple, float]],
-        counts_dict,
-        ed,
+        counts_dict: dict,
+        ed: dict,
         score_threshold: float = 0.05,
         n_best_pdeps: int = 5) -> List[Dict[str, float]]:
     """
