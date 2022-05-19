@@ -209,33 +209,6 @@ class Correction:
             return json.dumps([unicodedata.category(c) for c in value])
 
     @staticmethod
-    def _to_model_constant(model, key, value):
-        """
-        This methods incrementally adds a key-value into a dictionary-implemented model.
-        Philipp hat es kaputt gemacht um zu testen, was passiert, wenn man die
-        Vicinity models statisch auf 1 setzt.
-        """
-        if key not in model:
-            model[key] = {}
-        if value not in model[key]:
-            model[key][value] = 0.0
-        model[key][value] = 1.0
-
-    @staticmethod
-    def _to_model_ente(model, key, value):
-        """
-        This methods incrementally adds a key-value into a dictionary-implemented model.
-        Philipp hat es kaputt gemacht um zu testen, was passiert, wenn man die
-        Vicinity models komplett auslässt.
-        """
-        value = 'ente'
-        if key not in model:
-            model[key] = {}
-        if value not in model[key]:
-            model[key][value] = 0.0
-        model[key][value] = 1.0
-
-    @staticmethod
     def _to_model_adder(model, key, value):
         """
         This methods incrementally adds a key-value into a dictionary-implemented model.
@@ -561,10 +534,11 @@ class Correction:
 
     def _feature_generator_process(self, args):
         """
-        This method generates cleaning suggestions that get turned into features for the
-        classifier in predict_corrections(). It gets called once for each each error cell.
+        This method generates cleaning suggestions for one error in one cell. The suggestion
+        gets turned into features for the classifier in predict_corrections(). It gets called
+        once for each each error cell.
 
-        Depending of the value of `synchronous` in `generate_features()`, the method will
+        Depending on the value of `synchronous` in `generate_features()`, the method will
         be executed in parallel or not.
         """
         d, cell = args
@@ -600,7 +574,7 @@ class Correction:
                             n_best_pdeps=self.N_BEST_PDEPS)
                     pdep_vicinity_corrections.append(pdep_corrections)
             else:
-                raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR'
+                raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
                         f'{self.VICINITY_FEATURE_GENERATOR}')
 
         if "value" in self.FEATURE_GENERATORS:
@@ -617,9 +591,6 @@ class Correction:
         # End Philipps Changes
 
         corrections_features = {}
-        # Warum kann ein Modell für einen Fehler nur einen Korrekturvorschlag machen?
-        # Warum kann ein Modell nicht für einen Fehler mehrere Korrekturvorschläge
-        # akzeptieren mit unterschiedlich großen Scores?
         for mi, model in enumerate(models_corrections):
             for correction in model:
                 if correction not in corrections_features:
@@ -788,7 +759,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "beers"
+    dataset_name = "hospital"
     dataset_dictionary = {
         "name": dataset_name,
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
@@ -799,10 +770,10 @@ if __name__ == "__main__":
     app = Correction()
     app.LABELING_BUDGET = 20
 
-    app.VICINITY_ORDERS = [2]
+    app.VICINITY_ORDERS = [1]
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
-    app.GPDEP_CORRECTION_SCORE_THRESHOLD = 0.03
+    app.GPDEP_CORRECTION_SCORE_THRESHOLD = 0.00
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
     app.IMPUTER_CACHE_MODEL = True
