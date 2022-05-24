@@ -201,7 +201,6 @@ def pdep_vicinity_based_corrector(
         inverse_sorted_gpdeps: Dict[int, Dict[tuple, float]],
         counts_dict: dict,
         ed: dict,
-        score_threshold: float = 0.05,
         n_best_pdeps: int = 5) -> List[Dict[str, float]]:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
@@ -211,9 +210,12 @@ def pdep_vicinity_based_corrector(
     rhs_col = ed["column"]
     gpdeps = inverse_sorted_gpdeps[rhs_col]
     gpdeps_subset = {lhs: gpdeps[lhs] for i, lhs in enumerate(gpdeps) if i < n_best_pdeps}
+    max_gpdep_score = list(gpdeps_subset.items())[0][1]
+
     results_list = []
 
     for lhs_cols, gpdep_score in gpdeps_subset.items():
+        penalty = max_gpdep_score - gpdep_score
         lhs_vals = tuple([ed['vicinity'][x] for x in lhs_cols])
 
         if not rhs_col in lhs_cols and \
@@ -221,10 +223,9 @@ def pdep_vicinity_based_corrector(
             sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
             for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
                 pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
-                score = pr * gpdep_score
-                if score > score_threshold:
-                    results_list.append({'correction': rhs_val,
-                                         'score': score})
+                score = pr * (1 - penalty)
+                results_list.append({'correction': rhs_val,
+                                     'score': score})
 
     sorted_results = sorted(results_list, key=lambda x: x['score'], reverse=True)
     correction_suggestions = {}

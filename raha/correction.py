@@ -72,10 +72,6 @@ class Correction:
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
 
-        # conditional probability * gpdep_score needs to be higher than this threshold
-        # for a correction candidate to get turned in to a feature.
-        self.GPDEP_CORRECTION_SCORE_THRESHOLD = 0.05
-
         # recommend up to 10. Ignored when using 'naive' feature generator. That one
         # always generates features for all possible column combinations.
         self.N_BEST_PDEPS = None
@@ -570,7 +566,6 @@ class Correction:
                             inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
                             counts_dict=d.vicinity_models[o],
                             ed=error_dictionary,
-                            score_threshold=self.GPDEP_CORRECTION_SCORE_THRESHOLD,
                             n_best_pdeps=self.N_BEST_PDEPS)
                     pdep_vicinity_corrections.append(pdep_corrections)
             else:
@@ -765,15 +760,14 @@ if __name__ == "__main__":
         "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
         "clean_path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "clean.csv"))
     }
-    data = raha.dataset.Dataset(dataset_dictionary)
+    data = raha.dataset.Dataset(dataset_dictionary, n_rows=1000)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
     app.LABELING_BUDGET = 20
 
-    app.VICINITY_ORDERS = [1]
+    app.VICINITY_ORDERS = [1, 2]
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
-    app.GPDEP_CORRECTION_SCORE_THRESHOLD = 0.00
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
     app.IMPUTER_CACHE_MODEL = True
