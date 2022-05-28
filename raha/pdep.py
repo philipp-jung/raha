@@ -201,7 +201,8 @@ def pdep_vicinity_based_corrector(
         inverse_sorted_gpdeps: Dict[int, Dict[tuple, float]],
         counts_dict: dict,
         ed: dict,
-        n_best_pdeps: int = 5) -> List[Dict[str, float]]:
+        n_best_pdeps: int = 5,
+        scoring_strategy: str = 'penalty') -> List[Dict[str, float]]:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
     grow in number at (n-1)^2 / 2 pace. Only take the `n_best_pdeps`
@@ -223,9 +224,20 @@ def pdep_vicinity_based_corrector(
             sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
             for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
                 pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
-                score = pr * (1 - penalty)
+                if scoring_strategy == 'pr_only' or scoring_strategy == 'new_feature':
+                    score = pr
+                elif scoring_strategy == 'multiply':
+                    score = pr * gpdep_score
+                elif scoring_strategy == 'penalty':
+                    score = pr * (1 - penalty)
+                else:
+                    raise ValueError('No valid feature strategy specified')
+
                 results_list.append({'correction': rhs_val,
                                      'score': score})
+                if scoring_strategy == 'new_feature':  # create new feature for gpdep score
+                    results_list.append({'correction': rhs_val,
+                                         'score': gpdep_score})
 
     sorted_results = sorted(results_list, key=lambda x: x['score'], reverse=True)
     correction_suggestions = {}

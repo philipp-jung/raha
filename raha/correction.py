@@ -74,7 +74,11 @@ class Correction:
 
         # recommend up to 10. Ignored when using 'naive' feature generator. That one
         # always generates features for all possible column combinations.
-        self.N_BEST_PDEPS = None
+        self.N_BEST_PDEPS = 5
+
+        # Strategy upon which pdep feature generation is based. It is still ongoing
+        # research to determine which strategy is best.
+        self.PDEP_SCORE_STRATEGY = 'penalty'
 
 
     @staticmethod
@@ -566,7 +570,8 @@ class Correction:
                             inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
                             counts_dict=d.vicinity_models[o],
                             ed=error_dictionary,
-                            n_best_pdeps=self.N_BEST_PDEPS)
+                            n_best_pdeps=self.N_BEST_PDEPS,
+                            scoring_strategy=self.PDEP_SCORE_STRATEGY)
                     pdep_vicinity_corrections.append(pdep_corrections)
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
@@ -771,6 +776,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
     app.IMPUTER_CACHE_MODEL = True
+    app.PDEP_SCORE_STRATEGY = 'penalty'
 
     seed = None
     correction_dictionary = app.run(data, seed)
