@@ -1,10 +1,8 @@
 from pprint import pprint
 import datetime
 import itertools
-from pathlib import Path
-from collections import namedtuple
+from pathlib import Path, PosixPath
 from typing import Dict, List, Callable
-import pickle
 
 
 def format_delta(delta: datetime.timedelta):
@@ -58,7 +56,7 @@ class Ruska:
         self.description = description
         self.commit = commit
         self.config = config
-        self.ranges = {**ranges, 'runs': list(range(runs))}
+        self.ranges = {**ranges, 'run': list(range(runs))}
         self.save_path = Path(save_path) / f'{name}.txt'
         self.times = []
 
@@ -96,9 +94,9 @@ class Ruska:
         self.times.append(datetime.datetime.now())
 
         for parameter_combination in self.range_combinations:
-            app_config = {**self.config, **parameter_combination}
-            result = experiment(app_config)
-            results.append({'result': result, 'app_config': app_config})
+            config = {**self.config, **parameter_combination}
+            result = experiment(**config)
+            results.append({'result': result, 'config': config})
             self.times.append(datetime.datetime.now())
             print(estimate_time_to_finish(self.times, len(self.range_combinations)))
 
@@ -115,8 +113,37 @@ class Ruska:
             print('[END RESULTS]', file=f)
         print('Measurement finished')
 
+    @staticmethod
+    def load_result(path_to_result: str):
+        path = Path(path_to_result)
+        config_flag = False
+        result_flag = False
+
+        result = ''
+        result_config = ''
+
+        with open(path, 'rt') as f:
+            for line in f:
+                if line.strip() == '[BEGIN CONFIG]':
+                    config_flag = True
+                elif line.strip() == '[END CONFIG]':
+                    config_flag = False
+                elif line.strip() == '[BEGIN RESULTS]':
+                    result_flag = True
+                elif line.strip() == '[END RESULTS]':
+                    result_flag = False
+                else:
+                    if config_flag:
+                        result_config = result_config + line
+                    elif result_flag:
+                        result = result + line
+        result_dict = eval(result)
+        result_config_dict = eval(result_config)
+        return result_dict, result_config_dict
+
 if __name__ == '__main__':
     config = {'dataset': 'letter', 'strategy': 'paint', 'model': 'dtc'}
     ranges = {'dataset': ['paper', 'letter', 'restaurant']}
     ruska = Ruska('test', 'Eine Test-Messung, die ich ausführe, um zu testen.', 'f12fadsdfads', config, ranges, 3, save_path='/Users/philipp/code/raha/raha')
-    ruska.run(lambda x: True)
+    print(ruska.load_result('/Users/philipp/code/raha/raha/test.txt'))
+    #ruska.run(lambda **kwargs: True)
