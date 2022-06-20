@@ -227,7 +227,11 @@ def pdep_vicinity_based_corrector(
                 if scoring_strategy == 'pr_only' or scoring_strategy == 'new_feature':
                     score = pr
                 elif scoring_strategy == 'multiply':
-                    score = pr * gpdep_score
+                    score = pr * gpdep
+                elif scoring_strategy == 'erste_idee_mit_thorsten':
+                    score = n_corrections * max(pr * gpdep_score) / n_all_corrections
+                elif scoring_strategy == 'zweite':
+                    score = sum(pr * gpdep_score) / n_all_corrections
                 elif scoring_strategy == 'penalty':
                     score = pr * (1 - penalty)
                 else:
