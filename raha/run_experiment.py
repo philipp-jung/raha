@@ -36,10 +36,16 @@ def run_baran(c: dict):
 
 
 def run_baran_renuver(c: dict):
-    rate_formatted = str(c['error_fraction']).split(".")[1]
+    """
+    Use run in [0,4] to not get an error.
+    """
+
+    # um an das format von renuver anzupassen
+    rate_formatted = int(str(c['error_fraction']).split(".")[1]) * 10
+    run = c['run'] + 1
     data_dict = {
         "name": c["dataset"],
-        "path": f"../datasets/renuver/{c['dataset']}/{c['sampling']}/dirty_{rate_formatted}.csv",
+        "path": f"../datasets/renuver/{c['dataset']}/dirty_{rate_formatted}_{run}.csv",
         "clean_path": f"../datasets/{c['dataset']}/clean.csv",
     }
 
@@ -69,10 +75,10 @@ def run_baran_renuver(c: dict):
 
 if __name__ == "__main__":
     rsk = Ruska(
-        name="2022-06-10-validate-simple-mcar",
-        description="""Wiederholung aller Messungen auf den Datensätzen
-                 von denen ich weiß, dass pdep besser ist als Baran. Die Fehler
-                 erzeuge ich mit Ruska's simple-mcar""",
+        name="2022-06-20-recreate-limitation-on-renuver",
+        description="""Ich sammele alle Limitierungen mit pdep, um sie dann
+        zu verbessern. Die erste Limitierung ist die schlechtere Performance
+        auf den Renuver Datensätzen. Die möchte ich hier reproduzieren.""",
         commit="füge ich später ein :)",
         config={
             "dataset": "breast-cancer",
@@ -88,20 +94,20 @@ if __name__ == "__main__":
             "n_rows": None,
         },
         ranges={
-            "error_fraction": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99],
-            "dataset": ["breast-cancer", "letter"],
+            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
+            "dataset": ['cars', 'bridges', 'glass', 'physician', 'resturant'],
         },
-        runs=3,
+        runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk.run(experiment=run_baran, parallel=True)
+    rsk.run(experiment=run_baran_renuver, parallel=True)
 
     rsk_naive = Ruska(
-        name="2022-06-10-validate-simple-mcar-naive",
-        description="""Wiederholung aller Messungen auf den Datensätzen
-             von denen ich weiß, dass pdep besser ist als Baran. Die Fehler
-             erzeuge ich mit Ruska's simple-mcar""",
+        name="2022-06-20-recreate-limitation-on-renuver",
+        description="""Ich sammele alle Limitierungen mit pdep, um sie dann
+        zu verbessern. Die erste Limitierung ist die schlechtere Performance
+        auf den Renuver Datensätzen. Die möchte ich hier reproduzieren.""",
         commit="füge ich später ein :)",
         config={
             "dataset": "breast-cancer",
@@ -117,11 +123,11 @@ if __name__ == "__main__":
             "n_rows": None,
         },
         ranges={
-            "error_fraction": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99],
-            "dataset": ["breast-cancer", "letter"],
+            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
+            "dataset": ['cars', 'bridges', 'glass', 'physician', 'resturant'],
         },
-        runs=3,
+        runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk_naive.run(experiment=run_baran, parallel=True)
+    rsk_naive.run(experiment=run_baran_renuver, parallel=True)
