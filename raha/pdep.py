@@ -228,6 +228,7 @@ def pdep_vicinity_based_corrector(
                     score = pr
                 elif scoring_strategy == 'multiply':
                     score = pr * gpdep_score
+                    # score = pr * gpdep_score * n_for_correction / n_corrections  # inspiration thorsten ensembling-strategie
                 elif scoring_strategy == 'penalty':
                     score = pr * (1 - penalty)
                 else:
