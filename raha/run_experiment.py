@@ -127,7 +127,7 @@ if __name__ == "__main__":
         },
         ranges={
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "dataset": ['cars', 'bridges', 'glass', 'restaurant'],
+            "dataset": ['hospital', 'flights', 'beers', 'rayyan', ],
         },
         runs=5,
         save_path="/root/measurements/",
@@ -157,7 +157,7 @@ if __name__ == "__main__":
         },
         ranges={
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "dataset": ['cars', 'bridges', 'glass', 'restaurant'],
+            "dataset": ['hospital', 'flights', 'beers', 'rayyan', ],
         },
         runs=5,
         save_path="/root/measurements/",
