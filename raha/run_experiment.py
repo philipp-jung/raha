@@ -124,6 +124,7 @@ if __name__ == "__main__":
             "n_best_pdeps": 5,
             "score_strategy": "multiply",
             "n_rows": None,
+            "exclude_value_special_case": True,
         },
         ranges={
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
