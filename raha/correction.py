@@ -80,6 +80,9 @@ class Correction:
         # research to determine which strategy is best.
         self.PDEP_SCORE_STRATEGY = 'penalty'
 
+        # Exclude value models if the first 4 features are 0, and the last 4 features >0.
+        # This pattern is typical for the corrector trying to solve imputation problems.
+        self.EXCLUDE_VALUE_SPECIAL_CASE = False
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -336,6 +339,11 @@ class Correction:
                             if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                 results_dictionary[new_value] = pr
                 results_list.append(results_dictionary)
+
+        # special case that messes up cleaning results on RENUVER's bridges
+        if self.EXCLUDE_VALUE_SPECIAL_CASE:
+            if not results_list[0] and not results_list[1] and not results_list[2] and not results_list[3] and results_list[4] and results_list[5] and results_list[6] and results_list[7]:
+                return [{}, {}, {}, {}, {}, {}, {}, {}]
         return results_list
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
@@ -773,11 +781,12 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "hospital"
+    dataset_name = "bridges"
+
     dataset_dictionary = {
         "name": dataset_name,
-        "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
-        "clean_path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "clean.csv"))
+        "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_4_1.csv",
+        "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
     }
     data = raha.dataset.Dataset(dataset_dictionary, n_rows=1000)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
@@ -791,11 +800,12 @@ if __name__ == "__main__":
     app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
     app.IMPUTER_CACHE_MODEL = True
     app.PDEP_SCORE_STRATEGY = 'penalty'
+    app.EXCLUDE_VALUE_SPECIAL_CASE = True
 
     seed = None
     correction_dictionary = app.run(data, seed)
-    # p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
-    # print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
+    p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
+    print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
 
     # --------------------
     # app.extract_revisions(wikipedia_dumps_folder="../wikipedia-data")
