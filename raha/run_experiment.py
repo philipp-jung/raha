@@ -107,7 +107,7 @@ def run_baran_renuver(c: dict):
 
 if __name__ == "__main__":
     rsk = Ruska(
-        name="2022-06-26-ignore-value-model",
+        name="2022-06-27-ignore-value-model-baran-datasets",
         description="""Ich ignoriere die Vorschläge des Value-Modells bei
         Imputation-Problemen. Ich möchte untersuchen, ob das die Reinigung
         auf den alten Datensätzen kaputt macht.""",
@@ -127,17 +127,16 @@ if __name__ == "__main__":
             "exclude_value_special_case": True,
         },
         ranges={
-            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
             "dataset": ['hospital', 'flights', 'beers', 'rayyan', ],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk.run(experiment=run_og_baran, parallel=True)
+    rsk.run(experiment=run_og_baran, parallel=False)
 
     rsk_naive = Ruska(
-        name="2022-06-26-ignore-value-model-naive",
+        name="2022-06-27-ignore-value-model-baran-datasets-naive",
         description="""Ich ignoriere die Vorschläge des Value-Modells bei
         Imputation-Problemen. Ich möchte untersuchen, ob das die Reinigung
         auf den alten Datensätzen kaputt macht.""",
@@ -157,11 +156,10 @@ if __name__ == "__main__":
             "exclude_value_special_case": True,
         },
         ranges={
-            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
             "dataset": ['hospital', 'flights', 'beers', 'rayyan', ],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk_naive.run(experiment=run_og_baran, parallel=True)
+    rsk_naive.run(experiment=run_og_baran, parallel=False)
