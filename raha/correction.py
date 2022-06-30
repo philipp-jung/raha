@@ -793,13 +793,13 @@ if __name__ == "__main__":
     app = Correction()
     app.LABELING_BUDGET = 20
 
-    app.VICINITY_ORDERS = [1, 2]
+    app.VICINITY_ORDERS = [1, 2, 3]
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
     app.IMPUTER_CACHE_MODEL = True
-    app.PDEP_SCORE_STRATEGY = 'penalty'
+    app.PDEP_SCORE_STRATEGY = 'ensemble'
     app.EXCLUDE_VALUE_SPECIAL_CASE = True
 
     seed = None
