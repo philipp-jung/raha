@@ -4,13 +4,14 @@ from itertools import combinations
 from IPython.core.debugger import set_trace
 
 
-def calculate_frequency(df:pd.DataFrame, col:int):
+def calculate_frequency(df: pd.DataFrame, col: int):
     """
     Calculates the frequency of a value to occur in colum
     col on dataframe df.
     """
     counts = df.iloc[:, col].value_counts()
     return counts.to_dict()
+
 
 def calculate_counts_dict(df: pd.DataFrame,
         detected_cells: List[dict],
@@ -56,6 +57,7 @@ def calculate_counts_dict(df: pd.DataFrame,
                             d[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
     return d
 
+
 def update_counts_dict(df: pd.DataFrame,
         counts_dict: dict,
         order: int,
@@ -77,6 +79,7 @@ def update_counts_dict(df: pd.DataFrame,
                     counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
                 else:
                     counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
+
 
 def expected_pdep(df, counts_dict: dict, A: Tuple[List[int]], B: int):
     pdep_B = calc_pdep(df, counts_dict, tuple([B]))
@@ -121,6 +124,7 @@ def calc_pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int =
                          'should be a tuple of a list of column names of df, '
                          'B should be name of a column or None. If B is none,'
                          ' order must be 1.')
+
 
 def calc_gpdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int):
     """
@@ -197,6 +201,7 @@ def invert_and_sort_gpdeps(gpdeps: Dict[Tuple, Dict[int, float]]
             reverse=True)}
     return inverse_gpdeps
 
+
 def pdep_vicinity_based_corrector(
         inverse_sorted_gpdeps: Dict[int, Dict[tuple, float]],
         counts_dict: dict,
@@ -224,9 +229,9 @@ def pdep_vicinity_based_corrector(
             sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
             for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
                 pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
-                if scoring_strategy == 'pr_only' or scoring_strategy == 'new_feature':
+                if scoring_strategy == 'pr_only':
                     score = pr
-                elif scoring_strategy == 'multiply':
+                elif scoring_strategy in ['multiply', 'ensemble', 'ensemble_new_feature']:
                     score = pr * gpdep_score
                 elif scoring_strategy == 'penalty':
                     score = pr * (1 - penalty)
@@ -235,9 +240,6 @@ def pdep_vicinity_based_corrector(
 
                 results_list.append({'correction': rhs_val,
                                      'score': score})
-                if scoring_strategy == 'new_feature':  # create new feature for gpdep score
-                    results_list.append({'correction': rhs_val,
-                                         'score': gpdep_score})
 
     sorted_results = sorted(results_list, key=lambda x: x['score'], reverse=True)
     correction_suggestions = {}
@@ -247,5 +249,25 @@ def pdep_vicinity_based_corrector(
     for d in sorted_results:
         if correction_suggestions.get(d['correction']) is None:
             correction_suggestions[d['correction']] = d['score']
+
+    # In addition, we create another feature containing the relative frequency of
+    # each correction.
+    if scoring_strategy in ['ensemble', 'ensemble_new_feature']:
+        correction_ensemble = {}
+        n_corrections = len(correction_suggestions)
+        for d in sorted_results:
+            if correction_ensemble.get(d['correction']) is not None:
+                correction_ensemble[d['correction']] += 1/n_corrections
+            else:
+                correction_ensemble[d['correction']] = 1/n_corrections
+
+    if scoring_strategy == 'ensemble':
+        # Das ist die Strategie, die wir letzte Woche erdacht haben
+        # score = pr * gpdep_score * n_for_correction / n_corrections
+        for correction, score in correction_suggestions.items():
+            correction_suggestions[correction] *= correction_ensemble[correction]
+
+    if scoring_strategy == 'ensemble_new_feature':
+        return [correction_suggestions, correction_ensemble]
 
     return [correction_suggestions]

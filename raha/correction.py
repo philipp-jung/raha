@@ -80,6 +80,9 @@ class Correction:
         # research to determine which strategy is best.
         self.PDEP_SCORE_STRATEGY = 'penalty'
 
+        # Exclude value models if the first 4 features are 0, and the last 4 features >0.
+        # This pattern is typical for the corrector trying to solve imputation problems.
+        self.EXCLUDE_VALUE_SPECIAL_CASE = False
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -336,6 +339,11 @@ class Correction:
                             if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                 results_dictionary[new_value] = pr
                 results_list.append(results_dictionary)
+
+        # special case that messes up cleaning results on RENUVER's bridges
+        if self.EXCLUDE_VALUE_SPECIAL_CASE:
+            if not results_list[0] and not results_list[1] and not results_list[2] and not results_list[3] and results_list[4] and results_list[5] and results_list[6] and results_list[7]:
+                return [{}, {}, {}, {}, {}, {}, {}, {}]
         return results_list
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
@@ -426,6 +434,14 @@ class Correction:
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
 
         # BEGIN Philipp's changes
+
+        # for debugging purposes only
+        d.value_corrections = {}
+        d.domain_corrections = {}
+        d.naive_vicinity_corrections = {}
+        d.pdep_vicinity_corrections = {}
+        d.imputer_corrections = {}
+
         d.vicinity_models = {}
         for o in self.VICINITY_ORDERS:
             d.vicinity_models[o] = pdep.calculate_counts_dict(
@@ -441,14 +457,15 @@ class Correction:
     def sample_tuple(self, d, random_seed):
         """
         This method samples a tuple.
-        Philipp extended this with a random_seed to make runs reproducible.
+        Philipp extended this with a random_seed in an effort to make runs
+        reproducible.
         """
         rng = numpy.random.default_rng(seed=random_seed)
         remaining_column_erroneous_cells = {}
         remaining_column_erroneous_values = {}
         for j in d.column_errors:
             for cell in d.column_errors[j]:
-                if cell not in d.corrected_cells:  # debug sampling?
+                if cell not in d.corrected_cells:
                     self._to_model_adder(remaining_column_erroneous_cells, j, cell)
                     self._to_model_adder(remaining_column_erroneous_values, j, d.dataframe.iloc[cell])
         tuple_score = numpy.ones(d.dataframe.shape[0])
@@ -459,6 +476,7 @@ class Correction:
                 column_score = math.exp(len(remaining_column_erroneous_cells[j]) / len(d.column_errors[j]))
                 cell_score = math.exp(remaining_column_erroneous_values[j][value] / len(remaining_column_erroneous_cells[j]))
                 tuple_score[cell[0]] *= column_score * cell_score
+
         # Nützlich, um tuple-sampling zu debuggen: Zeigt die Tupel, aus denen
         # zufällig gewählt wird.
         # print(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
@@ -584,6 +602,13 @@ class Correction:
         if "imputer" in self.FEATURE_GENERATORS:
             imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
 
+        # for debugging purposes only
+        d.value_corrections[cell] = value_corrections
+        d.domain_corrections[cell] = domain_corrections
+        d.naive_vicinity_corrections[cell] = naive_vicinity_corrections
+        d.pdep_vicinity_corrections[cell] = pdep_vicinity_corrections
+        d.imputer_corrections[cell] = imputer_corrections
+
         models_corrections = value_corrections + domain_corrections \
         + [corrections for order in naive_vicinity_corrections for corrections in order] \
         + [corrections for order in pdep_vicinity_corrections for corrections in order] \
@@ -651,12 +676,9 @@ class Correction:
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
-    def predict_corrections(self, d, random_seed=None):
+    def predict_corrections(self, d):
         """
         This method predicts
-
-        Philipp added support for a random_seed to all classifiers. When the random_seed is set,
-        we measure a steep decline in cleaning performance. So not a recommended feature.
         """
         for j in d.column_errors:
             x_train = []
@@ -674,9 +696,9 @@ class Correction:
                             x_test.append(d.pair_features[cell][correction])
                             test_cell_correction_list.append([cell, correction])
             if self.CLASSIFICATION_MODEL == "ABC":
-                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100, random_state=random_seed)
+                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
             if self.CLASSIFICATION_MODEL == "DTC":
-                classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini", random_state=random_seed)
+                classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini")
             if self.CLASSIFICATION_MODEL == "GBC":
                 classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100)
             if self.CLASSIFICATION_MODEL == "GNB":
@@ -749,7 +771,7 @@ class Correction:
                 ValueError('go label tuples manually in a jupyter notebook.')
             self.update_models(d)
             self.generate_features(d, synchronous=True)
-            self.predict_corrections(d, random_seed=random_seed)
+            self.predict_corrections(d)
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
 
@@ -759,29 +781,31 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "hospital"
+    dataset_name = "bridges"
+
     dataset_dictionary = {
         "name": dataset_name,
-        "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
-        "clean_path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "clean.csv"))
+        "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_4_1.csv",
+        "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
     }
     data = raha.dataset.Dataset(dataset_dictionary, n_rows=1000)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
     app.LABELING_BUDGET = 20
 
-    app.VICINITY_ORDERS = [1, 2]
+    app.VICINITY_ORDERS = [1, 2, 3]
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
     app.IMPUTER_CACHE_MODEL = True
-    app.PDEP_SCORE_STRATEGY = 'penalty'
+    app.PDEP_SCORE_STRATEGY = 'ensemble'
+    app.EXCLUDE_VALUE_SPECIAL_CASE = True
 
     seed = None
     correction_dictionary = app.run(data, seed)
-    # p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
-    # print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
+    p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
+    print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
 
     # --------------------
     # app.extract_revisions(wikipedia_dumps_folder="../wikipedia-data")
