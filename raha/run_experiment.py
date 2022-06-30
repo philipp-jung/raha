@@ -107,10 +107,9 @@ def run_baran_renuver(c: dict):
 
 if __name__ == "__main__":
     rsk = Ruska(
-        name="2022-06-27-ignore-value-model-baran-datasets",
-        description="""Ich ignoriere die Vorschläge des Value-Modells bei
-        Imputation-Problemen. Ich möchte untersuchen, ob das die Reinigung
-        auf den alten Datensätzen kaputt macht.""",
+        name="2022-06-30-ensembling",
+        description="""Ich vermesse die Performance der neuen Ensembling-
+        Strategien auf dem RENUVER Datensatz.""",
         commit="füge ich später ein :)",
         config={
             "dataset": "breast-cancer",
@@ -127,19 +126,21 @@ if __name__ == "__main__":
             "exclude_value_special_case": True,
         },
         ranges={
-            "dataset": ['hospital', 'flights', 'beers', 'rayyan', ],
+            "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
+            "score_strategy": ['ensemble_new_feature', 'ensemble'],
+            "vicinity_orders": [[1], [1,2], [1,2,3], [1,2,3,4]],
+            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05]
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk.run(experiment=run_og_baran, parallel=False)
+    rsk.run(experiment=run_baran_renuver, parallel=True)
 
     rsk_naive = Ruska(
-        name="2022-06-27-ignore-value-model-baran-datasets-naive",
-        description="""Ich ignoriere die Vorschläge des Value-Modells bei
-        Imputation-Problemen. Ich möchte untersuchen, ob das die Reinigung
-        auf den alten Datensätzen kaputt macht.""",
+        name="2022-06-30-ensembling-naive",
+        description="""Ich vermesse die Performance der neuen Ensembling-
+        Strategien auf dem RENUVER Datensatz.""",
         commit="füge ich später ein :)",
         config={
             "dataset": "breast-cancer",
@@ -156,10 +157,11 @@ if __name__ == "__main__":
             "exclude_value_special_case": True,
         },
         ranges={
-            "dataset": ['hospital', 'flights', 'beers', 'rayyan', ],
+            "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
+            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05]
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk_naive.run(experiment=run_og_baran, parallel=False)
+    rsk_naive.run(experiment=run_baran_renuver, parallel=True)
