@@ -709,6 +709,8 @@ class Correction:
                 classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
             if self.CLASSIFICATION_MODEL == "SVC":
                 classification_model = sklearn.svm.SVC(kernel="sigmoid")
+            if self.CLASSIFICATION_MODEL == "LOGR":
+                classification_model = sklearn.linear_model.LogisticRegression(penalty='l2')
 
             if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:
@@ -801,6 +803,7 @@ if __name__ == "__main__":
     app.IMPUTER_CACHE_MODEL = True
     app.PDEP_SCORE_STRATEGY = 'ensemble'
     app.EXCLUDE_VALUE_SPECIAL_CASE = True
+    app.CLASSIFICATION_MODEL = "LOGR"
 
     seed = None
     correction_dictionary = app.run(data, seed)
