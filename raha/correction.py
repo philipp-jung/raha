@@ -709,6 +709,8 @@ class Correction:
                 classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
             if self.CLASSIFICATION_MODEL == "SVC":
                 classification_model = sklearn.svm.SVC(kernel="sigmoid")
+            if self.CLASSIFICATION_MODEL == "LOGR":
+                classification_model = sklearn.linear_model.LogisticRegression(penalty='l2')
 
             if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:
@@ -793,14 +795,16 @@ if __name__ == "__main__":
     app = Correction()
     app.LABELING_BUDGET = 20
 
-    app.VICINITY_ORDERS = [1, 2, 3]
+    app.VICINITY_ORDERS = [1, 2]
+    app.CLASSIFICATION_MODEL = "ABC"
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
     app.IMPUTER_CACHE_MODEL = True
-    app.PDEP_SCORE_STRATEGY = 'ensemble'
+    app.PDEP_SCORE_STRATEGY = 'multiply'
     app.EXCLUDE_VALUE_SPECIAL_CASE = True
+    app.CLASSIFICATION_MODEL = "LOGR"
 
     seed = None
     correction_dictionary = app.run(data, seed)
