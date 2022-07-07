@@ -31,10 +31,10 @@ import sklearn.naive_bayes
 import sklearn.linear_model
 from typing import Dict
 import pandas as pd
+import numpy as np
 
 from IPython.core.debugger import set_trace
 
-import datawig
 import raha
 from raha import imputer
 from raha import pdep
@@ -66,6 +66,7 @@ class Correction:
         self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
         self.REVISION_WINDOW_SIZE = 5
+        self.TRAINING_TIME_LIMIT = 10
 
         # Philipps changes
         # choose from "value", "domain", "vicinity", "imputer". Default is Baran's original configuration.
@@ -648,7 +649,7 @@ class Correction:
                 imp = imputer.train_cleaning_model(df_clean_subset,
                                                    d.name,
                                                    label=i_col,
-                                                   time_limit=45,
+                                                   time_limit=self.TRAINING_TIME_LIMIT,
                                                    use_cache=self.IMPUTER_CACHE_MODEL)
                 if imp is not None:
                     d.imputer_models[i_col] = imp.predict_proba(d.dataframe)
@@ -714,7 +715,8 @@ class Correction:
             if self.CLASSIFICATION_MODEL == "LOGR":
                 classification_model = sklearn.linear_model.LogisticRegression(penalty='l2')
             if self.CLASSIFICATION_MODEL == "AG":
-                # TODO continue with AutoGluon model
+                classification_model = TabularPredictor(label='label', problem_type='binary', eval_metric='f1',
+                                                        learner_kwargs={'positive_class': 1}, verbosity=0)
 
             if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:
@@ -722,8 +724,22 @@ class Correction:
                 elif sum(y_train) == len(y_train):
                     predicted_labels = numpy.ones(len(x_test))
                 else:
-                    classification_model.fit(x_train, y_train)
-                    predicted_labels = classification_model.predict(x_test)
+                    if self.CLASSIFICATION_MODEL == "AG":  # AutoGluon has a different API than sklearn
+                        train_data = np.c_[x_train, y_train]
+                        column_names = list(range(train_data.shape[1]))
+                        column_names[-1] = 'label'
+                        df_train = pd.DataFrame(train_data, columns=column_names)
+                        df_test = pd.DataFrame(x_test)
+
+                        classification_model.fit(train_data=df_train,
+                                                 presets='medium_quality_faster_train',
+                                                 time_limit=self.TRAINING_TIME_LIMIT,
+                                                 verbosity=0,
+                                                 excluded_model_types=['KNN'])
+                        predicted_labels = classification_model.predict(df_test)
+                    else:
+                        classification_model.fit(x_train, y_train)
+                        predicted_labels = classification_model.predict(x_test)
 
                 for index, predicted_label in enumerate(predicted_labels):
                     cell, predicted_correction = test_cell_correction_list[index]
@@ -808,7 +824,8 @@ if __name__ == "__main__":
     app.IMPUTER_CACHE_MODEL = True
     app.PDEP_SCORE_STRATEGY = 'multiply'
     app.EXCLUDE_VALUE_SPECIAL_CASE = True
-    app.CLASSIFICATION_MODEL = "LOGR"
+    app.CLASSIFICATION_MODEL = "AG"
+    app.TRAINING_TIME_LIMIT = 10
 
     seed = None
     correction_dictionary = app.run(data, seed)
