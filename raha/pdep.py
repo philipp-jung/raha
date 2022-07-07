@@ -262,8 +262,12 @@ def pdep_vicinity_based_corrector(
                 correction_ensemble[d['correction']] = 1/n_corrections
 
     if scoring_strategy == 'ensemble':
-        # Das ist die Strategie, die wir letzte Woche erdacht haben
+        # Das ist die Strategie, die wir letzte Woche erdacht haben:
         # score = pr * gpdep_score * n_for_correction / n_corrections
+        # TODO Zur Zeit ist n_corrections die Anzahl distinkter Korrekturen,
+        # n_corrections sollte nicht distinkt sein.
+        # n_for_correction sollte jede FD sein, die die Korrektur vorschlägt,
+        # unabhängig vom Score. Und n_corrections sollte jede Korrektur sein.
         for correction, score in correction_suggestions.items():
             correction_suggestions[correction] *= correction_ensemble[correction]
 

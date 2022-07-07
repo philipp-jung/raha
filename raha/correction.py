@@ -795,13 +795,14 @@ if __name__ == "__main__":
     app = Correction()
     app.LABELING_BUDGET = 20
 
-    app.VICINITY_ORDERS = [1, 2, 3]
+    app.VICINITY_ORDERS = [1, 2]
+    app.CLASSIFICATION_MODEL = "ABC"
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
     app.IMPUTER_CACHE_MODEL = True
-    app.PDEP_SCORE_STRATEGY = 'ensemble'
+    app.PDEP_SCORE_STRATEGY = 'multiply'
     app.EXCLUDE_VALUE_SPECIAL_CASE = True
     app.CLASSIFICATION_MODEL = "LOGR"
 
