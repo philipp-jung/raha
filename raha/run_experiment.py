@@ -53,7 +53,7 @@ if __name__ == "__main__":
             "error_fraction": 0.1,
             "labeling_budget": 20,
             "feature_generators": ["value", "domain", "vicinity"],
-            "classification_model": "ABC",
+            "classification_model": "AG",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_best_pdeps": 5,
