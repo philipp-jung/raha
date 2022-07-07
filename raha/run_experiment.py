@@ -43,7 +43,7 @@ def run_baran_renuver(c: dict):
 
 if __name__ == "__main__":
     rsk = Ruska(
-        name="2022-06-30-ensembling",
+        name="2022-07-07-replace-metalearner",
         description="""Ich vermesse die Performance der neuen Ensembling-
         Strategien auf dem RENUVER Datensatz.""",
         commit="füge ich später ein :)",
@@ -67,7 +67,7 @@ if __name__ == "__main__":
             "score_strategy": ['ensemble_new_feature', 'ensemble', 'multiply'],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05]
         },
-        runs=5,
+        runs=3,
         save_path="/root/measurements/",
     )
 
