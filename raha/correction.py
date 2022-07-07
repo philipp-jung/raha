@@ -38,6 +38,8 @@ import datawig
 import raha
 from raha import imputer
 from raha import pdep
+from autogluon.tabular import TabularPredictor
+
 ########################################
 
 
@@ -711,6 +713,8 @@ class Correction:
                 classification_model = sklearn.svm.SVC(kernel="sigmoid")
             if self.CLASSIFICATION_MODEL == "LOGR":
                 classification_model = sklearn.linear_model.LogisticRegression(penalty='l2')
+            if self.CLASSIFICATION_MODEL == "AG":
+                # TODO continue with AutoGluon model
 
             if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:
