@@ -56,7 +56,7 @@ class Correction:
         """
         self.PRETRAINED_VALUE_BASED_MODELS_PATH = ""
         self.VALUE_ENCODINGS = ["identity", "unicode"]
-        self.CLASSIFICATION_MODEL = "ABC"   # ["ABC", "DTC", "GBC", "GNB", "KNC" ,"SGDC", "SVC"]
+        self.CLASSIFICATION_MODEL = "ABC"   # ["ABC", "DTC", "GBC", "GNB", "KNC" ,"SGDC", "SVC", "AG"]
         self.IGNORE_SIGN = "<<<IGNORE_THIS_VALUE>>>"
         self.VERBOSE = False
         self.SAVE_RESULTS = True
@@ -66,7 +66,6 @@ class Correction:
         self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
         self.REVISION_WINDOW_SIZE = 5
-        self.TRAINING_TIME_LIMIT = 10
 
         # Philipps changes
         # choose from "value", "domain", "vicinity", "imputer". Default is Baran's original configuration.
@@ -86,6 +85,11 @@ class Correction:
         # Exclude value models if the first 4 features are 0, and the last 4 features >0.
         # This pattern is typical for the corrector trying to solve imputation problems.
         self.EXCLUDE_VALUE_SPECIAL_CASE = False
+
+        # Autogluon Parameters -- used by the imputer_feature_generator and the Metalearner,
+        # if AG is set as CLASSIFICATION_MODEL.
+        self.TRAINING_TIME_LIMIT = 10
+        self.AG_PRESETS = 'good_quality_faster_inference_only_refit'
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -732,7 +736,7 @@ class Correction:
                         df_test = pd.DataFrame(x_test)
 
                         classification_model.fit(train_data=df_train,
-                                                 presets='medium_quality_faster_train',
+                                                 presets=self.AG_PRESETS,
                                                  time_limit=self.TRAINING_TIME_LIMIT,
                                                  verbosity=0,
                                                  excluded_model_types=['KNN'])
@@ -826,6 +830,7 @@ if __name__ == "__main__":
     app.EXCLUDE_VALUE_SPECIAL_CASE = True
     app.CLASSIFICATION_MODEL = "AG"
     app.TRAINING_TIME_LIMIT = 10
+    app.AG_PRESETS = 'good_quality_faster_inference_only_refit'
 
     seed = None
     correction_dictionary = app.run(data, seed)

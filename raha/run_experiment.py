@@ -28,6 +28,8 @@ def run_baran_renuver(c: dict):
     app.PDEP_SCORE_STRATEGY = c["score_strategy"]
     app.TRAINING_TIME_LIMIT = c['training_time_limit']
     app.EXCLUDE_VALUE_SPECIAL_CASE = c["exclude_value_special_case"]
+    app.AG_PRESETS = c["ag_presets"]
+
 
     d = app.initialize_dataset(data)
     app.initialize_models(d)
@@ -43,10 +45,10 @@ def run_baran_renuver(c: dict):
 
 if __name__ == "__main__":
     rsk = Ruska(
-        name="2022-07-07-replace-metalearner",
-        description="""Ich vermesse die Performance der neuen Ensembling-
-        Strategien auf dem RENUVER Datensatz.""",
-        commit="füge ich später ein :)",
+        name="2022-07-08-tune-autogluon",
+        description="""Autogluon hat nicht den gewünschten Effekt. Ich erhoehe
+        das time_limit und die presets, um doch noch gute Ergebnisse zu erhalten.""",
+        commit="",
         config={
             "dataset": "breast-cancer",
             "sampling": "MCAR",
@@ -60,7 +62,8 @@ if __name__ == "__main__":
             "score_strategy": "multiply",
             "n_rows": None,
             "exclude_value_special_case": True,
-            "training_time_limit": 10,
+            "training_time_limit": 45,
+            "ag_presets": "good_quality_faster_inference_only_refit"
         },
         ranges={
             "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
@@ -71,4 +74,4 @@ if __name__ == "__main__":
         save_path="/root/measurements/",
     )
 
-    rsk.run(experiment=run_baran_renuver, parallel=True)
+    rsk.run(experiment=run_baran_renuver, parallel=False)
