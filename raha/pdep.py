@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import Tuple, List, Dict, Union, Any
 from itertools import combinations
+from collections import Counter
 from IPython.core.debugger import set_trace
 
 
@@ -206,8 +207,7 @@ def pdep_vicinity_based_corrector(
         inverse_sorted_gpdeps: Dict[int, Dict[tuple, float]],
         counts_dict: dict,
         ed: dict,
-        n_best_pdeps: int = 5,
-        scoring_strategy: str = 'penalty') -> List[Dict[str, float]]:
+        n_best_pdeps: int = 5) -> List[Dict]:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
     grow in number at (n-1)^2 / 2 pace. Only take the `n_best_pdeps`
@@ -216,12 +216,9 @@ def pdep_vicinity_based_corrector(
     rhs_col = ed["column"]
     gpdeps = inverse_sorted_gpdeps[rhs_col]
     gpdeps_subset = {lhs: gpdeps[lhs] for i, lhs in enumerate(gpdeps) if i < n_best_pdeps}
-    max_gpdep_score = list(gpdeps_subset.items())[0][1]
-
     results_list = []
 
     for lhs_cols, gpdep_score in gpdeps_subset.items():
-        penalty = max_gpdep_score - gpdep_score
         lhs_vals = tuple([ed['vicinity'][x] for x in lhs_cols])
 
         if not rhs_col in lhs_cols and \
@@ -229,49 +226,34 @@ def pdep_vicinity_based_corrector(
             sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
             for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
                 pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
-                if scoring_strategy == 'pr_only':
-                    score = pr
-                elif scoring_strategy in ['multiply', 'ensemble', 'ensemble_new_feature']:
-                    score = pr * gpdep_score
-                elif scoring_strategy == 'penalty':
-                    score = pr * (1 - penalty)
-                else:
-                    raise ValueError('No valid feature strategy specified')
 
                 results_list.append({'correction': rhs_val,
-                                     'score': score})
+                                     'pr': pr,
+                                     'gpdep': gpdep_score})
 
-    sorted_results = sorted(results_list, key=lambda x: x['score'], reverse=True)
-    correction_suggestions = {}
+    sorted_results = sorted(results_list, key=lambda x: x['pr'], reverse=True)
 
-    # Having a sorted dict allows us to only return the highest score per
-    # correction by iterating over all generated corrections like this.
+    highest_conditional_probabilities = {}
+    highest_gpdep_scores = {}
+    votes = {}
+
+    # Having a sorted dict allows us to only return the highest conditional
+    # probability per correction by iterating over all generated corrections
+    # like this.
+    # I get the highest gpdep score per correction this way, too.
     for d in sorted_results:
-        if correction_suggestions.get(d['correction']) is None:
-            correction_suggestions[d['correction']] = d['score']
+        if highest_conditional_probabilities.get(d['correction']) is None:
+            highest_conditional_probabilities[d['correction']] = d['pr']
+            highest_gpdep_scores[d['correction']] = d['gpdep']
 
-    # In addition, we create another feature containing the relative frequency of
-    # each correction.
-    if scoring_strategy in ['ensemble', 'ensemble_new_feature']:
-        correction_ensemble = {}
-        n_corrections = len(correction_suggestions)
-        for d in sorted_results:
-            if correction_ensemble.get(d['correction']) is not None:
-                correction_ensemble[d['correction']] += 1/n_corrections
-            else:
-                correction_ensemble[d['correction']] = 1/n_corrections
 
-    if scoring_strategy == 'ensemble':
-        # Das ist die Strategie, die wir letzte Woche erdacht haben:
-        # score = pr * gpdep_score * n_for_correction / n_corrections
-        # TODO Zur Zeit ist n_corrections die Anzahl distinkter Korrekturen,
-        # n_corrections sollte nicht distinkt sein.
-        # n_for_correction sollte jede FD sein, die die Korrektur vorschlägt,
-        # unabhängig vom Score. Und n_corrections sollte jede Korrektur sein.
-        for correction, score in correction_suggestions.items():
-            correction_suggestions[correction] *= correction_ensemble[correction]
+    # The three elements of our decision are majority vote, highest conditional
+    # probability, and highest gpdep score.
+    # Here, I calculate the majority vote.
+    counts = Counter([x['correction'] for x in sorted_results])
+    n_corrections = sum(counts.values())
 
-    if scoring_strategy == 'ensemble_new_feature':
-        return [correction_suggestions, correction_ensemble]
+    for correction in counts:
+        votes[correction] = counts[correction] / n_corrections
 
-    return [correction_suggestions]
+    return [highest_conditional_probabilities, highest_gpdep_scores, votes]

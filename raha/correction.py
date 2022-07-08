@@ -79,14 +79,6 @@ class Correction:
         # always generates features for all possible column combinations.
         self.N_BEST_PDEPS = 5
 
-        # Strategy upon which pdep feature generation is based. It is still ongoing
-        # research to determine which strategy is best.
-        self.PDEP_SCORE_STRATEGY = 'penalty'
-
-        # Exclude value models if the first 4 features are 0, and the last 4 features >0.
-        # This pattern is typical for the corrector trying to solve imputation problems.
-        self.EXCLUDE_VALUE_SPECIAL_CASE = False
-
     @staticmethod
     def _wikitext_segmenter(wikitext):
         """
@@ -342,11 +334,6 @@ class Correction:
                             if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                 results_dictionary[new_value] = pr
                 results_list.append(results_dictionary)
-
-        # special case that messes up cleaning results on RENUVER's bridges
-        if self.EXCLUDE_VALUE_SPECIAL_CASE:
-            if not results_list[0] and not results_list[1] and not results_list[2] and not results_list[3] and results_list[4] and results_list[5] and results_list[6] and results_list[7]:
-                return [{}, {}, {}, {}, {}, {}, {}, {}]
         return results_list
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
@@ -591,8 +578,7 @@ class Correction:
                             inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
                             counts_dict=d.vicinity_models[o],
                             ed=error_dictionary,
-                            n_best_pdeps=self.N_BEST_PDEPS,
-                            scoring_strategy=self.PDEP_SCORE_STRATEGY)
+                            n_best_pdeps=self.N_BEST_PDEPS)
                     pdep_vicinity_corrections.append(pdep_corrections)
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
@@ -731,12 +717,16 @@ class Correction:
                         df_train = pd.DataFrame(train_data, columns=column_names)
                         df_test = pd.DataFrame(x_test)
 
-                        classification_model.fit(train_data=df_train,
-                                                 presets='medium_quality_faster_train',
-                                                 time_limit=self.TRAINING_TIME_LIMIT,
-                                                 verbosity=0,
-                                                 excluded_model_types=['KNN'])
-                        predicted_labels = classification_model.predict(df_test)
+                        try:
+                            classification_model.fit(train_data=df_train,
+                                                     presets='medium_quality_faster_train',
+                                                     time_limit=self.TRAINING_TIME_LIMIT,
+                                                     verbosity=0,
+                                                     excluded_model_types=['KNN'])
+                            predicted_labels = classification_model.predict(df_test)
+                        except ValueError:
+                            predicted_labels = numpy.zeros(len(x_test))  # kein plan ob das Sinn macht
+
                     else:
                         classification_model.fit(x_train, y_train)
                         predicted_labels = classification_model.predict(x_test)
@@ -816,16 +806,12 @@ if __name__ == "__main__":
     app.LABELING_BUDGET = 20
 
     app.VICINITY_ORDERS = [1, 2]
-    app.CLASSIFICATION_MODEL = "ABC"
+    app.CLASSIFICATION_MODEL = "LOGR"
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
+    app.FEATURE_GENERATORS = ['vicinity']
     app.IMPUTER_CACHE_MODEL = True
-    app.PDEP_SCORE_STRATEGY = 'multiply'
-    app.EXCLUDE_VALUE_SPECIAL_CASE = True
-    app.CLASSIFICATION_MODEL = "AG"
-    app.TRAINING_TIME_LIMIT = 10
 
     seed = None
     correction_dictionary = app.run(data, seed)
