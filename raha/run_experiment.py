@@ -46,8 +46,10 @@ def run_baran_renuver(c: dict):
 if __name__ == "__main__":
     rsk = Ruska(
         name="2022-07-08-tune-autogluon",
-        description="""Autogluon hat nicht den gewünschten Effekt. Ich erhoehe
-        das time_limit und die presets, um doch noch gute Ergebnisse zu erhalten.""",
+        description="""Autogluon hat nicht den gewünschten Effekt. Die Datensätze
+        cars und bridges bei error-fraction 0.1 stehen exemplarisch dafür, dass
+        AG noch nicht funktioniert. Ich erhöhe das time_limit und die presets, um
+        doch noch gute Ergebnisse zu erhalten.""",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -62,16 +64,16 @@ if __name__ == "__main__":
             "score_strategy": "multiply",
             "n_rows": None,
             "exclude_value_special_case": True,
-            "training_time_limit": 30,
+            "training_time_limit": 45,
             "ag_presets": "good_quality_faster_inference_only_refit"
         },
         ranges={
-            "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
+            "dataset": ['bridges', 'cars'],
             "score_strategy": ['ensemble_new_feature', 'ensemble', 'multiply'],
-            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05]
+            "error_fraction": [0.01]
         },
-        runs=3,
+        runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk.run(experiment=run_baran_renuver, parallel=False)
+    rsk.run(experiment=run_baran_renuver, parallel=True)
