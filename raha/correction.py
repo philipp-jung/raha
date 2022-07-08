@@ -735,12 +735,15 @@ class Correction:
                         df_train = pd.DataFrame(train_data, columns=column_names)
                         df_test = pd.DataFrame(x_test)
 
-                        classification_model.fit(train_data=df_train,
-                                                 presets=self.AG_PRESETS,
-                                                 time_limit=self.TRAINING_TIME_LIMIT,
-                                                 verbosity=0,
-                                                 excluded_model_types=['KNN'])
-                        predicted_labels = classification_model.predict(df_test)
+                        try:
+                            classification_model.fit(train_data=df_train,
+                                                     presets=self.AG_PRESETS,
+                                                     time_limit=self.TRAINING_TIME_LIMIT,
+                                                     verbosity=0,
+                                                     excluded_model_types=['KNN'])
+                            predicted_labels = classification_model.predict(df_test)
+                        except ValueError:  # training fails
+                            predicted_labels = numpy.zeros(len(x_test))  # not sure if this makes sense
                     else:
                         classification_model.fit(x_train, y_train)
                         predicted_labels = classification_model.predict(x_test)
