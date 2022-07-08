@@ -62,7 +62,7 @@ if __name__ == "__main__":
             "score_strategy": "multiply",
             "n_rows": None,
             "exclude_value_special_case": True,
-            "training_time_limit": 45,
+            "training_time_limit": 30,
             "ag_presets": "good_quality_faster_inference_only_refit"
         },
         ranges={
