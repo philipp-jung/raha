@@ -685,23 +685,23 @@ class Correction:
                             x_test.append(d.pair_features[cell][correction])
                             test_cell_correction_list.append([cell, correction])
             if self.CLASSIFICATION_MODEL == "ABC":
-                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                self.classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
             if self.CLASSIFICATION_MODEL == "DTC":
-                classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini")
+                self.classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini")
             if self.CLASSIFICATION_MODEL == "GBC":
-                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100)
+                self.classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100)
             if self.CLASSIFICATION_MODEL == "GNB":
-                classification_model = sklearn.naive_bayes.GaussianNB()
+                self.classification_model = sklearn.naive_bayes.GaussianNB()
             if self.CLASSIFICATION_MODEL == "KNC":
-                classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1)
+                self.classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1)
             if self.CLASSIFICATION_MODEL == "SGDC":
-                classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
+                self.classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
             if self.CLASSIFICATION_MODEL == "SVC":
-                classification_model = sklearn.svm.SVC(kernel="sigmoid")
+                self.classification_model = sklearn.svm.SVC(kernel="sigmoid")
             if self.CLASSIFICATION_MODEL == "LOGR":
-                classification_model = sklearn.linear_model.LogisticRegression(penalty='l2')
+                self.classification_model = sklearn.linear_model.LogisticRegression(penalty='l2')
             if self.CLASSIFICATION_MODEL == "AG":
-                classification_model = TabularPredictor(label='label', problem_type='binary', eval_metric='f1',
+                self.classification_model = TabularPredictor(label='label', problem_type='binary', eval_metric='f1',
                                                         learner_kwargs={'positive_class': 1}, verbosity=0)
 
             if len(x_train) > 0 and len(x_test) > 0:
@@ -718,18 +718,18 @@ class Correction:
                         df_test = pd.DataFrame(x_test)
 
                         try:
-                            classification_model.fit(train_data=df_train,
+                            self.classification_model.fit(train_data=df_train,
                                                      presets='medium_quality_faster_train',
                                                      time_limit=self.TRAINING_TIME_LIMIT,
                                                      verbosity=0,
                                                      excluded_model_types=['KNN'])
-                            predicted_labels = classification_model.predict(df_test)
-                        except ValueError:
-                            predicted_labels = numpy.zeros(len(x_test))  # kein plan ob das Sinn macht
+                            predicted_labels = self.classification_model.predict(df_test)
+                        except ValueError:  # if model training fails completely
+                            predicted_labels = numpy.zeros(len(x_test))  # not sure if this is reasonable
 
                     else:
-                        classification_model.fit(x_train, y_train)
-                        predicted_labels = classification_model.predict(x_test)
+                        self.classification_model.fit(x_train, y_train)
+                        predicted_labels = self.classification_model.predict(x_test)
 
                 for index, predicted_label in enumerate(predicted_labels):
                     cell, predicted_correction = test_cell_correction_list[index]
