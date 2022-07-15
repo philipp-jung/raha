@@ -74,6 +74,7 @@ class Correction:
         self.VICINITY_ORDERS = [1]  # Baran default
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
+        self._classification_models = {}
 
         # recommend up to 10. Ignored when using 'naive' feature generator. That one
         # always generates features for all possible column combinations.
@@ -478,8 +479,9 @@ class Correction:
         """
         This method labels a tuple with ground truth.
         Takes the sampled row from d.sampled_tuple, iterates over each cell
-        in that row taken from the clean data, and then adds {(row, col):
-        [is_error, clean_value_from_clean_dataframe] to
+        in that row taken from the clean data, and then adds
+        d.labeled_cells[(row, col)] = [is_error, clean_value_from_clean_dataframe]
+        to d.labeled_cells.
         """
         d.labeled_tuples[d.sampled_tuple] = 1
         for col in range(d.dataframe.shape[1]):
@@ -674,43 +676,55 @@ class Correction:
             y_train = []
             x_test = []
             test_cell_correction_list = []
-            for _, cell in enumerate(d.column_errors[j]):
-                if cell in d.pair_features:
-                    for correction in d.pair_features[cell]:
-                        if cell in d.labeled_cells and d.labeled_cells[cell][0] == 1:
-                            x_train.append(d.pair_features[cell][correction])
-                            y_train.append(int(correction == d.labeled_cells[cell][1]))
-                            d.corrected_cells[cell] = d.labeled_cells[cell][1]
-                        else:
-                            x_test.append(d.pair_features[cell][correction])
-                            test_cell_correction_list.append([cell, correction])
+            for cell in d.column_errors[j]:
+                correction_suggestions = d.pair_features.get(cell, [])  # skips if there are no suggestions
+                for suggestion in correction_suggestions:
+                    # If a cell has been labeled by the user and is an error, use it to create the training dataset.
+                    # --> put all user-corrected cells that contain an error in the train set.
+                    # The second condition is always true if error detection and user_labeling work without an error.
+                    if cell in d.labeled_cells and d.labeled_cells[cell][0] == 1:
+                        x_train.append(d.pair_features[cell][suggestion])  # put features into x_train
+                        suggestion_is_correction =  suggestion == d.labeled_cells[cell][1]
+                        y_train.append(int(suggestion_is_correction))  # put generated label in to y_train
+                        d.corrected_cells[cell] = d.labeled_cells[cell][1]
+                    else:  # --> put all cells that contain an error without user-correction in the "test" set.
+                        x_test.append(d.pair_features[cell][suggestion])
+                        test_cell_correction_list.append([cell, suggestion])
+
             if self.CLASSIFICATION_MODEL == "ABC":
-                self.classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
             if self.CLASSIFICATION_MODEL == "DTC":
-                self.classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini")
+                classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini")
             if self.CLASSIFICATION_MODEL == "GBC":
-                self.classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100)
+                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100)
             if self.CLASSIFICATION_MODEL == "GNB":
-                self.classification_model = sklearn.naive_bayes.GaussianNB()
+                classification_model = sklearn.naive_bayes.GaussianNB()
             if self.CLASSIFICATION_MODEL == "KNC":
-                self.classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1)
+                classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1)
             if self.CLASSIFICATION_MODEL == "SGDC":
-                self.classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
+                classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
             if self.CLASSIFICATION_MODEL == "SVC":
-                self.classification_model = sklearn.svm.SVC(kernel="sigmoid")
+                classification_model = sklearn.svm.SVC(kernel="sigmoid")
             if self.CLASSIFICATION_MODEL == "LOGR":
-                self.classification_model = sklearn.linear_model.LogisticRegression(penalty='l2')
+                classification_model = sklearn.linear_model.LogisticRegression(penalty='l2')
             if self.CLASSIFICATION_MODEL == "AG":
-                self.classification_model = TabularPredictor(label='label', problem_type='binary', eval_metric='f1',
+                classification_model = TabularPredictor(label='label', problem_type='binary', eval_metric='f1',
                                                         learner_kwargs={'positive_class': 1}, verbosity=0)
 
             if len(x_train) > 0 and len(x_test) > 0:
-                if sum(y_train) == 0:
+                if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
                     predicted_labels = numpy.zeros(len(x_test))
-                elif sum(y_train) == len(y_train):
+                elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
                     predicted_labels = numpy.ones(len(x_test))
                 else:
-                    if self.CLASSIFICATION_MODEL == "AG":  # AutoGluon has a different API than sklearn
+                    if self.CLASSIFICATION_MODEL != "AG":
+                        classification_model.fit(x_train, y_train)
+                        predicted_labels = classification_model.predict(x_test)
+                        self._classification_models[j] = classification_model
+                        if len(d.labeled_tuples) == 19 and j == 2:
+                            breakpoint()
+
+                    else:  # AutoGluon has an API different from sklearn, needs special handling.
                         train_data = np.c_[x_train, y_train]
                         column_names = list(range(train_data.shape[1]))
                         column_names[-1] = 'label'
@@ -718,18 +732,14 @@ class Correction:
                         df_test = pd.DataFrame(x_test)
 
                         try:
-                            self.classification_model.fit(train_data=df_train,
+                            classification_model.fit(train_data=df_train,
                                                      presets='medium_quality_faster_train',
                                                      time_limit=self.TRAINING_TIME_LIMIT,
                                                      verbosity=0,
                                                      excluded_model_types=['KNN'])
-                            predicted_labels = self.classification_model.predict(df_test)
+                            predicted_labels = classification_model.predict(df_test)
                         except ValueError:  # if model training fails completely
                             predicted_labels = numpy.zeros(len(x_test))  # not sure if this is reasonable
-
-                    else:
-                        self.classification_model.fit(x_train, y_train)
-                        predicted_labels = self.classification_model.predict(x_test)
 
                 for index, predicted_label in enumerate(predicted_labels):
                     cell, predicted_correction = test_cell_correction_list[index]
@@ -793,7 +803,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "bridges"
+    dataset_name = "cars"
 
     dataset_dictionary = {
         "name": dataset_name,
