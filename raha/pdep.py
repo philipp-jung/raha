@@ -14,10 +14,12 @@ def calculate_frequency(df: pd.DataFrame, col: int):
     return counts.to_dict()
 
 
-def calculate_counts_dict(df: pd.DataFrame,
-        detected_cells: List[dict],
-        order=1,
-        ignore_sign="<<<IGNORE_THIS_VALUE>>>") -> dict:
+def calculate_counts_dict(
+    df: pd.DataFrame,
+    detected_cells: Dict[Tuple, str],
+    order=1,
+    ignore_sign="<<<IGNORE_THIS_VALUE>>>",
+) -> dict:
     """
     Calculates a dictionary d that countains the absolute counts of how
     often values in the lhs occur with values in the rhs in the table df.
@@ -39,8 +41,7 @@ def calculate_counts_dict(df: pd.DataFrame,
     way that value is excluded from the value counts, too.
     """
     i_cols = list(range(df.shape[1]))
-    d = {comb: {cc: {} for cc in i_cols}
-         for comb in combinations(i_cols, order)}
+    d = {comb: {cc: {} for cc in i_cols} for comb in combinations(i_cols, order)}
 
     for row in df.itertuples(index=True):
         i_row, row = row[0], row[1:]
@@ -48,7 +49,10 @@ def calculate_counts_dict(df: pd.DataFrame,
             for rhs_col in i_cols:
                 if rhs_col not in lhs_cols:
                     lhs_vals = tuple(row[lhs_col] for lhs_col in lhs_cols)
-                    if ignore_sign not in lhs_vals and (i_row, rhs_col) not in detected_cells:
+                    if (
+                        ignore_sign not in lhs_vals
+                        and (i_row, rhs_col) not in detected_cells
+                    ):
                         if d[lhs_cols][rhs_col].get(lhs_vals) is None:
                             d[lhs_cols][rhs_col][lhs_vals] = {}
                         rhs_val = row[rhs_col]
@@ -59,10 +63,9 @@ def calculate_counts_dict(df: pd.DataFrame,
     return d
 
 
-def update_counts_dict(df: pd.DataFrame,
-        counts_dict: dict,
-        order: int,
-        cleaned_sampled_tuple: list) -> None:
+def update_counts_dict(
+    df: pd.DataFrame, counts_dict: dict, order: int, cleaned_sampled_tuple: list
+) -> None:
     """
     This function is created to fit Baran's style of working. It Updates a
     counts dict in place with a newly labeled row.
@@ -70,8 +73,7 @@ def update_counts_dict(df: pd.DataFrame,
     i_cols = list(range(df.shape[1]))
     for lhs_cols in combinations(i_cols, order):
         for rhs_col in i_cols:
-            lhs_vals = tuple(cleaned_sampled_tuple[lhs_col] for lhs_col
-                    in lhs_cols)
+            lhs_vals = tuple(cleaned_sampled_tuple[lhs_col] for lhs_col in lhs_cols)
             if rhs_col not in lhs_cols:
                 if counts_dict[lhs_cols][rhs_col].get(lhs_vals) is None:
                     counts_dict[lhs_cols][rhs_col][lhs_vals] = {}
@@ -82,19 +84,20 @@ def update_counts_dict(df: pd.DataFrame,
                     counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
 
 
-def expected_pdep(df, counts_dict: dict, A: Tuple[List[int]], B: int):
-    pdep_B = calc_pdep(df, counts_dict, tuple([B]))
+def expected_pdep(df, counts_dict: dict, A: Tuple[int, ...], B: int):
+    pdep_B = pdep(df, counts_dict, tuple([B]))
 
     if len(A) == 1:
         n_distinct_values_A = df.iloc[:, A[0]].nunique(dropna=False)
     elif len(A) > 1:
         n_distinct_values_A = len(counts_dict[A][B])
     else:
-        raise ValueError('A needs to contain one or more attribute names')
+        raise ValueError("A needs to contain one or more attribute names")
 
     return pdep_B + (n_distinct_values_A - 1) / (df.shape[0] - 1) * (1 - pdep_B)
 
-def calc_pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int = None):
+
+def pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[int, ...], B: int = None):
     """
     Calculates the probabilistic dependence (pdep) between a left hand side A,
     which consists of one or more attributes, and a right hand side B, which
@@ -108,9 +111,9 @@ def calc_pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int =
 
     if B is not None:  # pdep(A,B)
         counts_dict = counts_dict[A][B]
-        for lhs_val, rhs_dict in counts_dict.items(): # lhs_val same as A_i
-            lhs_counts = sum(rhs_dict.values()) # same as a_i
-            for rhs_val, rhs_counts in rhs_dict.items(): # rhs_counts same as n_ij
+        for lhs_val, rhs_dict in counts_dict.items():  # lhs_val same as A_i
+            lhs_counts = sum(rhs_dict.values())  # same as a_i
+            for rhs_val, rhs_counts in rhs_dict.items():  # rhs_counts same as n_ij
                 sum_components.append(rhs_counts**2 / lhs_counts)
         return sum(sum_components) / N
 
@@ -121,19 +124,21 @@ def calc_pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int =
         return sum(sum_components) / N**2
 
     else:
-        raise ValueError('Wrong data type for A or B, nor wrong order. A '
-                         'should be a tuple of a list of column names of df, '
-                         'B should be name of a column or None. If B is none,'
-                         ' order must be 1.')
+        raise ValueError(
+            "Wrong data type for A or B, nor wrong order. A "
+            "should be a tuple of a list of column names of df, "
+            "B should be name of a column or None. If B is none,"
+            " order must be 1."
+        )
 
 
-def calc_gpdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[List[int]], B: int):
+def gpdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[int, ...], B: int):
     """
     Calculates the *genuine* probabilistic dependence (gpdep) between
     a left hand side A, which consists of one or more attributes, and
     a right hand side B, which consists of exactly one attribute.
     """
-    return calc_pdep(df, counts_dict, A, B) - expected_pdep(df, counts_dict, A, B)
+    return pdep(df, counts_dict, A, B) - expected_pdep(df, counts_dict, A, B)
 
 
 def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
@@ -169,7 +174,9 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
     return results_list
 
 
-def calc_all_gpdeps(counts_dict: dict, df: pd.DataFrame) -> Dict[Tuple, Dict[int, float]]:
+def calc_all_gpdeps(
+    counts_dict: dict, df: pd.DataFrame
+) -> Dict[Tuple, Dict[int, float]]:
     """
     Calculate all gpdeps in dataframe df, with an order implied by the depth
     of counts_dict.
@@ -179,12 +186,13 @@ def calc_all_gpdeps(counts_dict: dict, df: pd.DataFrame) -> Dict[Tuple, Dict[int
     gpdeps = {lhs: {} for lhs in lhss}
     for lhs in lhss:
         for rhs in rhss:
-            gpdeps[lhs][rhs] = calc_gpdep(df, counts_dict, lhs, rhs)
+            gpdeps[lhs][rhs] = gpdep(df, counts_dict, lhs, rhs)
     return gpdeps
 
 
-def invert_and_sort_gpdeps(gpdeps: Dict[Tuple, Dict[int, float]]
-        ) -> Dict[int, Dict[Tuple, float]]:
+def invert_and_sort_gpdeps(
+    gpdeps: Dict[Tuple, Dict[int, float]]
+) -> Dict[int, Dict[Tuple, float]]:
     """
     Invert the gpdeps dict and sort it. Results in a dict whose first key is
     the rhs, second key is the lhs, value of that is the gpdep score. The second
@@ -197,17 +205,21 @@ def invert_and_sort_gpdeps(gpdeps: Dict[Tuple, Dict[int, float]]
             inverse_gpdeps[rhs][lhs] = gpdeps[lhs][rhs]
 
     for rhs in inverse_gpdeps:
-        inverse_gpdeps[rhs] = {k: v for k, v in sorted(inverse_gpdeps[rhs].items(),
-            key=lambda item: item[1],
-            reverse=True)}
+        inverse_gpdeps[rhs] = {
+            k: v
+            for k, v in sorted(
+                inverse_gpdeps[rhs].items(), key=lambda item: item[1], reverse=True
+            )
+        }
     return inverse_gpdeps
 
 
 def pdep_vicinity_based_corrector(
-        inverse_sorted_gpdeps: Dict[int, Dict[tuple, float]],
-        counts_dict: dict,
-        ed: dict,
-        n_best_pdeps: int = 5) -> List[Dict]:
+    inverse_sorted_gpdeps: Dict[int, Dict[tuple, float]],
+    counts_dict: dict,
+    ed: dict,
+    n_best_pdeps: int = 5,
+) -> List[Dict]:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
     grow in number at (n-1)^2 / 2 pace. Only take the `n_best_pdeps`
@@ -215,23 +227,24 @@ def pdep_vicinity_based_corrector(
     """
     rhs_col = ed["column"]
     gpdeps = inverse_sorted_gpdeps[rhs_col]
-    gpdeps_subset = {lhs: gpdeps[lhs] for i, lhs in enumerate(gpdeps) if i < n_best_pdeps}
+    gpdeps_subset = {
+        lhs: gpdeps[lhs] for i, lhs in enumerate(gpdeps) if i < n_best_pdeps
+    }
     results_list = []
 
     for lhs_cols, gpdep_score in gpdeps_subset.items():
-        lhs_vals = tuple([ed['vicinity'][x] for x in lhs_cols])
+        lhs_vals = tuple([ed["vicinity"][x] for x in lhs_cols])
 
-        if not rhs_col in lhs_cols and \
-        lhs_vals in counts_dict[lhs_cols][rhs_col]:
+        if not rhs_col in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
             sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
             for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
                 pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
 
-                results_list.append({'correction': rhs_val,
-                                     'pr': pr,
-                                     'gpdep': gpdep_score})
+                results_list.append(
+                    {"correction": rhs_val, "pr": pr, "gpdep": gpdep_score}
+                )
 
-    sorted_results = sorted(results_list, key=lambda x: x['pr'], reverse=True)
+    sorted_results = sorted(results_list, key=lambda x: x["pr"], reverse=True)
 
     highest_conditional_probabilities = {}
     highest_gpdep_scores = {}
@@ -242,15 +255,14 @@ def pdep_vicinity_based_corrector(
     # like this.
     # I get the highest gpdep score per correction this way, too.
     for d in sorted_results:
-        if highest_conditional_probabilities.get(d['correction']) is None:
-            highest_conditional_probabilities[d['correction']] = d['pr']
-            highest_gpdep_scores[d['correction']] = d['gpdep']
-
+        if highest_conditional_probabilities.get(d["correction"]) is None:
+            highest_conditional_probabilities[d["correction"]] = d["pr"]
+            highest_gpdep_scores[d["correction"]] = d["gpdep"]
 
     # The three elements of our decision are majority vote, highest conditional
     # probability, and highest gpdep score.
     # Here, I calculate the majority vote.
-    counts = Counter([x['correction'] for x in sorted_results])
+    counts = Counter([x["correction"] for x in sorted_results])
     n_corrections = sum(counts.values())
 
     for correction in counts:
