@@ -2,7 +2,6 @@ import pandas as pd
 from typing import Tuple, List, Dict, Union, Any
 from itertools import combinations
 from collections import Counter
-from IPython.core.debugger import set_trace
 
 
 def calculate_frequency(df: pd.DataFrame, col: int):
@@ -21,7 +20,7 @@ def calculate_counts_dict(
     ignore_sign="<<<IGNORE_THIS_VALUE>>>",
 ) -> dict:
     """
-    Calculates a dictionary d that countains the absolute counts of how
+    Calculates a dictionary d that contains the absolute counts of how
     often values in the lhs occur with values in the rhs in the table df.
 
     The dictionary has the structure
@@ -42,13 +41,24 @@ def calculate_counts_dict(
     """
     i_cols = list(range(df.shape[1]))
     d = {comb: {cc: {} for cc in i_cols} for comb in combinations(i_cols, order)}
+    for lhs_cols in d:
+        d[lhs_cols]['value_counts'] = {}
 
     for row in df.itertuples(index=True):
         i_row, row = row[0], row[1:]
         for lhs_cols in combinations(i_cols, order):
+            lhs_vals = tuple(row[lhs_col] for lhs_col in lhs_cols)
+
+            # counts of values in the LHS, accessed via d[lhs_columns]['value_counts']
+            if ignore_sign not in lhs_vals and not any([(i_row, lhs_col) in detected_cells for lhs_col in lhs_cols]):
+                if d[lhs_cols]['value_counts'].get(lhs_vals) is None:
+                    d[lhs_cols]['value_counts'][lhs_vals] = 1.0
+                else:
+                    d[lhs_cols]['value_counts'][lhs_vals] += 1.0
+
+            # conditional counts
             for rhs_col in i_cols:
                 if rhs_col not in lhs_cols:
-                    lhs_vals = tuple(row[lhs_col] for lhs_col in lhs_cols)
                     if (
                         ignore_sign not in lhs_vals
                         and (i_row, rhs_col) not in detected_cells
@@ -71,9 +81,18 @@ def update_counts_dict(
     counts dict in place with a newly labeled row.
     """
     i_cols = list(range(df.shape[1]))
+
     for lhs_cols in combinations(i_cols, order):
+        lhs_vals = tuple(cleaned_sampled_tuple[lhs_col] for lhs_col in lhs_cols)
+
+        # updates counts of values in the LHS
+        if counts_dict[lhs_cols]['value_counts'].get(lhs_vals) is None:
+            counts_dict[lhs_cols]['value_counts'][lhs_vals] = 1.0
+        else:
+            counts_dict[lhs_cols]['value_counts'][lhs_vals] += 1.0
+
+        # updates conditional counts
         for rhs_col in i_cols:
-            lhs_vals = tuple(cleaned_sampled_tuple[lhs_col] for lhs_col in lhs_cols)
             if rhs_col not in lhs_cols:
                 if counts_dict[lhs_cols][rhs_col].get(lhs_vals) is None:
                     counts_dict[lhs_cols][rhs_col][lhs_vals] = {}
