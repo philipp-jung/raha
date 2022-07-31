@@ -620,14 +620,13 @@ class Correction:
         and a potential correction.
         Philipp added a `synchronous` parameter to make debugging easier.
         """
-        d.create_repaired_dataset(d.corrected_cells)
 
         # Calculate gpdeps and append them to d
         if self.VICINITY_FEATURE_GENERATOR == 'pdep':
             d.inv_vicinity_gpdeps = {}
             for o in self.VICINITY_ORDERS:
                 vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models[o],
-                        d.repaired_dataframe)
+                        d.dataframe, d.detected_cells)
                 d.inv_vicinity_gpdeps[o] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
         # train imputer model for each column.

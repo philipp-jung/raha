@@ -42,7 +42,7 @@ def calculate_counts_dict(
     i_cols = list(range(df.shape[1]))
     d = {comb: {cc: {} for cc in i_cols} for comb in combinations(i_cols, order)}
     for lhs_cols in d:
-        d[lhs_cols]['value_counts'] = {}
+        d[lhs_cols]["value_counts"] = {}
 
     for row in df.itertuples(index=True):
         i_row, row = row[0], row[1:]
@@ -50,11 +50,13 @@ def calculate_counts_dict(
             lhs_vals = tuple(row[lhs_col] for lhs_col in lhs_cols)
 
             # counts of values in the LHS, accessed via d[lhs_columns]['value_counts']
-            if ignore_sign not in lhs_vals and not any([(i_row, lhs_col) in detected_cells for lhs_col in lhs_cols]):
-                if d[lhs_cols]['value_counts'].get(lhs_vals) is None:
-                    d[lhs_cols]['value_counts'][lhs_vals] = 1.0
+            if ignore_sign not in lhs_vals and not any(
+                [(i_row, lhs_col) in detected_cells for lhs_col in lhs_cols]
+            ):
+                if d[lhs_cols]["value_counts"].get(lhs_vals) is None:
+                    d[lhs_cols]["value_counts"][lhs_vals] = 1.0
                 else:
-                    d[lhs_cols]['value_counts'][lhs_vals] += 1.0
+                    d[lhs_cols]["value_counts"][lhs_vals] += 1.0
 
             # conditional counts
             for rhs_col in i_cols:
@@ -85,13 +87,13 @@ def update_counts_dict(
     for lhs_cols in combinations(i_cols, order):
         lhs_vals = tuple(cleaned_sampled_tuple[lhs_col] for lhs_col in lhs_cols)
 
-        # updates counts of values in the LHS
-        if counts_dict[lhs_cols]['value_counts'].get(lhs_vals) is None:
-            counts_dict[lhs_cols]['value_counts'][lhs_vals] = 1.0
+        # Updates counts of values in the LHS
+        if counts_dict[lhs_cols]["value_counts"].get(lhs_vals) is None:
+            counts_dict[lhs_cols]["value_counts"][lhs_vals] = 1.0
         else:
-            counts_dict[lhs_cols]['value_counts'][lhs_vals] += 1.0
+            counts_dict[lhs_cols]["value_counts"][lhs_vals] += 1.0
 
-        # updates conditional counts
+        # Updates conditional counts
         for rhs_col in i_cols:
             if rhs_col not in lhs_cols:
                 if counts_dict[lhs_cols][rhs_col].get(lhs_vals) is None:
@@ -103,29 +105,62 @@ def update_counts_dict(
                     counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
 
 
-def expected_pdep(df, counts_dict: dict, A: Tuple[int, ...], B: int):
-    pdep_B = pdep(df, counts_dict, tuple([B]))
+def expected_pdep(
+    n_rows: int,
+    counts_dict: dict,
+    detected_cells: Dict[Tuple, str],
+    A: Tuple[int, ...],
+    B: int,
+) -> float:
+    pdep_B = pdep(n_rows, counts_dict, detected_cells, tuple([B]))
 
     if len(A) == 1:
-        n_distinct_values_A = df.iloc[:, A[0]].nunique(dropna=False)
+        n_distinct_values_A = len(counts_dict[A]["value_counts"])
     elif len(A) > 1:
         n_distinct_values_A = len(counts_dict[A][B])
     else:
         raise ValueError("A needs to contain one or more attribute names")
 
-    return pdep_B + (n_distinct_values_A - 1) / (df.shape[0] - 1) * (1 - pdep_B)
+    return pdep_B + (n_distinct_values_A - 1) / (n_rows - 1) * (1 - pdep_B)
 
 
-def pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[int, ...], B: int = None):
+def error_corrected_row_count(
+    n_rows: int, detected_cells: Dict[Tuple, str], A: Tuple[int, ...], B: int = None
+) -> int:
+    """
+    Calculate the number of rows N that do not contain an error in the LHS or RHS.
+    @param A: LHS column
+    @param B: RHS column
+    @param detected_cells: Dictionary with key error position, value correct value
+    @return: Number of rows without an error
+    """
+    relevant_cols = list(A) if B is None else list(A) + [B]
+    excluded_rows = []
+    for row, col in detected_cells:
+        if col in relevant_cols and row not in excluded_rows:
+            excluded_rows.append(row)
+    return n_rows - len(excluded_rows)
+
+
+def pdep(
+    n_rows: int,
+    counts_dict: dict,
+    detected_cells: Dict[Tuple, str],
+    A: Tuple[int, ...],
+    B: int = None,
+) -> Union[float, None]:
     """
     Calculates the probabilistic dependence (pdep) between a left hand side A,
-    which consists of one or more attributes, and a right hand side B, which
-    consists of one or zero attributes.
+    which consists of one or more attributes, and an optional right hand side B,
+    which consists of one attribute.
 
-    If B is None, calculate pdep(A), which is the probability that two randomly
-    selected records will have the same value for A.
+    If B is None, calculate pdep(A), that is the probability that two randomly
+    selected records from A will have the same value.
     """
-    N = df.shape[0]
+    N = error_corrected_row_count(n_rows, detected_cells, A, B)
+    if N == 0:  # no tuple exists without an error in lhs and rhs
+        return None
+
     sum_components = []
 
     if B is not None:  # pdep(A,B)
@@ -137,7 +172,7 @@ def pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[int, ...], B: int = None)
         return sum(sum_components) / N
 
     elif len(A) == 1:  # pdep(A)
-        counts_dict = calculate_frequency(df, A[0])
+        counts_dict = counts_dict[A]["value_counts"]
         for lhs_val, lhs_rel_frequency in counts_dict.items():
             sum_components.append(lhs_rel_frequency**2)
         return sum(sum_components) / N**2
@@ -151,13 +186,21 @@ def pdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[int, ...], B: int = None)
         )
 
 
-def gpdep(df: pd.DataFrame, counts_dict: dict, A: Tuple[int, ...], B: int):
+def gpdep(
+    n_rows: int,
+    counts_dict: dict,
+    detected_cells: Dict[Tuple, str],
+    A: Tuple[int, ...],
+    B: int,
+):
     """
     Calculates the *genuine* probabilistic dependence (gpdep) between
     a left hand side A, which consists of one or more attributes, and
     a right hand side B, which consists of exactly one attribute.
     """
-    return pdep(df, counts_dict, A, B) - expected_pdep(df, counts_dict, A, B)
+    return pdep(n_rows, counts_dict, detected_cells, A, B) - expected_pdep(
+        n_rows, counts_dict, detected_cells, A, B
+    )
 
 
 def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
@@ -194,18 +237,19 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
 
 
 def calc_all_gpdeps(
-    counts_dict: dict, df: pd.DataFrame
+    counts_dict: dict, df: pd.DataFrame, detected_cells: Dict[Tuple, str]
 ) -> Dict[Tuple, Dict[int, float]]:
     """
     Calculate all gpdeps in dataframe df, with an order implied by the depth
     of counts_dict.
     """
+    n_rows, n_cols = df.shape
     lhss = set([x for x in counts_dict.keys()])
-    rhss = list(range(df.shape[1]))
+    rhss = list(range(n_cols))
     gpdeps = {lhs: {} for lhs in lhss}
     for lhs in lhss:
         for rhs in rhss:
-            gpdeps[lhs][rhs] = gpdep(df, counts_dict, lhs, rhs)
+            gpdeps[lhs][rhs] = gpdep(n_rows, counts_dict, detected_cells, lhs, rhs)
     return gpdeps
 
 
