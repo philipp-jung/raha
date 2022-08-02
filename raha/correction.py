@@ -624,10 +624,10 @@ class Correction:
         # Calculate gpdeps and append them to d
         if self.VICINITY_FEATURE_GENERATOR == 'pdep':
             d.inv_vicinity_gpdeps = {}
-            for o in self.VICINITY_ORDERS:
-                vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models[o],
-                        d.dataframe, d.detected_cells)
-                d.inv_vicinity_gpdeps[o] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
+            for order in self.VICINITY_ORDERS:
+                vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models,
+                        d.dataframe, d.detected_cells, order)
+                d.inv_vicinity_gpdeps[order] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
         # train imputer model for each column.
         if 'imputer' in self.FEATURE_GENERATORS:
