@@ -73,23 +73,11 @@ class Correction:
         self.VICINITY_ORDERS = [1]  # Baran default
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
+        self._classification_models = {}
 
         # recommend up to 10. Ignored when using 'naive' feature generator. That one
         # always generates features for all possible column combinations.
         self.N_BEST_PDEPS = 5
-
-        # Strategy upon which pdep feature generation is based. It is still ongoing
-        # research to determine which strategy is best.
-        self.PDEP_SCORE_STRATEGY = 'penalty'
-
-        # Exclude value models if the first 4 features are 0, and the last 4 features >0.
-        # This pattern is typical for the corrector trying to solve imputation problems.
-        self.EXCLUDE_VALUE_SPECIAL_CASE = False
-
-        # Autogluon Parameters -- used by the imputer_feature_generator and the Metalearner,
-        # if AG is set as CLASSIFICATION_MODEL.
-        self.TRAINING_TIME_LIMIT = 10
-        self.AG_PRESETS = 'good_quality_faster_inference_only_refit'
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -346,11 +334,6 @@ class Correction:
                             if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                 results_dictionary[new_value] = pr
                 results_list.append(results_dictionary)
-
-        # special case that messes up cleaning results on RENUVER's bridges
-        if self.EXCLUDE_VALUE_SPECIAL_CASE:
-            if not results_list[0] and not results_list[1] and not results_list[2] and not results_list[3] and results_list[4] and results_list[5] and results_list[6] and results_list[7]:
-                return [{}, {}, {}, {}, {}, {}, {}, {}]
         return results_list
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
@@ -495,8 +478,9 @@ class Correction:
         """
         This method labels a tuple with ground truth.
         Takes the sampled row from d.sampled_tuple, iterates over each cell
-        in that row taken from the clean data, and then adds {(row, col):
-        [is_error, clean_value_from_clean_dataframe] to
+        in that row taken from the clean data, and then adds
+        d.labeled_cells[(row, col)] = [is_error, clean_value_from_clean_dataframe]
+        to d.labeled_cells.
         """
         d.labeled_tuples[d.sampled_tuple] = 1
         for col in range(d.dataframe.shape[1]):
@@ -595,8 +579,7 @@ class Correction:
                             inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
                             counts_dict=d.vicinity_models[o],
                             ed=error_dictionary,
-                            n_best_pdeps=self.N_BEST_PDEPS,
-                            scoring_strategy=self.PDEP_SCORE_STRATEGY)
+                            n_best_pdeps=self.N_BEST_PDEPS)
                     pdep_vicinity_corrections.append(pdep_corrections)
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
@@ -636,15 +619,14 @@ class Correction:
         and a potential correction.
         Philipp added a `synchronous` parameter to make debugging easier.
         """
-        d.create_repaired_dataset(d.corrected_cells)
 
         # Calculate gpdeps and append them to d
         if self.VICINITY_FEATURE_GENERATOR == 'pdep':
             d.inv_vicinity_gpdeps = {}
-            for o in self.VICINITY_ORDERS:
-                vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models[o],
-                        d.repaired_dataframe)
-                d.inv_vicinity_gpdeps[o] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
+            for order in self.VICINITY_ORDERS:
+                vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models,
+                        d.dataframe, d.detected_cells, order)
+                d.inv_vicinity_gpdeps[order] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
         # train imputer model for each column.
         if 'imputer' in self.FEATURE_GENERATORS:
@@ -692,16 +674,21 @@ class Correction:
             y_train = []
             x_test = []
             test_cell_correction_list = []
-            for _, cell in enumerate(d.column_errors[j]):
-                if cell in d.pair_features:
-                    for correction in d.pair_features[cell]:
-                        if cell in d.labeled_cells and d.labeled_cells[cell][0] == 1:
-                            x_train.append(d.pair_features[cell][correction])
-                            y_train.append(int(correction == d.labeled_cells[cell][1]))
-                            d.corrected_cells[cell] = d.labeled_cells[cell][1]
-                        else:
-                            x_test.append(d.pair_features[cell][correction])
-                            test_cell_correction_list.append([cell, correction])
+            for cell in d.column_errors[j]:
+                correction_suggestions = d.pair_features.get(cell, [])  # skips if there are no suggestions
+                for suggestion in correction_suggestions:
+                    # If a cell has been labeled by the user and is an error, use it to create the training dataset.
+                    # --> put all user-corrected cells that contain an error in the train set.
+                    # The second condition is always true if error detection and user_labeling work without an error.
+                    if cell in d.labeled_cells and d.labeled_cells[cell][0] == 1:
+                        x_train.append(d.pair_features[cell][suggestion])  # put features into x_train
+                        suggestion_is_correction =  suggestion == d.labeled_cells[cell][1]
+                        y_train.append(int(suggestion_is_correction))  # put generated label in to y_train
+                        d.corrected_cells[cell] = d.labeled_cells[cell][1]
+                    else:  # --> put all cells that contain an error without user-correction in the "test" set.
+                        x_test.append(d.pair_features[cell][suggestion])
+                        test_cell_correction_list.append([cell, suggestion])
+
             if self.CLASSIFICATION_MODEL == "ABC":
                 classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
             if self.CLASSIFICATION_MODEL == "DTC":
@@ -723,12 +710,17 @@ class Correction:
                                                         learner_kwargs={'positive_class': 1}, verbosity=0)
 
             if len(x_train) > 0 and len(x_test) > 0:
-                if sum(y_train) == 0:
+                if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
                     predicted_labels = numpy.zeros(len(x_test))
-                elif sum(y_train) == len(y_train):
+                elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
                     predicted_labels = numpy.ones(len(x_test))
                 else:
-                    if self.CLASSIFICATION_MODEL == "AG":  # AutoGluon has a different API than sklearn
+                    if self.CLASSIFICATION_MODEL != "AG":
+                        classification_model.fit(x_train, y_train)
+                        predicted_labels = classification_model.predict(x_test)
+                        self._classification_models[j] = classification_model
+
+                    else:  # AutoGluon has an API different from sklearn, needs special handling.
                         train_data = np.c_[x_train, y_train]
                         column_names = list(range(train_data.shape[1]))
                         column_names[-1] = 'label'
@@ -737,16 +729,13 @@ class Correction:
 
                         try:
                             classification_model.fit(train_data=df_train,
-                                                     presets=self.AG_PRESETS,
+                                                     presets='medium_quality_faster_train',
                                                      time_limit=self.TRAINING_TIME_LIMIT,
                                                      verbosity=0,
                                                      excluded_model_types=['KNN'])
                             predicted_labels = classification_model.predict(df_test)
-                        except ValueError:  # training fails
-                            predicted_labels = numpy.zeros(len(x_test))  # not sure if this makes sense
-                    else:
-                        classification_model.fit(x_train, y_train)
-                        predicted_labels = classification_model.predict(x_test)
+                        except ValueError:  # if model training fails completely
+                            predicted_labels = numpy.zeros(len(x_test))  # not sure if this is reasonable
 
                 for index, predicted_label in enumerate(predicted_labels):
                     cell, predicted_correction = test_cell_correction_list[index]
@@ -810,7 +799,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "bridges"
+    dataset_name = "cars"
 
     dataset_dictionary = {
         "name": dataset_name,
@@ -823,17 +812,12 @@ if __name__ == "__main__":
     app.LABELING_BUDGET = 20
 
     app.VICINITY_ORDERS = [1, 2]
-    app.CLASSIFICATION_MODEL = "ABC"
+    app.CLASSIFICATION_MODEL = "LOGR"
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['value', 'domain', 'vicinity']
+    app.FEATURE_GENERATORS = ['vicinity', 'domain', 'value']
     app.IMPUTER_CACHE_MODEL = True
-    app.PDEP_SCORE_STRATEGY = 'multiply'
-    app.EXCLUDE_VALUE_SPECIAL_CASE = True
-    app.CLASSIFICATION_MODEL = "AG"
-    app.TRAINING_TIME_LIMIT = 10
-    app.AG_PRESETS = 'good_quality_faster_inference_only_refit'
 
     seed = None
     correction_dictionary = app.run(data, seed)
