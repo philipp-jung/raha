@@ -720,8 +720,6 @@ class Correction:
                         classification_model.fit(x_train, y_train)
                         predicted_labels = classification_model.predict(x_test)
                         self._classification_models[j] = classification_model
-                        if len(d.labeled_tuples) == 19 and j == 2:
-                            breakpoint()
 
                     else:  # AutoGluon has an API different from sklearn, needs special handling.
                         train_data = np.c_[x_train, y_train]
@@ -819,7 +817,7 @@ if __name__ == "__main__":
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['vicinity']
+    app.FEATURE_GENERATORS = ['vicinity', 'domain', 'value']
     app.IMPUTER_CACHE_MODEL = True
 
     seed = None

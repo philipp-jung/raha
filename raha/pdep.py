@@ -1,7 +1,9 @@
 import pandas as pd
 from typing import Tuple, List, Dict, Union, Any
 from itertools import combinations
-from collections import Counter
+from collections import Counter, namedtuple
+
+PdepTuple = namedtuple("PdepTuple", ["pdep", "gpdep"])
 
 
 def calculate_frequency(df: pd.DataFrame, col: int):
@@ -49,7 +51,9 @@ def calculate_counts_dict(
         for lhs_cols in combinations(i_cols, order):
             lhs_vals = tuple(row[lhs_col] for lhs_col in lhs_cols)
 
-            any_cell_contains_error = any([(i_row, lhs_col) in detected_cells for lhs_col in lhs_cols])
+            any_cell_contains_error = any(
+                [(i_row, lhs_col) in detected_cells for lhs_col in lhs_cols]
+            )
             if ignore_sign not in lhs_vals and not any_cell_contains_error:
                 # increase counts of values in the LHS, accessed via d[lhs_columns]['value_counts']
                 if d[lhs_cols]["value_counts"].get(lhs_vals) is None:
@@ -61,10 +65,7 @@ def calculate_counts_dict(
                 for rhs_col in i_cols:
                     if rhs_col not in lhs_cols:
                         rhs_contains_error = (i_row, rhs_col) in detected_cells
-                        if (
-                            ignore_sign not in lhs_vals
-                            and not rhs_contains_error
-                        ):
+                        if ignore_sign not in lhs_vals and not rhs_contains_error:
                             if d[lhs_cols][rhs_col].get(lhs_vals) is None:
                                 d[lhs_cols][rhs_col][lhs_vals] = {}
                             rhs_val = row[rhs_col]
@@ -152,7 +153,7 @@ def pdep(
     detected_cells: Dict[Tuple, str],
     order: int,
     A: Tuple[int, ...],
-    B: int = None
+    B: int = None,
 ) -> Union[float, None]:
     """
     Calculates the probabilistic dependence (pdep) between a left hand side A,
@@ -198,8 +199,8 @@ def gpdep(
     detected_cells: Dict[Tuple, str],
     A: Tuple[int, ...],
     B: int,
-    order: int
-) -> Union[float, None]:
+    order: int,
+) -> Union[PdepTuple, None]:
     """
     Calculates the *genuine* probabilistic dependence (gpdep) between
     a left hand side A, which consists of one or more attributes, and
@@ -208,10 +209,10 @@ def gpdep(
     pdep_A_B = pdep(n_rows, counts_dict, detected_cells, order, A, B)
     epdep_A_B = expected_pdep(n_rows, counts_dict, detected_cells, order, A, B)
 
-    if pdep_A_B is None or epdep_A_B is None:
-        return None
-
-    return pdep_A_B - epdep_A_B
+    if pdep_A_B is not None and epdep_A_B is not None:
+        gpdep_A_B = pdep_A_B - epdep_A_B
+        return PdepTuple(pdep_A_B, gpdep_A_B)
+    return None
 
 
 def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
@@ -249,7 +250,7 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
 
 def calc_all_gpdeps(
     counts_dict: dict, df: pd.DataFrame, detected_cells: Dict[Tuple, str], order: int
-) -> Dict[Tuple, Dict[int, float]]:
+) -> Dict[Tuple, Dict[int, PdepTuple]]:
     """
     Calculate all gpdeps in dataframe df, with an order implied by the depth
     of counts_dict.
@@ -260,17 +261,19 @@ def calc_all_gpdeps(
     gpdeps = {lhs: {} for lhs in lhss}
     for lhs in lhss:
         for rhs in rhss:
-            gpdeps[lhs][rhs] = gpdep(n_rows, counts_dict, detected_cells, lhs, rhs, order)
+            gpdeps[lhs][rhs] = gpdep(
+                n_rows, counts_dict, detected_cells, lhs, rhs, order
+            )
     return gpdeps
 
 
 def invert_and_sort_gpdeps(
-    gpdeps: Dict[Tuple, Dict[int, float]]
-) -> Dict[int, Dict[Tuple, float]]:
+    gpdeps: Dict[Tuple, Dict[int, PdepTuple]]
+) -> Dict[int, Dict[Tuple, PdepTuple]]:
     """
     Invert the gpdeps dict and sort it. Results in a dict whose first key is
     the rhs, second key is the lhs, value of that is the gpdep score. The second
-    key is sorted in descendingly by the gpdep score.
+    key is sorted by the descending gpdep score.
     """
     inverse_gpdeps = {rhs: {} for rhs in list(gpdeps.items())[0][1]}
 
@@ -282,14 +285,16 @@ def invert_and_sort_gpdeps(
         inverse_gpdeps[rhs] = {
             k: v
             for k, v in sorted(
-                inverse_gpdeps[rhs].items(), key=lambda x: (x[1] is not None, x[1]), reverse=True
+                inverse_gpdeps[rhs].items(),
+                key=lambda x: (x[1] is not None, x[1].gpdep if x[1] is not None else None),
+                reverse=True,
             )
         }
     return inverse_gpdeps
 
 
 def pdep_vicinity_based_corrector(
-    inverse_sorted_gpdeps: Dict[int, Dict[tuple, float]],
+    inverse_sorted_gpdeps: Dict[int, Dict[tuple, PdepTuple]],
     counts_dict: dict,
     ed: dict,
     n_best_pdeps: int = 5,
@@ -306,7 +311,7 @@ def pdep_vicinity_based_corrector(
     }
     results_list = []
 
-    for lhs_cols, gpdep_score in gpdeps_subset.items():
+    for lhs_cols, pdep_tuple in gpdeps_subset.items():
         lhs_vals = tuple([ed["vicinity"][x] for x in lhs_cols])
 
         if not rhs_col in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
@@ -315,13 +320,13 @@ def pdep_vicinity_based_corrector(
                 pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
 
                 results_list.append(
-                    {"correction": rhs_val, "pr": pr, "gpdep": gpdep_score}
+                    {"correction": rhs_val, "pr": pr, "pdep": pdep_tuple.pdep if pdep_tuple is not None else 0}
                 )
 
     sorted_results = sorted(results_list, key=lambda x: x["pr"], reverse=True)
 
     highest_conditional_probabilities = {}
-    highest_gpdep_scores = {}
+    highest_pdep_scores = {}
     votes = {}
 
     # Having a sorted dict allows us to only return the highest conditional
@@ -331,7 +336,7 @@ def pdep_vicinity_based_corrector(
     for d in sorted_results:
         if highest_conditional_probabilities.get(d["correction"]) is None:
             highest_conditional_probabilities[d["correction"]] = d["pr"]
-            highest_gpdep_scores[d["correction"]] = d["gpdep"]
+            highest_pdep_scores[d["correction"]] = d["pdep"]
 
     # The three elements of our decision are majority vote, highest conditional
     # probability, and highest gpdep score.
@@ -342,4 +347,4 @@ def pdep_vicinity_based_corrector(
     for correction in counts:
         votes[correction] = counts[correction] / n_corrections
 
-    return [highest_conditional_probabilities, highest_gpdep_scores, votes]
+    return [highest_conditional_probabilities, highest_pdep_scores, votes]
