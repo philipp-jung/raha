@@ -1,19 +1,36 @@
 import raha
 from ruska import Ruska
 
-def run_baran_renuver(c: dict):
+
+def run_baran(c: dict):
     """
     Use run in [1,5] to not get an error.
     """
 
     # an das format von renuver angepasst.
-    rate_formatted = int(str(c['error_fraction']).split(".")[1])
-    run = c['run'] + 1
-    data_dict = {
-        "name": c["dataset"],
-        "path": f"../datasets/renuver/{c['dataset']}/{c['dataset']}_{rate_formatted}_{run}.csv",
-        "clean_path": f"../datasets/renuver/{c['dataset']}/clean.csv",
-    }
+    if c["dataset"] in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
+        rate_formatted = int(str(c["error_fraction"]).split(".")[1])
+        run = c["run"] + 1
+        data_dict = {
+            "name": c["dataset"],
+            "path": f"../datasets/renuver/{c['dataset']}/{c['dataset']}_{rate_formatted}_{run}.csv",
+            "clean_path": f"../datasets/renuver/{c['dataset']}/clean.csv",
+        }
+    elif c["dataset"] in ["beers", "flights", "hospital", "tax", "toy"]:
+        data_dict = {
+            "name": c["dataset"],
+            "path": f"../datasets/{c['dataset']}/dirty.csv",
+            "clean_path": f"../datasets/{c['dataset']}/clean.csv",
+        }
+    elif c["dataset"] in ["adult", "breast-cancer", "letter", "nursery"]:
+        rate_formatted = int(c["error_fraction"] * 10)
+        data_dict = {
+            "name": c["dataset"],
+            "path": f"../datasets/{c['dataset']}/MCAR/dirty_{rate_formatted}.csv",
+            "clean_path": f"../datasets/{c['dataset']}/clean.csv",
+        }
+    else:
+        raise ValueError("Unknown Dataset.")
 
     data = raha.Dataset(data_dict, n_rows=c["n_rows"])
     data.detected_cells = dict(data.get_actual_errors_dictionary())
@@ -25,11 +42,7 @@ def run_baran_renuver(c: dict):
     app.VICINITY_ORDERS = c["vicinity_orders"]
     app.VICINITY_FEATURE_GENERATOR = c["vicinity_feature_generator"]
     app.N_BEST_PDEPS = c["n_best_pdeps"]
-    app.PDEP_SCORE_STRATEGY = c["score_strategy"]
-    app.TRAINING_TIME_LIMIT = c['training_time_limit']
-    app.EXCLUDE_VALUE_SPECIAL_CASE = c["exclude_value_special_case"]
-    app.AG_PRESETS = c["ag_presets"]
-
+    app.USE_PDEP_FEATURE = c["use_pdep_feature"]
 
     d = app.initialize_dataset(data)
     app.initialize_models(d)
@@ -43,37 +56,99 @@ def run_baran_renuver(c: dict):
         p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
     return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
 
+
 if __name__ == "__main__":
-    rsk = Ruska(
-        name="2022-07-08-tune-autogluon",
-        description="""Autogluon hat nicht den gewünschten Effekt. Die Datensätze
-        cars und bridges bei error-fraction 0.1 stehen exemplarisch dafür, dass
-        AG noch nicht funktioniert. Ich erhöhe das time_limit und die presets, um
-        doch noch gute Ergebnisse zu erhalten.""",
+    rsk_renuver = Ruska(
+        name="2022-08-03-evaluate-pdep-features-renuver",
+        description="""Basierend auf meiner Sync mit Thorsten und Felix vom
+        26.07.22 habe ich einen Haufen TODOs, die ich abarbeite. Hier untersuche
+        ich den Nutzen, pdep selbst als Feature zu benutzen.
+        Wegen der unterschiedlichen Definitionen der Datensätze splitte ich die
+        Messung in drei Teile.""",
         commit="",
         config={
             "dataset": "breast-cancer",
             "sampling": "MCAR",
             "error_fraction": 0.1,
             "labeling_budget": 20,
-            "feature_generators": ["value", "domain", "vicinity"],
-            "classification_model": "AG",
+            "feature_generators": ["vicinity"],
+            "classification_model": "LOGR",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_best_pdeps": 5,
-            "score_strategy": "multiply",
             "n_rows": None,
-            "exclude_value_special_case": True,
-            "training_time_limit": 45,
-            "ag_presets": "good_quality_faster_inference_only_refit"
+            "use_pdep_feature": True,
         },
         ranges={
-            "dataset": ['bridges', 'cars'],
-            "score_strategy": ['ensemble_new_feature', 'ensemble', 'multiply'],
-            "error_fraction": [0.01]
+            "dataset": ["bridges", "cars", "glass", "restaurant"],
+            "error_fraction": [0.01],
+            # "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
+            # "use_pdep_feature": [False, True]
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk.run(experiment=run_baran_renuver, parallel=True)
+    rsk_baran = Ruska(
+        name="2022-08-03-evaluate-pdep-features-baran",
+        description="""Basierend auf meiner Sync mit Thorsten und Felix vom
+        26.07.22 habe ich einen Haufen TODOs, die ich abarbeite. Hier untersuche
+        ich den Nutzen, pdep selbst als Feature zu benutzen.
+        Wegen der unterschiedlichen Definitionen der Datensätze splitte ich die
+        Messung in drei Teile.""",
+        commit="",
+        config={
+            "dataset": "breast-cancer",
+            "sampling": "MCAR",
+            "error_fraction": 0.1,
+            "labeling_budget": 20,
+            "feature_generators": ["vicinity"],
+            "classification_model": "LOGR",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_best_pdeps": 5,
+            "n_rows": None,
+            "use_pdep_feature": True,
+        },
+        ranges={
+            "dataset": ["beers", "flights", "hospital", "rayyan"],
+            #"use_pdep_feature": [False, True],
+        },
+        runs=5,
+        save_path="/root/measurements/",
+    )
+
+    rsk_new = Ruska(
+        name="2022-08-03-evaluate-pdep-features-new",
+        description="""Basierend auf meiner Sync mit Thorsten und Felix vom
+        26.07.22 habe ich einen Haufen TODOs, die ich abarbeite. Hier untersuche
+        ich den Nutzen, pdep selbst als Feature zu benutzen.
+        Wegen der unterschiedlichen Definitionen der Datensätze splitte ich die
+        Messung in drei Teile.""",
+        commit="",
+        config={
+            "dataset": "breast-cancer",
+            "sampling": "MCAR",
+            "error_fraction": 0.1,
+            "labeling_budget": 20,
+            "feature_generators": ["vicinity"],
+            "classification_model": "LOGR",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_best_pdeps": 5,
+            "n_rows": None,
+            "use_pdep_feature": True,
+        },
+        ranges={
+            "dataset": ["adult", "breast-cancer", "letter", "nursery"],
+            "error_fraction": [0.1]
+            # "error_fraction": [0.1, 0.3, 0.5, 0.7, 0.9, 0.99],
+            # "use_pdep_feature": [False, True],
+        },
+        runs=5,
+        save_path="/root/measurements/",
+    )
+
+    rsk_new.run(experiment=run_baran, parallel=True)
+    rsk_baran.run(experiment=run_baran, parallel=True)
+    rsk_renuver.run(experiment=run_baran, parallel=True)
