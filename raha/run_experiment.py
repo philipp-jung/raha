@@ -81,9 +81,8 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
-            "error_fraction": [0.01],
-            # "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            # "use_pdep_feature": [False, True]
+            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
+            "use_pdep_feature": [False, True]
         },
         runs=5,
         save_path="/root/measurements/",
@@ -112,7 +111,7 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            #"use_pdep_feature": [False, True],
+            "use_pdep_feature": [False, True],
         },
         runs=5,
         save_path="/root/measurements/",
@@ -141,9 +140,8 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["adult", "breast-cancer", "letter", "nursery"],
-            "error_fraction": [0.1]
-            # "error_fraction": [0.1, 0.3, 0.5, 0.7, 0.9, 0.99],
-            # "use_pdep_feature": [False, True],
+            "error_fraction": [0.1, 0.3, 0.5, 0.7, 0.9, 0.99],
+            "use_pdep_feature": [False, True],
         },
         runs=5,
         save_path="/root/measurements/",
