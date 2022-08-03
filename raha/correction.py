@@ -79,6 +79,9 @@ class Correction:
         # always generates features for all possible column combinations.
         self.N_BEST_PDEPS = 5
 
+        # is the pdep feature required at all?
+        self.USE_PDEP_FEATURE = True
+
     @staticmethod
     def _wikitext_segmenter(wikitext):
         """
@@ -579,7 +582,8 @@ class Correction:
                             inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
                             counts_dict=d.vicinity_models[o],
                             ed=error_dictionary,
-                            n_best_pdeps=self.N_BEST_PDEPS)
+                            n_best_pdeps=self.N_BEST_PDEPS,
+                            use_pdep_feature=self.USE_PDEP_FEATURE)
                     pdep_vicinity_corrections.append(pdep_corrections)
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
@@ -818,6 +822,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['vicinity', 'domain', 'value']
     app.IMPUTER_CACHE_MODEL = True
+    app.USE_PDEP_FEATURE = False
 
     seed = None
     correction_dictionary = app.run(data, seed)

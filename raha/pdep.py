@@ -298,6 +298,7 @@ def pdep_vicinity_based_corrector(
     counts_dict: dict,
     ed: dict,
     n_best_pdeps: int = 5,
+    use_pdep_feature: bool = True
 ) -> List[Dict]:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
@@ -347,4 +348,6 @@ def pdep_vicinity_based_corrector(
     for correction in counts:
         votes[correction] = counts[correction] / n_corrections
 
+    if not use_pdep_feature:
+        return [highest_conditional_probabilities, votes]
     return [highest_conditional_probabilities, highest_pdep_scores, votes]
