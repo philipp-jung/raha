@@ -59,12 +59,9 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-08-03-evaluate-pdep-features-renuver",
-        description="""Basierend auf meiner Sync mit Thorsten und Felix vom
-        26.07.22 habe ich einen Haufen TODOs, die ich abarbeite. Hier untersuche
-        ich den Nutzen, pdep selbst als Feature zu benutzen.
-        Wegen der unterschiedlichen Definitionen der Datensätze splitte ich die
-        Messung in drei Teile.""",
+        name="2022-08-05-evaluate-pdep-features-renuver",
+        description="""Untersuche, wie sich n_best_pdeps auf die Reinigung
+        auswirkt.""",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -82,19 +79,16 @@ if __name__ == "__main__":
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "use_pdep_feature": [False, True]
+            "n_best_pdeps": [0, 5, 99],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-08-03-evaluate-pdep-features-baran",
-        description="""Basierend auf meiner Sync mit Thorsten und Felix vom
-        26.07.22 habe ich einen Haufen TODOs, die ich abarbeite. Hier untersuche
-        ich den Nutzen, pdep selbst als Feature zu benutzen.
-        Wegen der unterschiedlichen Definitionen der Datensätze splitte ich die
-        Messung in drei Teile.""",
+        name="2022-08-05-evaluate-pdep-features-baran",
+        description="""Untersuche, wie sich n_best_pdeps auf die Reinigung
+        auswirkt.""",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -111,42 +105,11 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "use_pdep_feature": [False, True],
+            "n_best_pdeps": [0, 5, 99],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk_new = Ruska(
-        name="2022-08-03-evaluate-pdep-features-new",
-        description="""Basierend auf meiner Sync mit Thorsten und Felix vom
-        26.07.22 habe ich einen Haufen TODOs, die ich abarbeite. Hier untersuche
-        ich den Nutzen, pdep selbst als Feature zu benutzen.
-        Wegen der unterschiedlichen Definitionen der Datensätze splitte ich die
-        Messung in drei Teile.""",
-        commit="",
-        config={
-            "dataset": "breast-cancer",
-            "sampling": "MCAR",
-            "error_fraction": 0.1,
-            "labeling_budget": 20,
-            "feature_generators": ["vicinity"],
-            "classification_model": "LOGR",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_best_pdeps": 5,
-            "n_rows": None,
-            "use_pdep_feature": True,
-        },
-        ranges={
-            "dataset": ["adult", "breast-cancer", "letter", "nursery"],
-            "error_fraction": [0.1, 0.3, 0.5, 0.7, 0.9, 0.99],
-            "use_pdep_feature": [False, True],
-        },
-        runs=5,
-        save_path="/root/measurements/",
-    )
-
-    rsk_new.run(experiment=run_baran, parallel=True)
-    rsk_baran.run(experiment=run_baran, parallel=True)
     rsk_renuver.run(experiment=run_baran, parallel=True)
+    rsk_baran.run(experiment=run_baran, parallel=True)

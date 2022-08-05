@@ -186,9 +186,9 @@ def pdep(
 
     else:
         raise ValueError(
-            "Wrong data type for A or B, nor wrong order. A "
+            "Wrong data type for A or B, or wrong order. A "
             "should be a tuple of a list of column names of df, "
-            "B should be name of a column or None. If B is none,"
+            "B should be name of a column or None. If B is None,"
             " order must be 1."
         )
 
@@ -307,9 +307,18 @@ def pdep_vicinity_based_corrector(
     """
     rhs_col = ed["column"]
     gpdeps = inverse_sorted_gpdeps[rhs_col]
-    gpdeps_subset = {
-        lhs: gpdeps[lhs] for i, lhs in enumerate(gpdeps) if i < n_best_pdeps
-    }
+
+    if n_best_pdeps == 0:
+        gpdeps_subset = gpdeps
+    elif n_best_pdeps == 99:
+        n_best_pdeps == int(len(inverse_sorted_gpdeps) / 2)
+        gpdeps_subset = {
+            rhs: gpdeps[rhs] for i, rhs in enumerate(gpdeps) if i < n_best_pdeps
+        }
+    else:
+        gpdeps_subset = {
+            rhs: gpdeps[rhs] for i, rhs in enumerate(gpdeps) if i < n_best_pdeps
+        }
     results_list = []
 
     for lhs_cols, pdep_tuple in gpdeps_subset.items():
