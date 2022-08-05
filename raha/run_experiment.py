@@ -59,7 +59,7 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-08-05-evaluate-pdep-n-best-features-renuver",
+        name="2022-08-05-evaluate-pdep-features-renuver-updated",
         description="""Untersuche, wie sich n_best_pdeps auf die Reinigung
         auswirkt.""",
         commit="",
@@ -77,16 +77,17 @@ if __name__ == "__main__":
             "use_pdep_feature": True,
         },
         ranges={
+            "classification_model": ["LOGR", "ABC", "DTC"],
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "n_best_pdeps": [0, 5, 99],
+            "use_pdep_feature": [True, False],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-08-05-evaluate-pdep-n-best-features-baran",
+        name="2022-08-05-evaluate-pdep-features-baran-updated",
         description="""Untersuche, wie sich n_best_pdeps auf die Reinigung
         auswirkt.""",
         commit="",
@@ -104,8 +105,9 @@ if __name__ == "__main__":
             "use_pdep_feature": True,
         },
         ranges={
+            "classification_model": ["LOGR", "ABC", "DTC"],
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "n_best_pdeps": [0, 5, 99],
+            "use_pdep_feature": [True, False],
         },
         runs=5,
         save_path="/root/measurements/",
