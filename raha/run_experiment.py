@@ -16,7 +16,7 @@ def run_baran(c: dict):
             "path": f"../datasets/renuver/{c['dataset']}/{c['dataset']}_{rate_formatted}_{run}.csv",
             "clean_path": f"../datasets/renuver/{c['dataset']}/clean.csv",
         }
-    elif c["dataset"] in ["beers", "flights", "hospital", "tax", "toy"]:
+    elif c["dataset"] in ["beers", "flights", "hospital", "tax",  "rayyan", "toy"]:
         data_dict = {
             "name": c["dataset"],
             "path": f"../datasets/{c['dataset']}/dirty.csv",
