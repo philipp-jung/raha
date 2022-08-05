@@ -59,7 +59,7 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-08-05-evaluate-pdep-n-best-features",
+        name="2022-08-05-evaluate-pdep-n-best-features-renuver",
         description="""Untersuche, wie sich n_best_pdeps auf die Reinigung
         auswirkt.""",
         commit="",
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     )
 
     rsk_baran = Ruska(
-        name="2022-08-05-evaluate-pdep-n-best-features",
+        name="2022-08-05-evaluate-pdep-n-best-features-baran",
         description="""Untersuche, wie sich n_best_pdeps auf die Reinigung
         auswirkt.""",
         commit="",
