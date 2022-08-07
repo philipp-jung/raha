@@ -59,7 +59,7 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-08-05-evaluate-pdep-features-renuver-updated",
+        name="2022-08-07-evaluate-pdep-features-renuver-updated-all-features",
         description="""Untersuche, wie sich n_best_pdeps auf die Reinigung
         auswirkt.""",
         commit="",
@@ -68,7 +68,7 @@ if __name__ == "__main__":
             "sampling": "MCAR",
             "error_fraction": 0.1,
             "labeling_budget": 20,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["vicinity", "domain", "value"],
             "classification_model": "LOGR",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     )
 
     rsk_baran = Ruska(
-        name="2022-08-05-evaluate-pdep-features-baran-updated",
+        name="2022-08-07-evaluate-pdep-features-baran-updated-all-features",
         description="""Untersuche, wie sich n_best_pdeps auf die Reinigung
         auswirkt.""",
         commit="",
@@ -96,7 +96,7 @@ if __name__ == "__main__":
             "sampling": "MCAR",
             "error_fraction": 0.1,
             "labeling_budget": 20,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["vicinity", "domain", "value"],
             "classification_model": "LOGR",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
