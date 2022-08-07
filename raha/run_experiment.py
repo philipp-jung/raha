@@ -60,12 +60,11 @@ def run_baran(c: dict):
 if __name__ == "__main__":
 
     rsk_new = Ruska(
-        name="2022-08-03-evaluate-pdep-features-new",
-        description="""Basierend auf meiner Sync mit Thorsten und Felix vom
-        26.07.22 habe ich einen Haufen TODOs, die ich abarbeite. Hier untersuche
-        ich den Nutzen, pdep selbst als Feature zu benutzen.
-        Wegen der unterschiedlichen Definitionen der Datensätze splitte ich die
-        Messung in drei Teile.""",
+        name="2022-08-07-evaluate-pdep-features-new-datasets",
+        description="""Eine weitere Iteration des ersten Experimentes. Ich
+        will abschließend überprüfen, ob das pdep-Feature auf den neuen Datensätzen
+        zur Reinigung beiträgt. Dazu habe ich n_rows gesetzt, damit die Messung
+        nicht den Arbeitsspeicher von meinem Hetzner Node zerlegt.""",
         commit="",
         config={
             "dataset": "breast-cancer",
