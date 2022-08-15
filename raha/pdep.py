@@ -308,17 +308,9 @@ def pdep_vicinity_based_corrector(
     rhs_col = ed["column"]
     gpdeps = inverse_sorted_gpdeps[rhs_col]
 
-    if n_best_pdeps == 0:
-        gpdeps_subset = gpdeps
-    elif n_best_pdeps == 99:
-        n_best_pdeps == int(len(inverse_sorted_gpdeps) / 2)
-        gpdeps_subset = {
-            rhs: gpdeps[rhs] for i, rhs in enumerate(gpdeps) if i < n_best_pdeps
-        }
-    else:
-        gpdeps_subset = {
-            rhs: gpdeps[rhs] for i, rhs in enumerate(gpdeps) if i < n_best_pdeps
-        }
+    gpdeps_subset = {
+        rhs: gpdeps[rhs] for i, rhs in enumerate(gpdeps) if i < n_best_pdeps
+    }
     results_list = []
 
     for lhs_cols, pdep_tuple in gpdeps_subset.items():

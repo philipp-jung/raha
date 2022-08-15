@@ -34,60 +34,89 @@ def run_baran(c: dict):
 
     data = raha.Dataset(data_dict, n_rows=c["n_rows"])
     data.detected_cells = dict(data.get_actual_errors_dictionary())
-    app = raha.Correction()
-    app.LABELING_BUDGET = c["labeling_budget"]
-    app.VERBOSE = False
-    app.FEATURE_GENERATORS = c["feature_generators"]
-    app.CLASSIFICATION_MODEL = c["classification_model"]
-    app.VICINITY_ORDERS = c["vicinity_orders"]
-    app.VICINITY_FEATURE_GENERATOR = c["vicinity_feature_generator"]
-    app.N_BEST_PDEPS = c["n_best_pdeps"]
-    app.USE_PDEP_FEATURE = c["use_pdep_feature"]
 
-    d = app.initialize_dataset(data)
-    app.initialize_models(d)
-    while len(d.labeled_tuples) < app.LABELING_BUDGET:
-        app.sample_tuple(d, random_seed=None)
-        app.label_with_ground_truth(d)
-        app.update_models(d)
-        app.generate_features(d, synchronous=True)
-        app.predict_corrections(d)
+    results = []
+    for n_best_pdeps in range(1, data.dataframe.shape[1]+1):
+        c["n_best_pdeps"] = n_best_pdeps
+        app = raha.Correction()
+        app.LABELING_BUDGET = c["labeling_budget"]
+        app.VERBOSE = False
+        app.FEATURE_GENERATORS = c["feature_generators"]
+        app.CLASSIFICATION_MODEL = c["classification_model"]
+        app.VICINITY_ORDERS = c["vicinity_orders"]
+        app.VICINITY_FEATURE_GENERATOR = c["vicinity_feature_generator"]
+        app.N_BEST_PDEPS = c["n_best_pdeps"]
+        app.USE_PDEP_FEATURE = c["use_pdep_feature"]
 
-        p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
-    return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
+        d = app.initialize_dataset(data)
+        app.initialize_models(d)
+        while len(d.labeled_tuples) < app.LABELING_BUDGET:
+            app.sample_tuple(d, random_seed=None)
+            app.label_with_ground_truth(d)
+            app.update_models(d)
+            app.generate_features(d, synchronous=True)
+            app.predict_corrections(d)
+
+            p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
+        results.append({"result": {"precision": p, "recall": r, "f1": f}, "config": c})
+    return results
 
 
 if __name__ == "__main__":
+    rsk_renuver = Ruska(
+        name="2022-08-15-evaluate-pdep-features-renuver-dynamic-n-best-pdeps",
+        description="""Untersuche besser, wie sich n_best_pdeps auf die Reinigung
+        auswirkt.""",
+        commit="",
+        config={
+            "dataset": "bridges",
+            "sampling": "MCAR",
+            "error_fraction": 0.01,
+            "labeling_budget": 20,
+            "feature_generators": ["vicinity", "domain", "value"],
+            "classification_model": "LOGR",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_best_pdeps": 5,
+            "n_rows": None,
+            "use_pdep_feature": True,
+        },
+        ranges={
+            "classification_model": ["LOGR", "ABC", "DTC"],
+            "dataset": ["bridges", "cars", "glass", "restaurant"],
+            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
+            "use_pdep_feature": [True, False],
+        },
+        runs=5,
+        save_path="/root/measurements/",
+    )
 
-    rsk_new = Ruska(
-        name="2022-08-07-evaluate-pdep-features-new-datasets",
-        description="""Eine weitere Iteration des ersten Experimentes. Ich
-        will abschließend überprüfen, ob das pdep-Feature auf den neuen Datensätzen
-        zur Reinigung beiträgt. Dazu habe ich n_rows gesetzt, damit die Messung
-        nicht den Arbeitsspeicher von meinem Hetzner Node zerlegt.""",
+    rsk_baran = Ruska(
+        name="2022-08-15-evaluate-pdep-features-baran-dynamic-n-best-pdeps",
+        description="""Untersuche besser, wie sich n_best_pdeps auf die Reinigung
+        auswirkt.""",
         commit="",
         config={
             "dataset": "breast-cancer",
             "sampling": "MCAR",
             "error_fraction": 0.1,
             "labeling_budget": 20,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["vicinity", "domain", "value"],
             "classification_model": "LOGR",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_best_pdeps": 5,
-            "n_rows": 5000,
+            "n_rows": None,
             "use_pdep_feature": True,
         },
         ranges={
-            "classification_model": ["LOGR", "DTC", "ABC"],
-            "dataset": ["adult", "letter", "nursery"],
-            "error_fraction": [0.1, 0.3, 0.7],
-            "use_pdep_feature": [False, True],
+            "classification_model": ["LOGR", "ABC", "DTC"],
+            "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "use_pdep_feature": [True, False],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
-
-    rsk_new.run(experiment=run_baran, parallel=True)
+    rsk_renuver.run(experiment=run_baran, parallel=True)
+    rsk_baran.run(experiment=run_baran, parallel=True)
