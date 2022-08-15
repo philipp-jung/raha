@@ -33,11 +33,12 @@ def run_baran(c: dict):
         raise ValueError("Unknown Dataset.")
 
     data = raha.Dataset(data_dict, n_rows=c["n_rows"])
-    data.detected_cells = dict(data.get_actual_errors_dictionary())
+    n_cols = data.dataframe.shape[1]
 
     results = []
-    for n_best_pdeps in range(1, data.dataframe.shape[1]+1):
-        c["n_best_pdeps"] = n_best_pdeps
+    for n_best_pdeps in range(1, n_cols+1):
+        data = raha.Dataset(data_dict, n_rows=c["n_rows"])
+        data.detected_cells = dict(data.get_actual_errors_dictionary())
         app = raha.Correction()
         app.LABELING_BUDGET = c["labeling_budget"]
         app.VERBOSE = False
@@ -45,7 +46,7 @@ def run_baran(c: dict):
         app.CLASSIFICATION_MODEL = c["classification_model"]
         app.VICINITY_ORDERS = c["vicinity_orders"]
         app.VICINITY_FEATURE_GENERATOR = c["vicinity_feature_generator"]
-        app.N_BEST_PDEPS = c["n_best_pdeps"]
+        app.N_BEST_PDEPS = n_best_pdeps
         app.USE_PDEP_FEATURE = c["use_pdep_feature"]
 
         d = app.initialize_dataset(data)
@@ -57,8 +58,8 @@ def run_baran(c: dict):
             app.generate_features(d, synchronous=True)
             app.predict_corrections(d)
 
-            p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
-        results.append({"result": {"precision": p, "recall": r, "f1": f}, "config": c})
+        p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
+        results.append({"result": {"precision": p, "recall": r, "f1": f}, "config": {"n_best_pdeps": n_best_pdeps, **c}})
     return results
 
 
@@ -77,7 +78,6 @@ if __name__ == "__main__":
             "classification_model": "LOGR",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
-            "n_best_pdeps": 5,
             "n_rows": None,
             "use_pdep_feature": True,
         },
@@ -105,8 +105,7 @@ if __name__ == "__main__":
             "classification_model": "LOGR",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
-            "n_best_pdeps": 5,
-            "n_rows": None,
+            "n_rows": 300,
             "use_pdep_feature": True,
         },
         ranges={
