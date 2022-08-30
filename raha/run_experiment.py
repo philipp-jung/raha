@@ -33,41 +33,36 @@ def run_baran(c: dict):
         raise ValueError("Unknown Dataset.")
 
     data = raha.Dataset(data_dict, n_rows=c["n_rows"])
-    n_cols = data.dataframe.shape[1]
 
-    results = []
-    for n_best_pdeps in range(1, n_cols+1):
-        data = raha.Dataset(data_dict, n_rows=c["n_rows"])
-        data.detected_cells = dict(data.get_actual_errors_dictionary())
-        app = raha.Correction()
-        app.LABELING_BUDGET = c["labeling_budget"]
-        app.VERBOSE = False
-        app.FEATURE_GENERATORS = c["feature_generators"]
-        app.CLASSIFICATION_MODEL = c["classification_model"]
-        app.VICINITY_ORDERS = c["vicinity_orders"]
-        app.VICINITY_FEATURE_GENERATOR = c["vicinity_feature_generator"]
-        app.N_BEST_PDEPS = n_best_pdeps
-        app.USE_PDEP_FEATURE = c["use_pdep_feature"]
+    data = raha.Dataset(data_dict, n_rows=c["n_rows"])
+    data.detected_cells = dict(data.get_actual_errors_dictionary())
+    app = raha.Correction()
+    app.LABELING_BUDGET = c["labeling_budget"]
+    app.VERBOSE = False
+    app.FEATURE_GENERATORS = c["feature_generators"]
+    app.CLASSIFICATION_MODEL = c["classification_model"]
+    app.VICINITY_ORDERS = c["vicinity_orders"]
+    app.VICINITY_FEATURE_GENERATOR = c["vicinity_feature_generator"]
+    app.N_BEST_PDEPS = c["n_best_pdeps"]
+    app.USE_PDEP_FEATURE = c["use_pdep_feature"]
 
-        d = app.initialize_dataset(data)
-        app.initialize_models(d)
-        while len(d.labeled_tuples) < app.LABELING_BUDGET:
-            app.sample_tuple(d, random_seed=None)
-            app.label_with_ground_truth(d)
-            app.update_models(d)
-            app.generate_features(d, synchronous=True)
-            app.predict_corrections(d)
+    d = app.initialize_dataset(data)
+    app.initialize_models(d)
+    while len(d.labeled_tuples) < app.LABELING_BUDGET:
+        app.sample_tuple(d, random_seed=None)
+        app.label_with_ground_truth(d)
+        app.update_models(d)
+        app.generate_features(d, synchronous=True)
+        app.predict_corrections(d)
 
-        p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
-        results.append({"result": {"precision": p, "recall": r, "f1": f}, "config": {"n_best_pdeps": n_best_pdeps, **c}})
-    return results
+    p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
+    return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
 
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-08-16-evaluate-pdep-features-renuver-dynamic-n-best-pdeps",
-        description="""Untersuche besser, wie sich n_best_pdeps auf die Reinigung
-        auswirkt.""",
+        name="2022-08-30-evaluate-pdep-features-renuver-dynamic-n-best-pdeps",
+        description="""Kann ich den Meta-Learner mit Kreuzvalidierung verbessern?""",
         commit="",
         config={
             "dataset": "bridges",
@@ -79,22 +74,21 @@ if __name__ == "__main__":
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
-            "use_pdep_feature": True,
+            "use_pdep_feature": False,
+            "n_best_pdeps": 3,
         },
         ranges={
-            "classification_model": ["LOGR", "ABC", "DTC"],
+            "classification_model": ["ABC", "CV"],
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "use_pdep_feature": [True, False],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-08-16-evaluate-pdep-features-baran-dynamic-n-best-pdeps",
-        description="""Untersuche besser, wie sich n_best_pdeps auf die Reinigung
-        auswirkt.""",
+        name="2022-08-30-evaluate-pdep-features-baran-dynamic-n-best-pdeps",
+        description="""Kann ich den Meta-Learner mit Kreuzvalidierung verbessern?""",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -106,12 +100,12 @@ if __name__ == "__main__":
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
-            "use_pdep_feature": True,
+            "use_pdep_feature": False,
+            "n_best_pdeps": 3,
         },
         ranges={
-            "classification_model": ["LOGR", "ABC", "DTC"],
+            "classification_model": ["ABC", "CV"],
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "use_pdep_feature": [True, False],
         },
         runs=5,
         save_path="/root/measurements/",

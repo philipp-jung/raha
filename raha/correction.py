@@ -29,6 +29,8 @@ import sklearn.svm
 import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import GridSearchCV
 from typing import Dict
 import pandas as pd
 import numpy as np
@@ -56,7 +58,7 @@ class Correction:
         """
         self.PRETRAINED_VALUE_BASED_MODELS_PATH = ""
         self.VALUE_ENCODINGS = ["identity", "unicode"]
-        self.CLASSIFICATION_MODEL = "ABC"   # ["ABC", "DTC", "GBC", "GNB", "KNC" ,"SGDC", "SVC", "AG"]
+        self.CLASSIFICATION_MODEL = "ABC"   # "ABC" oder irgendwas anderes, was dann zu crossvalidation fuehrt.
         self.IGNORE_SIGN = "<<<IGNORE_THIS_VALUE>>>"
         self.VERBOSE = False
         self.SAVE_RESULTS = True
@@ -73,7 +75,6 @@ class Correction:
         self.VICINITY_ORDERS = [1]  # Baran default
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
-        self._classification_models = {}
 
         # recommend up to 10. Ignored when using 'naive' feature generator. That one
         # always generates features for all possible column combinations.
@@ -693,53 +694,31 @@ class Correction:
                         x_test.append(d.pair_features[cell][suggestion])
                         test_cell_correction_list.append([cell, suggestion])
 
-            if self.CLASSIFICATION_MODEL == "ABC":
-                classification_model = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-            if self.CLASSIFICATION_MODEL == "DTC":
-                classification_model = sklearn.tree.DecisionTreeClassifier(criterion="gini")
-            if self.CLASSIFICATION_MODEL == "GBC":
-                classification_model = sklearn.ensemble.GradientBoostingClassifier(n_estimators=100)
-            if self.CLASSIFICATION_MODEL == "GNB":
-                classification_model = sklearn.naive_bayes.GaussianNB()
-            if self.CLASSIFICATION_MODEL == "KNC":
-                classification_model = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1)
-            if self.CLASSIFICATION_MODEL == "SGDC":
-                classification_model = sklearn.linear_model.SGDClassifier(loss="hinge", penalty="l2")
-            if self.CLASSIFICATION_MODEL == "SVC":
-                classification_model = sklearn.svm.SVC(kernel="sigmoid")
-            if self.CLASSIFICATION_MODEL == "LOGR":
-                classification_model = sklearn.linear_model.LogisticRegression(penalty='l2')
-            if self.CLASSIFICATION_MODEL == "AG":
-                classification_model = TabularPredictor(label='label', problem_type='binary', eval_metric='f1',
-                                                        learner_kwargs={'positive_class': 1}, verbosity=0)
-
             if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
                     predicted_labels = numpy.zeros(len(x_test))
                 elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
                     predicted_labels = numpy.ones(len(x_test))
                 else:
-                    if self.CLASSIFICATION_MODEL != "AG":
-                        classification_model.fit(x_train, y_train)
-                        predicted_labels = classification_model.predict(x_test)
-                        self._classification_models[j] = classification_model
+                    if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
+                        # print('Defaulting to AdaBoostClassifier as meta-learner.')
+                        gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                        gs_clf.fit(x_train, y_train)
+                    else:
+                        pipeline = Pipeline([
+                            ('clf', sklearn.linear_model.LogisticRegression())
+                        ])
+                        parameters = {'clf': [
+                            sklearn.linear_model.LogisticRegression(penalty='l2'),
+                            sklearn.tree.DecisionTreeClassifier(criterion="gini"),
+                            sklearn.ensemble.AdaBoostClassifier(n_estimators=100),
+                        ]}
 
-                    else:  # AutoGluon has an API different from sklearn, needs special handling.
-                        train_data = np.c_[x_train, y_train]
-                        column_names = list(range(train_data.shape[1]))
-                        column_names[-1] = 'label'
-                        df_train = pd.DataFrame(train_data, columns=column_names)
-                        df_test = pd.DataFrame(x_test)
-
-                        try:
-                            classification_model.fit(train_data=df_train,
-                                                     presets='medium_quality_faster_train',
-                                                     time_limit=self.TRAINING_TIME_LIMIT,
-                                                     verbosity=0,
-                                                     excluded_model_types=['KNN'])
-                            predicted_labels = classification_model.predict(df_test)
-                        except ValueError:  # if model training fails completely
-                            predicted_labels = numpy.zeros(len(x_test))  # not sure if this is reasonable
+                        cv = round(sum(y_train) / 2)
+                        gs_clf = GridSearchCV(pipeline, parameters, n_jobs=1, scoring='f1', cv=cv)
+                        gs_clf = gs_clf.fit(x_train, y_train)
+                        # print(f"Calculated best score {gs_clf.best_score_} with {gs_clf.best_params_['clf']}.")
+                    predicted_labels = gs_clf.predict(x_test)
 
                 for index, predicted_label in enumerate(predicted_labels):
                     cell, predicted_correction = test_cell_correction_list[index]
@@ -756,6 +735,7 @@ class Correction:
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(100 * len(d.corrected_cells) / len(d.detected_cells),
                                                                            len(d.corrected_cells), len(d.detected_cells)))
+
     def store_results(self, d):
         """
         This method stores the results.
@@ -807,7 +787,7 @@ if __name__ == "__main__":
 
     dataset_dictionary = {
         "name": dataset_name,
-        "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_4_1.csv",
+        "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_3_3.csv",
         "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
     }
     data = raha.dataset.Dataset(dataset_dictionary, n_rows=1000)
