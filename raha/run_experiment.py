@@ -61,8 +61,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-08-30-evaluate-pdep-features-renuver-dynamic-n-best-pdeps",
-        description="""Kann ich den Meta-Learner mit Kreuzvalidierung verbessern?""",
+        name="2022-08-31-cross-validation-labeling-budget",
+        description="""Funktioniert CV besser, wenn ich das labeling-budget erhoehe?""",
         commit="",
         config={
             "dataset": "bridges",
@@ -81,14 +81,15 @@ if __name__ == "__main__":
             "classification_model": ["ABC", "CV"],
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
+            "labeling_budget": [20, 30, 40],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-08-30-evaluate-pdep-features-baran-dynamic-n-best-pdeps",
-        description="""Kann ich den Meta-Learner mit Kreuzvalidierung verbessern?""",
+        name="2022-08-31-cross-validation-labeling-budget",
+        description="""Funktioniert CV besser, wenn ich das labeling-budget erhoehe?""",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -106,6 +107,7 @@ if __name__ == "__main__":
         ranges={
             "classification_model": ["ABC", "CV"],
             "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "labeling_budget": [20, 30, 40],
         },
         runs=5,
         save_path="/root/measurements/",

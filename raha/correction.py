@@ -796,7 +796,7 @@ if __name__ == "__main__":
     app.LABELING_BUDGET = 20
 
     app.VICINITY_ORDERS = [1, 2]
-    app.CLASSIFICATION_MODEL = "LOGR"
+    app.CLASSIFICATION_MODEL = "CV"
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 5
     app.SAVE_RESULTS = False
