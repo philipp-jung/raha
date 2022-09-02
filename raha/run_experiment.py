@@ -61,8 +61,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-08-31-cross-validation-labeling-budget",
-        description="""Funktioniert CV besser, wenn ich das labeling-budget erhoehe?""",
+        name="2022-09-02-labeling-function",
+        description="""Ich habe die labeling function überarbeitet.""",
         commit="",
         config={
             "dataset": "bridges",
@@ -88,8 +88,8 @@ if __name__ == "__main__":
     )
 
     rsk_baran = Ruska(
-        name="2022-08-31-cross-validation-labeling-budget",
-        description="""Funktioniert CV besser, wenn ich das labeling-budget erhoehe?""",
+        name="2022-09-02-labeling-function",
+        description="""Ich habe die labeling function überarbeitet.""",
         commit="",
         config={
             "dataset": "breast-cancer",

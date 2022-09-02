@@ -453,23 +453,43 @@ class Correction:
         This method samples a tuple.
         Philipp extended this with a random_seed in an effort to make runs
         reproducible.
+
+        I also added two tiers of columns to choose samples from. Either, there are error cells
+        for which no correction suggestion has been made yet. In that case, we sample from these error cells.
+        If correction suggestions have been made for all cells, we sample from error cells that have not been
+        sampled before.
         """
         rng = numpy.random.default_rng(seed=random_seed)
-        remaining_column_erroneous_cells = {}
-        remaining_column_erroneous_values = {}
+        remaining_column_unlabeled_cells = {}
+        remaining_column_unlabeled_cells_error_values = {}
+        remaining_column_uncorrected_cells = {}
+        remaining_column_uncorrected_cells_error_values = {}
         for j in d.column_errors:
-            for cell in d.column_errors[j]:
-                if cell not in d.corrected_cells:
-                    self._to_model_adder(remaining_column_erroneous_cells, j, cell)
-                    self._to_model_adder(remaining_column_erroneous_values, j, d.dataframe.iloc[cell])
+            for error_cell in d.column_errors[j]:
+                if error_cell not in d.corrected_cells:  # no correction suggestion has been found yet.
+                    self._to_model_adder(remaining_column_uncorrected_cells, j, error_cell)
+                    self._to_model_adder(remaining_column_uncorrected_cells_error_values, j, d.dataframe.iloc[error_cell])
+                if error_cell not in d.labeled_cells:
+                    # the cell has not been labeled by the user yet. this is stricter than the above condition.
+                    self._to_model_adder(remaining_column_unlabeled_cells, j, error_cell)
+                    self._to_model_adder(remaining_column_unlabeled_cells_error_values, j, d.dataframe.iloc[error_cell])
         tuple_score = numpy.ones(d.dataframe.shape[0])
         tuple_score[list(d.labeled_tuples.keys())] = 0.0
-        for j in remaining_column_erroneous_cells:
-            for cell in remaining_column_erroneous_cells[j]:
+
+        if len(remaining_column_uncorrected_cells) > 0:
+            remaining_columns_to_choose_from = remaining_column_uncorrected_cells
+            remaining_cell_error_values = remaining_column_uncorrected_cells_error_values
+        else:
+            remaining_columns_to_choose_from = remaining_column_unlabeled_cells
+            remaining_cell_error_values = remaining_column_unlabeled_cells_error_values
+
+        for j in remaining_columns_to_choose_from:
+            for cell in remaining_columns_to_choose_from[j]:
                 value = d.dataframe.iloc[cell]
-                column_score = math.exp(len(remaining_column_erroneous_cells[j]) / len(d.column_errors[j]))
-                cell_score = math.exp(remaining_column_erroneous_values[j][value] / len(remaining_column_erroneous_cells[j]))
+                column_score = math.exp(len(remaining_columns_to_choose_from[j]) / len(d.column_errors[j]))
+                cell_score = math.exp(remaining_cell_error_values[j][value] / len(remaining_columns_to_choose_from[j]))
                 tuple_score[cell[0]] *= column_score * cell_score
+
 
         # Nützlich, um tuple-sampling zu debuggen: Zeigt die Tupel, aus denen
         # zufällig gewählt wird.
@@ -679,20 +699,20 @@ class Correction:
             y_train = []
             x_test = []
             test_cell_correction_list = []
-            for cell in d.column_errors[j]:
-                correction_suggestions = d.pair_features.get(cell, [])  # skips if there are no suggestions
-                for suggestion in correction_suggestions:
-                    # If a cell has been labeled by the user and is an error, use it to create the training dataset.
-                    # --> put all user-corrected cells that contain an error in the train set.
+            for error_cell in d.column_errors[j]:
+                correction_suggestions = d.pair_features.get(error_cell, [])
+                if error_cell in d.labeled_cells and d.labeled_cells[error_cell][0] == 1:
+                    # If an error-cell has been labeled by the user, use it to create the training dataset.
                     # The second condition is always true if error detection and user_labeling work without an error.
-                    if cell in d.labeled_cells and d.labeled_cells[cell][0] == 1:
-                        x_train.append(d.pair_features[cell][suggestion])  # put features into x_train
-                        suggestion_is_correction =  suggestion == d.labeled_cells[cell][1]
-                        y_train.append(int(suggestion_is_correction))  # put generated label in to y_train
-                        d.corrected_cells[cell] = d.labeled_cells[cell][1]
-                    else:  # --> put all cells that contain an error without user-correction in the "test" set.
-                        x_test.append(d.pair_features[cell][suggestion])
-                        test_cell_correction_list.append([cell, suggestion])
+                    for suggestion in correction_suggestions:
+                        x_train.append(d.pair_features[error_cell][suggestion])  # put features into x_train
+                        suggestion_is_correction = (suggestion == d.labeled_cells[error_cell][1])
+                        y_train.append(int(suggestion_is_correction))
+                        d.corrected_cells[error_cell] = d.labeled_cells[error_cell][1]  # user input as cleaning result
+                else:  # put all cells that contain an error without user-correction in the "test" set.
+                    for suggestion in correction_suggestions:
+                        x_test.append(d.pair_features[error_cell][suggestion])
+                        test_cell_correction_list.append([error_cell, suggestion])
 
             if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
@@ -701,7 +721,6 @@ class Correction:
                     predicted_labels = numpy.ones(len(x_test))
                 else:
                     if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
-                        # print('Defaulting to AdaBoostClassifier as meta-learner.')
                         gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
                         gs_clf.fit(x_train, y_train)
                     else:
@@ -714,10 +733,9 @@ class Correction:
                             sklearn.ensemble.AdaBoostClassifier(n_estimators=100),
                         ]}
 
-                        cv = round(sum(y_train) / 2)
+                        cv = 2 if sum(y_train) < 4 else math.floor(math.log2(sum(y_train)))  # okayer Wert: 3-5
                         gs_clf = GridSearchCV(pipeline, parameters, n_jobs=1, scoring='f1', cv=cv)
                         gs_clf = gs_clf.fit(x_train, y_train)
-                        # print(f"Calculated best score {gs_clf.best_score_} with {gs_clf.best_params_['clf']}.")
                     predicted_labels = gs_clf.predict(x_test)
 
                 for index, predicted_label in enumerate(predicted_labels):
@@ -725,12 +743,22 @@ class Correction:
                     if predicted_label:
                         d.corrected_cells[cell] = predicted_correction
 
-            elif len(d.labeled_tuples) == 0:  # no training data because no user labels
+            elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
                 for cell in d.pair_features:
                     correction_dict = d.pair_features[cell]
                     if len(correction_dict) > 0:
+                        # select the correction with the highest sum of features.
                         max_proba_feature = sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
                         d.corrected_cells[cell] = max_proba_feature[0]
+
+            elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
+                pass  # nothing to do here -- just use the manually corrected cell that has been set before.
+
+            elif len(x_train) == 0:
+                pass  # nothing to learn because x_train is empty.
+            else:
+                a = 1
+                raise ValueError('Invalid state')
 
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(100 * len(d.corrected_cells) / len(d.detected_cells),
@@ -783,22 +811,38 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "cars"
+    dataset_name = "bridges"
 
-    dataset_dictionary = {
-        "name": dataset_name,
-        "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_3_3.csv",
-        "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
-    }
-    data = raha.dataset.Dataset(dataset_dictionary, n_rows=1000)
+    if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
+        data_dict = {
+            "name": dataset_name,
+            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_5_3.csv",
+            "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
+        }
+    elif dataset_name in ["beers", "flights", "hospital", "tax",  "rayyan", "toy"]:
+        data_dict = {
+            "name": dataset_name,
+            "path": f"../datasets/{dataset_name}/dirty.csv",
+            "clean_path": f"../datasets/{dataset_name}/clean.csv",
+        }
+    elif dataset_name in ["adult", "breast-cancer", "letter", "nursery"]:
+        data_dict = {
+            "name": dataset_name,
+            "path": f"../datasets/{dataset_name}/MCAR/dirty_5.csv",
+            "clean_path": f"../datasets/{dataset_name}/clean.csv",
+        }
+    else:
+        raise ValueError("Dataset not supported.")
+    data = raha.dataset.Dataset(data_dict, n_rows=1000)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
     app.LABELING_BUDGET = 20
+    app.VERBOSE = True
 
     app.VICINITY_ORDERS = [1, 2]
     app.CLASSIFICATION_MODEL = "CV"
     app.VICINITY_FEATURE_GENERATOR = "pdep"
-    app.N_BEST_PDEPS = 5
+    app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['vicinity', 'domain', 'value']
     app.IMPUTER_CACHE_MODEL = True
