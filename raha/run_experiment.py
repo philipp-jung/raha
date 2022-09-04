@@ -61,8 +61,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-09-02-labeling-function",
-        description="""Ich habe die labeling function überarbeitet.""",
+        name="2022-09-04-value-function-effectiveness-renuver",
+        description="""Auf welchem Datensatz ist das Value-Modell am nützlichesten?""",
         commit="",
         config={
             "dataset": "bridges",
@@ -70,7 +70,7 @@ if __name__ == "__main__":
             "error_fraction": 0.01,
             "labeling_budget": 20,
             "feature_generators": ["vicinity", "domain", "value"],
-            "classification_model": "LOGR",
+            "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -78,18 +78,17 @@ if __name__ == "__main__":
             "n_best_pdeps": 3,
         },
         ranges={
-            "classification_model": ["ABC", "CV"],
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "labeling_budget": [20, 30, 40],
+            "feature_generators": [["vicinity", "domain", "value"], ["value"]]
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-09-02-labeling-function",
-        description="""Ich habe die labeling function überarbeitet.""",
+        name="2022-09-04-value-function-effectiveness-baran",
+        description="""Auf welchem Datensatz ist das Value-Modell am nützlichesten?""",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -97,7 +96,7 @@ if __name__ == "__main__":
             "error_fraction": 0.1,
             "labeling_budget": 20,
             "feature_generators": ["vicinity", "domain", "value"],
-            "classification_model": "LOGR",
+            "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -105,10 +104,9 @@ if __name__ == "__main__":
             "n_best_pdeps": 3,
         },
         ranges={
-            "classification_model": ["ABC", "CV"],
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "labeling_budget": [20, 30, 40],
-        },
+            "feature_generators": [["vicinity", "domain", "value"], ["value"]]
+            },
         runs=5,
         save_path="/root/measurements/",
     )
