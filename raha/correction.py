@@ -312,6 +312,7 @@ class Correction:
                 results_dictionary = {}
                 encoded_value_string = self._value_encoder(ed["old_value"], encoding)
                 if encoded_value_string in model:
+                    # print(f'{model_name}: {encoded_value_string}')  ## nice when debugging value corrections
                     sum_scores = sum(model[encoded_value_string].values())
                     if model_name in ["remover", "adder", "replacer"]:
                         for transformation_string in model[encoded_value_string]:
@@ -338,6 +339,8 @@ class Correction:
                             if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                 results_dictionary[new_value] = pr
                 results_list.append(results_dictionary)
+            if encoded_value_string != '[]' and model.get(encoded_value_string) is not None:
+                a = 1
         return results_list
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
@@ -727,14 +730,20 @@ class Correction:
                         pipeline = Pipeline([
                             ('clf', sklearn.linear_model.LogisticRegression())
                         ])
-                        parameters = {'clf': [
-                            sklearn.linear_model.LogisticRegression(penalty='l2'),
-                            sklearn.tree.DecisionTreeClassifier(criterion="gini"),
-                            sklearn.ensemble.AdaBoostClassifier(n_estimators=100),
-                        ]}
+                        parameters = [
+                            {
+                                'clf': (sklearn.linear_model.LogisticRegression(),),
+                                'clf__C': (0.001, 0.01, 0.1, 1),
+                                'clf__penalty': ('l2',),
+                            },
+                            {
+                                'clf': (sklearn.ensemble.AdaBoostClassifier(),),
+                                'clf__n_estimators': (10, 20, 50, 100, 200),
+                            }
+                        ]
 
                         cv = 2 if sum(y_train) < 4 else math.floor(math.log2(sum(y_train)))  # okayer Wert: 3-5
-                        gs_clf = GridSearchCV(pipeline, parameters, n_jobs=1, scoring='f1', cv=cv)
+                        gs_clf = GridSearchCV(pipeline, parameters, n_jobs=1, scoring='precision', cv=cv)
                         gs_clf = gs_clf.fit(x_train, y_train)
                     predicted_labels = gs_clf.predict(x_test)
 
@@ -757,7 +766,6 @@ class Correction:
             elif len(x_train) == 0:
                 pass  # nothing to learn because x_train is empty.
             else:
-                a = 1
                 raise ValueError('Invalid state')
 
         if self.VERBOSE:
@@ -811,12 +819,12 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "bridges"
+    dataset_name = "beers"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
             "name": dataset_name,
-            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_5_3.csv",
+            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_3_3.csv",
             "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
         }
     elif dataset_name in ["beers", "flights", "hospital", "tax",  "rayyan", "toy"]:
@@ -833,18 +841,22 @@ if __name__ == "__main__":
         }
     else:
         raise ValueError("Dataset not supported.")
-    data = raha.dataset.Dataset(data_dict, n_rows=1000)
+
+    # Set this parameter for debugging purposes
+    N_ROWS = None
+
+    data = raha.dataset.Dataset(data_dict, n_rows=N_ROWS)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
-    app.LABELING_BUDGET = 20
+    app.LABELING_BUDGET = 5
     app.VERBOSE = True
 
     app.VICINITY_ORDERS = [1, 2]
-    app.CLASSIFICATION_MODEL = "CV"
+    app.CLASSIFICATION_MODEL = "ABC"
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['vicinity', 'domain', 'value']
+    app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
     app.IMPUTER_CACHE_MODEL = True
     app.USE_PDEP_FEATURE = False
 

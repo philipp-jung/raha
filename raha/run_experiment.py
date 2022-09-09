@@ -61,8 +61,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-09-04-value-function-effectiveness-renuver",
-        description="""Auf welchem Datensatz ist das Value-Modell am nützlichesten?""",
+        name="2022-09-09-hpo-renuver",
+        description="""Ist HPO nützlich, um CV zu verbessern?""",
         commit="",
         config={
             "dataset": "bridges",
@@ -80,15 +80,15 @@ if __name__ == "__main__":
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "feature_generators": [["vicinity", "domain", "value"], ["value"]]
+            "classification_model": ["ABC", "CV"],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-09-04-value-function-effectiveness-baran",
-        description="""Auf welchem Datensatz ist das Value-Modell am nützlichesten?""",
+        name="2022-09-09-hpo-baran",
+        description="""Ist HPO nützlich, um CV zu verbessern?""",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -105,7 +105,7 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "feature_generators": [["vicinity", "domain", "value"], ["value"]]
+            "classification_model": ["ABC", "CV"],
             },
         runs=5,
         save_path="/root/measurements/",
