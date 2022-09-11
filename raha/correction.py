@@ -824,12 +824,12 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "restaurant"
+    dataset_name = "glass"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
             "name": dataset_name,
-            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_5_2.csv",
+            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_5_3.csv",
             "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
         }
     elif dataset_name in ["beers", "flights", "hospital", "tax",  "rayyan", "toy"]:
