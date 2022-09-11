@@ -61,8 +61,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-09-09-hpo-renuver",
-        description="""Ist HPO nützlich, um CV zu verbessern?""",
+        name="2022-09-11-hpo-new-approach-renuver",
+        description="""Kann ich den HPO-Ansatz verbessern?""",
         commit="",
         config={
             "dataset": "bridges",
@@ -87,8 +87,8 @@ if __name__ == "__main__":
     )
 
     rsk_baran = Ruska(
-        name="2022-09-09-hpo-baran",
-        description="""Ist HPO nützlich, um CV zu verbessern?""",
+        name="2022-09-11-hpo-new-approach-baran",
+        description="""Kann ich den HPO-Ansatz verbessern?""",
         commit="",
         config={
             "dataset": "breast-cancer",

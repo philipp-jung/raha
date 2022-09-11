@@ -16,6 +16,7 @@ import sys
 import math
 import json
 import pickle
+import random
 import difflib
 import unicodedata
 import multiprocessing
@@ -31,9 +32,9 @@ import sklearn.naive_bayes
 import sklearn.linear_model
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
-from typing import Dict
+from typing import Dict, Tuple
 import pandas as pd
-import numpy as np
+from cross_validation import cross_validated_estimator
 
 from IPython.core.debugger import set_trace
 
@@ -68,6 +69,9 @@ class Correction:
         self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
         self.REVISION_WINDOW_SIZE = 5
+
+        # debug variable
+        self.n_true_classes = {}
 
         # Philipps changes
         # choose from "value", "domain", "vicinity", "imputer". Default is Baran's original configuration.
@@ -693,6 +697,17 @@ class Correction:
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
+    def synthesize_train_data(self, n_samples: int, col: int, d: raha.dataset.Dataset) -> Tuple[list, list]:
+        """
+        Leverage rows that do not contain errors to synthesize more training data for a given column.
+        """
+        x_train_synth, y_train_synth = [], []
+        df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
+        if df_clean_subset.shape[0] < n_samples:  # dont' have enough rows without errors to synthesize n_samples.
+            return x_train_synth, y_train_synth
+
+        return x_train_synth, y_train_synth
+
     def predict_corrections(self, d):
         """
         This method predicts
@@ -723,28 +738,20 @@ class Correction:
                 elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
                     predicted_labels = numpy.ones(len(x_test))
                 else:
+                    if self.n_true_classes.get(len(d.labeled_tuples)) is None:
+                        self.n_true_classes[len(d.labeled_tuples)] = []
                     if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
                         gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
                         gs_clf.fit(x_train, y_train)
+                        self.n_true_classes[len(d.labeled_tuples)].append({'clf': str(gs_clf),
+                                                                           'clf__n_estimators': 100,
+                                                                           'n_y_true': sum(y_train)})
                     else:
-                        pipeline = Pipeline([
-                            ('clf', sklearn.linear_model.LogisticRegression())
-                        ])
-                        parameters = [
-                            {
-                                'clf': (sklearn.linear_model.LogisticRegression(),),
-                                'clf__C': (0.001, 0.01, 0.1, 1),
-                                'clf__penalty': ('l2',),
-                            },
-                            {
-                                'clf': (sklearn.ensemble.AdaBoostClassifier(),),
-                                'clf__n_estimators': (10, 20, 50, 100, 200),
-                            }
-                        ]
-
-                        cv = 2 if sum(y_train) < 4 else math.floor(math.log2(sum(y_train)))  # okayer Wert: 3-5
-                        gs_clf = GridSearchCV(pipeline, parameters, n_jobs=1, scoring='precision', cv=cv)
-                        gs_clf = gs_clf.fit(x_train, y_train)
+                        gs_clf = cross_validated_estimator(x_train, y_train)
+                        self.n_true_classes[len(d.labeled_tuples)].append({'clf': gs_clf.best_estimator_,
+                                                                           'score': gs_clf.best_score_,
+                                                                           **gs_clf.best_params_,
+                                                                           'n_y_true': sum(y_train)})
                     predicted_labels = gs_clf.predict(x_test)
 
                 for index, predicted_label in enumerate(predicted_labels):
@@ -803,28 +810,26 @@ class Correction:
                   "------------------------------------------------------------------------")
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
             self.sample_tuple(d, random_seed=random_seed)
-            if d.has_ground_truth:
-                self.label_with_ground_truth(d)
-            else:
-                ValueError('go label tuples manually in a jupyter notebook.')
+            self.label_with_ground_truth(d)
             self.update_models(d)
             self.generate_features(d, synchronous=True)
             self.predict_corrections(d)
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
 
+        print("Number of true classes: {}".format(self.n_true_classes))
         return d.corrected_cells
 ########################################
 
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "beers"
+    dataset_name = "restaurant"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
             "name": dataset_name,
-            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_3_3.csv",
+            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_5_2.csv",
             "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
         }
     elif dataset_name in ["beers", "flights", "hospital", "tax",  "rayyan", "toy"]:
@@ -848,11 +853,11 @@ if __name__ == "__main__":
     data = raha.dataset.Dataset(data_dict, n_rows=N_ROWS)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
-    app.LABELING_BUDGET = 5
+    app.LABELING_BUDGET = 20
     app.VERBOSE = True
 
     app.VICINITY_ORDERS = [1, 2]
-    app.CLASSIFICATION_MODEL = "ABC"
+    app.CLASSIFICATION_MODEL = "CV"
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
