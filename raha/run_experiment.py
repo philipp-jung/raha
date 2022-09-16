@@ -61,8 +61,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-09-11-hpo-new-approach-renuver",
-        description="""Kann ich den HPO-Ansatz verbessern?""",
+        name="2022-09-16-hpo-new-approach-renuver",
+        description="""Mit dem verbesserten HPO Ansatz, bringen mehr Trainingssamples eine bessere Reinigung?""",
         commit="",
         config={
             "dataset": "bridges",
@@ -70,7 +70,7 @@ if __name__ == "__main__":
             "error_fraction": 0.01,
             "labeling_budget": 20,
             "feature_generators": ["vicinity", "domain", "value"],
-            "classification_model": "ABC",
+            "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -80,15 +80,15 @@ if __name__ == "__main__":
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "classification_model": ["ABC", "CV"],
+            "labeling_budget": [20, 30, 40]
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-09-11-hpo-new-approach-baran",
-        description="""Kann ich den HPO-Ansatz verbessern?""",
+        name="2022-09-16-hpo-new-approach-baran",
+        description="""Mit dem verbesserten HPO Ansatz, bringen mehr Trainingssamples eine bessere Reinigung?""",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -96,7 +96,7 @@ if __name__ == "__main__":
             "error_fraction": 0.1,
             "labeling_budget": 20,
             "feature_generators": ["vicinity", "domain", "value"],
-            "classification_model": "ABC",
+            "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -105,7 +105,7 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "classification_model": ["ABC", "CV"],
+            "labeling_budget": [20, 30, 40]
             },
         runs=5,
         save_path="/root/measurements/",
