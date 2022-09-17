@@ -1,6 +1,6 @@
 import sklearn.linear_model
-from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
+
 
 def cross_validated_estimator(x_train, y_train):
     """

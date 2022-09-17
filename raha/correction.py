@@ -16,7 +16,6 @@ import sys
 import math
 import json
 import pickle
-import random
 import difflib
 import unicodedata
 import multiprocessing
@@ -30,18 +29,13 @@ import sklearn.svm
 import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import GridSearchCV
 from typing import Dict, Tuple
 import pandas as pd
-from cross_validation import cross_validated_estimator
-
-from IPython.core.debugger import set_trace
 
 import raha
 from raha import imputer
 from raha import pdep
-from autogluon.tabular import TabularPredictor
+from raha import hpo
 
 ########################################
 
@@ -74,18 +68,12 @@ class Correction:
         self.n_true_classes = {}
 
         # Philipps changes
-        # choose from "value", "domain", "vicinity", "imputer". Default is Baran's original configuration.
+        # Choose from "value", "domain", "vicinity", "imputer". Original Baran uses all of them.
         self.FEATURE_GENERATORS = ["value", "domain", "vicinity"]
         self.VICINITY_ORDERS = [1]  # Baran default
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
-
-        # recommend up to 10. Ignored when using 'naive' feature generator. That one
-        # always generates features for all possible column combinations.
-        self.N_BEST_PDEPS = 5
-
-        # is the pdep feature required at all?
-        self.USE_PDEP_FEATURE = True
+        self.N_BEST_PDEPS = 3  # recommend up to 10. Ignored when using 'naive' feature generator.
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -747,7 +735,7 @@ class Correction:
                                                                            'clf__n_estimators': 100,
                                                                            'n_y_true': sum(y_train)})
                     else:
-                        gs_clf = cross_validated_estimator(x_train, y_train)
+                        gs_clf = hpo.cross_validated_estimator(x_train, y_train)
                         self.n_true_classes[len(d.labeled_tuples)].append({'clf': gs_clf.best_estimator_,
                                                                            'score': gs_clf.best_score_,
                                                                            **gs_clf.best_params_,

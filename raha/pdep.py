@@ -297,8 +297,7 @@ def pdep_vicinity_based_corrector(
     inverse_sorted_gpdeps: Dict[int, Dict[tuple, PdepTuple]],
     counts_dict: dict,
     ed: dict,
-    n_best_pdeps: int = 5,
-    use_pdep_feature: bool = True
+    n_best_pdeps: int = 3,
 ) -> List[Dict]:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
@@ -316,7 +315,7 @@ def pdep_vicinity_based_corrector(
     for lhs_cols, pdep_tuple in gpdeps_subset.items():
         lhs_vals = tuple([ed["vicinity"][x] for x in lhs_cols])
 
-        if not rhs_col in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
+        if rhs_col not in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
             sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
             for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
                 pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
@@ -328,17 +327,14 @@ def pdep_vicinity_based_corrector(
     sorted_results = sorted(results_list, key=lambda x: x["pr"], reverse=True)
 
     highest_conditional_probabilities = {}
-    highest_pdep_scores = {}
     votes = {}
 
     # Having a sorted dict allows us to only return the highest conditional
     # probability per correction by iterating over all generated corrections
     # like this.
-    # I get the highest gpdep score per correction this way, too.
     for d in sorted_results:
         if highest_conditional_probabilities.get(d["correction"]) is None:
             highest_conditional_probabilities[d["correction"]] = d["pr"]
-            highest_pdep_scores[d["correction"]] = d["pdep"]
 
     # The three elements of our decision are majority vote, highest conditional
     # probability, and highest gpdep score.
@@ -349,6 +345,4 @@ def pdep_vicinity_based_corrector(
     for correction in counts:
         votes[correction] = counts[correction] / n_corrections
 
-    if not use_pdep_feature:
-        return [highest_conditional_probabilities, votes]
-    return [highest_conditional_probabilities, highest_pdep_scores, votes]
+    return [highest_conditional_probabilities, votes]
