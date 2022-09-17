@@ -52,6 +52,8 @@ def run_baran(c: dict):
         app.sample_tuple(d, random_seed=None)
         app.label_with_ground_truth(d)
         app.update_models(d)
+        if app.RULE_BASED_VALUE_CLEANING:
+            app.rule_based_value_cleaning(d)
         app.generate_features(d, synchronous=True)
         app.predict_corrections(d)
 
