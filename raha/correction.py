@@ -75,6 +75,9 @@ class Correction:
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
         self.N_BEST_PDEPS = 3  # recommend up to 10. Ignored when using 'naive' feature generator.
 
+        # If True, exclude value-based corrections from the training problem.
+        self.RULE_BASED_VALUE_CLEANING = False
+
     @staticmethod
     def _wikitext_segmenter(wikitext):
         """
@@ -331,8 +334,6 @@ class Correction:
                             if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                 results_dictionary[new_value] = pr
                 results_list.append(results_dictionary)
-            if encoded_value_string != '[]' and model.get(encoded_value_string) is not None:
-                a = 1
         return results_list
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
@@ -598,8 +599,7 @@ class Correction:
                             inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
                             counts_dict=d.vicinity_models[o],
                             ed=error_dictionary,
-                            n_best_pdeps=self.N_BEST_PDEPS,
-                            use_pdep_feature=self.USE_PDEP_FEATURE)
+                            n_best_pdeps=self.N_BEST_PDEPS)
                     pdep_vicinity_corrections.append(pdep_corrections)
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
@@ -619,10 +619,16 @@ class Correction:
         d.pdep_vicinity_corrections[cell] = pdep_vicinity_corrections
         d.imputer_corrections[cell] = imputer_corrections
 
-        models_corrections = value_corrections + domain_corrections \
-        + [corrections for order in naive_vicinity_corrections for corrections in order] \
-        + [corrections for order in pdep_vicinity_corrections for corrections in order] \
-        + imputer_corrections
+        if not self.RULE_BASED_VALUE_CLEANING:
+            models_corrections = value_corrections + domain_corrections \
+            + [corrections for order in naive_vicinity_corrections for corrections in order] \
+            + [corrections for order in pdep_vicinity_corrections for corrections in order] \
+            + imputer_corrections
+        elif self.RULE_BASED_VALUE_CLEANING:
+            models_corrections = domain_corrections \
+            + [corrections for order in naive_vicinity_corrections for corrections in order] \
+            + [corrections for order in pdep_vicinity_corrections for corrections in order] \
+            + imputer_corrections
         # End Philipps Changes
 
         corrections_features = {}
@@ -685,21 +691,29 @@ class Correction:
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
-    def synthesize_train_data(self, n_samples: int, col: int, d: raha.dataset.Dataset) -> Tuple[list, list]:
-        """
-        Leverage rows that do not contain errors to synthesize more training data for a given column.
-        """
-        x_train_synth, y_train_synth = [], []
-        df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
-        if df_clean_subset.shape[0] < n_samples:  # dont' have enough rows without errors to synthesize n_samples.
-            return x_train_synth, y_train_synth
-
-        return x_train_synth, y_train_synth
+    def rule_based_value_cleaning(self, d):
+        """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
+        d.rule_based_corrections = {}
+        model_types = ["identity_remover",
+                       "unicode_remover",
+                       "identity_adder",
+                       "unicode_adder",
+                       "identity_replacer",
+                       "unicode_replacer",
+                       "identity_swapper",
+                       "unicode_swapper"]
+        for cell in d.value_corrections:
+            correction_choice = None  # choose the first correction with pr of 1.0
+            n_corrections = 0
+            for i, correction_model in enumerate(d.value_corrections[cell]):
+                for correction in correction_model:
+                    if len(correction_model) == 1:  # this is equivalent to a correction having pr of 1.0
+                        n_corrections += 1
+                        correction_choice = correction
+            if correction_choice is not None and n_corrections == 1:
+                d.rule_based_corrections[cell] = correction_choice
 
     def predict_corrections(self, d):
-        """
-        This method predicts
-        """
         for j in d.column_errors:
             x_train = []
             y_train = []
@@ -709,7 +723,7 @@ class Correction:
                 correction_suggestions = d.pair_features.get(error_cell, [])
                 if error_cell in d.labeled_cells and d.labeled_cells[error_cell][0] == 1:
                     # If an error-cell has been labeled by the user, use it to create the training dataset.
-                    # The second condition is always true if error detection and user_labeling work without an error.
+                    # The second condition is always true if error detection and user labeling work without an error.
                     for suggestion in correction_suggestions:
                         x_train.append(d.pair_features[error_cell][suggestion])  # put features into x_train
                         suggestion_is_correction = (suggestion == d.labeled_cells[error_cell][1])
@@ -742,10 +756,16 @@ class Correction:
                                                                            'n_y_true': sum(y_train)})
                     predicted_labels = gs_clf.predict(x_test)
 
+                # set final cleaning suggestion from meta-learning result.
                 for index, predicted_label in enumerate(predicted_labels):
                     cell, predicted_correction = test_cell_correction_list[index]
                     if predicted_label:
                         d.corrected_cells[cell] = predicted_correction
+
+                if self.RULE_BASED_VALUE_CLEANING:
+                    # overwrite meta-learning result for domain & vicinity features with rule-based results if possible.
+                    for cell, correction in d.rule_based_corrections.items():
+                        d.corrected_cells[cell] = correction
 
             elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
                 for cell in d.pair_features:
@@ -801,6 +821,8 @@ class Correction:
             self.label_with_ground_truth(d)
             self.update_models(d)
             self.generate_features(d, synchronous=True)
+            if self.RULE_BASED_VALUE_CLEANING:
+                self.rule_based_value_cleaning(d)
             self.predict_corrections(d)
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
@@ -812,7 +834,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "glass"
+    dataset_name = "cars"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -851,7 +873,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
     app.IMPUTER_CACHE_MODEL = True
-    app.USE_PDEP_FEATURE = False
+    app.RULE_BASED_VALUE_CLEANING = False
 
     seed = None
     correction_dictionary = app.run(data, seed)
