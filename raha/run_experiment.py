@@ -44,7 +44,7 @@ def run_baran(c: dict):
     app.VICINITY_ORDERS = c["vicinity_orders"]
     app.VICINITY_FEATURE_GENERATOR = c["vicinity_feature_generator"]
     app.N_BEST_PDEPS = c["n_best_pdeps"]
-    app.USE_PDEP_FEATURE = c["use_pdep_feature"]
+    app.RULE_BASED_VALUE_CLEANING = c['rule_based_value_cleaning']
 
     d = app.initialize_dataset(data)
     app.initialize_models(d)
@@ -61,8 +61,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-09-16-hpo-new-approach-renuver",
-        description="""Mit dem verbesserten HPO Ansatz, bringen mehr Trainingssamples eine bessere Reinigung?""",
+        name="2022-09-17-rule-based-value-cleaning-renuver",
+        description="Macht rule based value cleaning die reinigung besser?",
         commit="",
         config={
             "dataset": "bridges",
@@ -74,21 +74,21 @@ if __name__ == "__main__":
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
-            "use_pdep_feature": False,
             "n_best_pdeps": 3,
+            "rule_based_value_cleaning": True,
         },
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "labeling_budget": [20, 30, 40]
+            "rule_based_value_cleaning": [True, False],
         },
         runs=5,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-09-16-hpo-new-approach-baran",
-        description="""Mit dem verbesserten HPO Ansatz, bringen mehr Trainingssamples eine bessere Reinigung?""",
+        name="2022-09-17-rule-based-value-cleaning-baran",
+        description="Macht rule based value cleaning die reinigung besser?",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -100,12 +100,12 @@ if __name__ == "__main__":
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
-            "use_pdep_feature": False,
             "n_best_pdeps": 3,
+            "rule_based_value_cleaning": True,
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "labeling_budget": [20, 30, 40]
+            "rule_based_value_cleaning": [True, False],
             },
         runs=5,
         save_path="/root/measurements/",
