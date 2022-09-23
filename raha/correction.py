@@ -19,6 +19,7 @@ import pickle
 import difflib
 import unicodedata
 import multiprocessing
+import random
 
 import bs4
 import bz2
@@ -695,7 +696,10 @@ class Correction:
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
         d.rule_based_corrections = {}
-        d.indecisive_value_corrections = 0
+
+        # for debugging purposes
+        # d.indecisive_value_corrections = {}
+
         model_types = ["identity_remover",
                        "unicode_remover",
                        "identity_adder",
@@ -718,7 +722,14 @@ class Correction:
             if len(certain_corrections) == 1:
                 d.rule_based_corrections[cell] = list(certain_corrections.keys())[0]
             elif len(certain_corrections) > 1:
-                d.indecisive_value_corrections += 1
+                random.choice(list(certain_corrections.keys()))
+
+            # this is nice for debugging
+            # elif len(certain_corrections) > 1 and len(d.labeled_tuples) >= 18:
+            #     d.indecisive_value_corrections[cell] = {'corrections': certain_corrections,
+            #                                             'error': d.dataframe.iloc[cell],
+            #                                             'true_correction': d.clean_dataframe.iloc[cell]}
+
 
     def predict_corrections(self, d):
         for j in d.column_errors:
@@ -842,7 +853,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "rayyan"
+    dataset_name = "cars"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {

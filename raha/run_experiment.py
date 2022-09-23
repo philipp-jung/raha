@@ -62,8 +62,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-09-23-indecisive-value-corrections-renuver",
-        description="Wie viele Value-Corrections können nicht gemacht werden, weil es widersprüchliche Reinigungsvorschläge gibt?",
+        name="2022-09-23-improved-value-corrections-renuver",
+        description="Jetzt werden auch doppelte Vorschläge gezählt. Knackt das die Benchmark?",
         commit="",
         config={
             "dataset": "bridges",
@@ -81,14 +81,15 @@ if __name__ == "__main__":
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
+            "rule_based_value_cleaning": [True, False],
         },
-        runs=1,
+        runs=5,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-09-23-indecisive-value-corrections-baran",
-        description="Wie viele Value-Corrections können nicht gemacht werden, weil es widersprüchliche Reinigungsvorschläge gibt?",
+        name="2022-09-23-improved-value-corrections-baran",
+        description="Jetzt werden auch doppelte Vorschläge gezählt. Knackt das die Benchmark?",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -105,10 +106,11 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "rule_based_value_cleaning": True,
             },
-        runs=1,
+        runs=5,
         save_path="/root/measurements/",
     )
 
-    rsk_renuver.run(experiment=run_baran, parallel=False)
+    rsk_renuver.run(experiment=run_baran, parallel=True)
     rsk_baran.run(experiment=run_baran, parallel=True)
