@@ -620,7 +620,8 @@ class Correction:
         d.imputer_corrections[cell] = imputer_corrections
 
         if not self.RULE_BASED_VALUE_CLEANING:
-            models_corrections = value_corrections + domain_corrections \
+            models_corrections = value_corrections \
+            + domain_corrections \
             + [corrections for order in naive_vicinity_corrections for corrections in order] \
             + [corrections for order in pdep_vicinity_corrections for corrections in order] \
             + imputer_corrections
@@ -694,6 +695,7 @@ class Correction:
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
         d.rule_based_corrections = {}
+        d.indecisive_value_corrections = 0
         model_types = ["identity_remover",
                        "unicode_remover",
                        "identity_adder",
@@ -703,15 +705,20 @@ class Correction:
                        "identity_swapper",
                        "unicode_swapper"]
         for cell in d.value_corrections:
-            correction_choice = None  # choose the first correction with pr of 1.0
-            n_corrections = 0
+            certain_corrections = {}
             for i, correction_model in enumerate(d.value_corrections[cell]):
-                for correction in correction_model:
-                    if len(correction_model) == 1:  # this is equivalent to a correction having pr of 1.0
-                        n_corrections += 1
-                        correction_choice = correction
-            if correction_choice is not None and n_corrections == 1:
-                d.rule_based_corrections[cell] = correction_choice
+                model = model_types[i]
+                for correction, pr in correction_model.items():
+                    if pr == 1.0:
+                        if certain_corrections.get(correction) is None:
+                            certain_corrections[correction] = [model]
+                        else:
+                            certain_corrections[correction].append(model)
+
+            if len(certain_corrections) == 1:
+                d.rule_based_corrections[cell] = list(certain_corrections.keys())[0]
+            elif len(certain_corrections) > 1:
+                d.indecisive_value_corrections += 1
 
     def predict_corrections(self, d):
         for j in d.column_errors:
@@ -763,7 +770,8 @@ class Correction:
                         d.corrected_cells[cell] = predicted_correction
 
                 if self.RULE_BASED_VALUE_CLEANING:
-                    # overwrite meta-learning result for domain & vicinity features with rule-based results if possible.
+                    # overwrite meta-learning result for domain & vicinity features with rule-based results if
+                    # these are available.
                     for cell, correction in d.rule_based_corrections.items():
                         d.corrected_cells[cell] = correction
 
@@ -834,7 +842,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "cars"
+    dataset_name = "rayyan"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -857,7 +865,7 @@ if __name__ == "__main__":
     else:
         raise ValueError("Dataset not supported.")
 
-    # Set this parameter for debugging purposes
+    # Set this parameter to keep runtimes low when debugging
     N_ROWS = None
 
     data = raha.dataset.Dataset(data_dict, n_rows=N_ROWS)
@@ -873,7 +881,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = False
+    app.RULE_BASED_VALUE_CLEANING = True
 
     seed = None
     correction_dictionary = app.run(data, seed)

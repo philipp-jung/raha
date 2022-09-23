@@ -33,8 +33,6 @@ def run_baran(c: dict):
         raise ValueError("Unknown Dataset.")
 
     data = raha.Dataset(data_dict, n_rows=c["n_rows"])
-
-    data = raha.Dataset(data_dict, n_rows=c["n_rows"])
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = raha.Correction()
     app.LABELING_BUDGET = c["labeling_budget"]
@@ -58,13 +56,14 @@ def run_baran(c: dict):
         app.predict_corrections(d)
 
     p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
-    return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
+
+    return {"result": {"precision": p, "recall": r, "f1": f, "indecisive_value_corrections": d.indecisive_value_corrections}, "config": c}
 
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-09-17-rule-based-value-cleaning-renuver",
-        description="Macht rule based value cleaning die reinigung besser?",
+        name="2022-09-23-indecisive-value-corrections-renuver",
+        description="Wie viele Value-Corrections können nicht gemacht werden, weil es widersprüchliche Reinigungsvorschläge gibt?",
         commit="",
         config={
             "dataset": "bridges",
@@ -82,15 +81,14 @@ if __name__ == "__main__":
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "rule_based_value_cleaning": [True, False],
         },
-        runs=5,
+        runs=1,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-09-17-rule-based-value-cleaning-baran",
-        description="Macht rule based value cleaning die reinigung besser?",
+        name="2022-09-23-indecisive-value-corrections-baran",
+        description="Wie viele Value-Corrections können nicht gemacht werden, weil es widersprüchliche Reinigungsvorschläge gibt?",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -107,11 +105,10 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "rule_based_value_cleaning": [True, False],
             },
-        runs=5,
+        runs=1,
         save_path="/root/measurements/",
     )
 
-    rsk_renuver.run(experiment=run_baran, parallel=True)
+    rsk_renuver.run(experiment=run_baran, parallel=False)
     rsk_baran.run(experiment=run_baran, parallel=True)
