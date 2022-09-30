@@ -429,6 +429,7 @@ class Correction:
         d.naive_vicinity_corrections = {}
         d.pdep_vicinity_corrections = {}
         d.imputer_corrections = {}
+        d.indecisive_value_corrections = {}  # can be removed after experiment 2022W38
 
         d.vicinity_models = {}
         for o in self.VICINITY_ORDERS:
