@@ -49,9 +49,6 @@ class Correction:
     """
 
     def __init__(self):
-        """
-        The constructor.
-        """
         self.PRETRAINED_VALUE_BASED_MODELS_PATH = ""
         self.VALUE_ENCODINGS = ["identity", "unicode"]
         self.CLASSIFICATION_MODEL = "ABC"   # "ABC" oder irgendwas anderes, was dann zu crossvalidation fuehrt.
@@ -77,7 +74,7 @@ class Correction:
         self.N_BEST_PDEPS = 3  # recommend up to 10. Ignored when using 'naive' feature generator.
 
         # If True, exclude value-based corrections from the training problem.
-        self.RULE_BASED_VALUE_CLEANING = False
+        self.RULE_BASED_VALUE_CLEANING = True
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -698,7 +695,7 @@ class Correction:
         d.rule_based_corrections = {}
 
         # for debugging purposes
-        # d.indecisive_value_corrections = {}
+        d.indecisive_value_corrections = {}
 
         model_types = ["identity_remover",
                        "unicode_remover",
@@ -725,10 +722,10 @@ class Correction:
                 random.choice(list(certain_corrections.keys()))
 
             # this is nice for debugging
-            # elif len(certain_corrections) > 1 and len(d.labeled_tuples) >= 18:
-            #     d.indecisive_value_corrections[cell] = {'corrections': certain_corrections,
-            #                                             'error': d.dataframe.iloc[cell],
-            #                                             'true_correction': d.clean_dataframe.iloc[cell]}
+            elif len(certain_corrections) > 1 and len(d.labeled_tuples) >= 18:
+                d.indecisive_value_corrections[cell] = {'corrections': certain_corrections,
+                                                        'error': d.dataframe.iloc[cell],
+                                                        'true_correction': d.clean_dataframe.iloc[cell]}
 
 
     def predict_corrections(self, d):
@@ -853,7 +850,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "cars"
+    dataset_name = "rayyan"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
