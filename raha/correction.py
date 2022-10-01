@@ -37,6 +37,7 @@ import raha
 from raha import imputer
 from raha import pdep
 from raha import hpo
+from raha import helpers
 
 ########################################
 
@@ -429,7 +430,6 @@ class Correction:
         d.naive_vicinity_corrections = {}
         d.pdep_vicinity_corrections = {}
         d.imputer_corrections = {}
-        d.indecisive_value_corrections = {}  # can be removed after experiment 2022W38
 
         d.vicinity_models = {}
         for o in self.VICINITY_ORDERS:
@@ -611,8 +611,8 @@ class Correction:
         if "imputer" in self.FEATURE_GENERATORS:
             imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
 
-        # for debugging purposes only
         d.value_corrections[cell] = value_corrections
+        # for debugging purposes only
         d.domain_corrections[cell] = domain_corrections
         d.naive_vicinity_corrections[cell] = naive_vicinity_corrections
         d.pdep_vicinity_corrections[cell] = pdep_vicinity_corrections
@@ -695,39 +695,11 @@ class Correction:
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
         d.rule_based_corrections = {}
 
-        # for debugging purposes
-        d.indecisive_value_corrections = {}
-
-        model_types = ["identity_remover",
-                       "unicode_remover",
-                       "identity_adder",
-                       "unicode_adder",
-                       "identity_replacer",
-                       "unicode_replacer",
-                       "identity_swapper",
-                       "unicode_swapper"]
-        for cell in d.value_corrections:
-            certain_corrections = {}
-            for i, correction_model in enumerate(d.value_corrections[cell]):
-                model = model_types[i]
-                for correction, pr in correction_model.items():
-                    if pr == 1.0:
-                        if certain_corrections.get(correction) is None:
-                            certain_corrections[correction] = [model]
-                        else:
-                            certain_corrections[correction].append(model)
-
-            if len(certain_corrections) == 1:
-                d.rule_based_corrections[cell] = list(certain_corrections.keys())[0]
-            elif len(certain_corrections) > 1:
-                random.choice(list(certain_corrections.keys()))
-
-            # this is nice for debugging
-            elif len(certain_corrections) > 1 and len(d.labeled_tuples) >= 18:
-                d.indecisive_value_corrections[cell] = {'corrections': certain_corrections,
-                                                        'error': d.dataframe.iloc[cell],
-                                                        'true_correction': d.clean_dataframe.iloc[cell]}
-
+        for cell, value_corrections in d.value_corrections.items():
+            value_suggestions = helpers.ValueSuggestions(cell, value_corrections)
+            rule_based_suggestion = value_suggestions.get_rule_based_suggestion()
+            if rule_based_suggestion is not None:
+                d.rule_based_corrections[cell] = rule_based_suggestion
 
     def predict_corrections(self, d):
         for j in d.column_errors:
@@ -779,8 +751,9 @@ class Correction:
                         d.corrected_cells[cell] = predicted_correction
 
                 if self.RULE_BASED_VALUE_CLEANING:
-                    # overwrite meta-learning result for domain & vicinity features with rule-based results if
-                    # these are available.
+                    # write the rule-based value corrections into the corrections dictionary. This overwrites
+                    # meta-learning result for domain & vicinity features. The idea is that the rule-based value
+                    # corrections are super precise and thus should be used if possible.
                     for cell, correction in d.rule_based_corrections.items():
                         d.corrected_cells[cell] = correction
 
