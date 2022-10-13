@@ -41,11 +41,18 @@ class ValueSuggestions:
         """Number of suggestions with probability 1.0"""
         return sum([1 for model_suggestions in self.suggestions for pr in model_suggestions.values() if pr == 1])
 
+    def get_certain_suggestions(self) -> List:
+        """Return all certain suggestions."""
+        return [s for model_suggestions in self.suggestions for s, pr in model_suggestions.items() if pr == 1]
+
     def n_certain_unicode_suggestions(self) -> int:
         """Number of unicode suggestions with probability 1.0"""
         return sum([1 for model_suggestions in self.unicode_suggestions for pr in model_suggestions.values() if pr == 1])
 
-    def get_rule_based_suggestion(self) -> Union[str, None]:
+    def get_most_certain_unicode_suggestions(self, threshold: int) -> List[Tuple[str, float]]:
+        pass
+
+    def get_rule_based_suggestion(self, d) -> Union[str, None]:
         """
         Cleaning heuristic to determine the best rule-based suggestion. Documentation on this can be found in
         the experiment from 2022W38.
@@ -57,15 +64,15 @@ class ValueSuggestions:
             choice = [suggestion for model_suggestions in self.suggestions for suggestion, pr in model_suggestions.items() if pr == 1]
             if len(choice) > 1:
                 raise ValueError(f"More than one certain suggestion: {choice}")
-            return choice[0]
+            choice = choice[0]
 
-        if self.n_certain_unicode_suggestions() == 1:  # Use the one certain unicode-encoded suggestion.
+        elif self.n_certain_unicode_suggestions() == 1:  # Use the one certain unicode-encoded suggestion.
             # Das funktioniert in der Praxis nicht perfekt. Ich bekomme auf rayyan z.B. "1/13" als Vorschlag, obwohl ich
             # einen datestring %m/%d/%y erwarte.
             choice = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, pr in model_suggestions.items() if pr == 1]
             if len(choice) > 1:
                 raise ValueError(f"More than one certain suggestion: {choice}")
-            return choice[0]
+            choice = choice[0]
 
         else:  # sum up the probabilities of both encodings of all certain corrections and take the max.
             suggestion_sums = {}
@@ -80,5 +87,13 @@ class ValueSuggestions:
                     suggestion_sums[s] = self.suggestions[i][s] + corresponding_score
                 else:
                     suggestion_sums[s] += self.suggestions[i][s] + corresponding_score
-        choice = max(suggestion_sums, key=suggestion_sums.get)
+            choice = max(suggestion_sums, key=suggestion_sums.get)
+
+        error = d.dataframe.iloc[self.cell]
+        true_correction = d.clean_dataframe.iloc[self.cell]
+
+        d.debug_rules.append({'suggestions': self.get_certain_suggestions(),
+                              'choice': choice,
+                              'true_correction': true_correction,
+                              'error': error})
         return choice

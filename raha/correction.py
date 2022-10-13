@@ -19,7 +19,6 @@ import pickle
 import difflib
 import unicodedata
 import multiprocessing
-import random
 
 import bs4
 import bz2
@@ -38,6 +37,7 @@ from raha import imputer
 from raha import pdep
 from raha import hpo
 from raha import helpers
+from raha import ml_helpers
 
 ########################################
 
@@ -694,33 +694,18 @@ class Correction:
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
         d.rule_based_corrections = {}
+        d.debug_rules = []  # for debugging in get_rule_based_suggestion(d)
 
         for cell, value_corrections in d.value_corrections.items():
             value_suggestions = helpers.ValueSuggestions(cell, value_corrections)
-            rule_based_suggestion = value_suggestions.get_rule_based_suggestion()
+            rule_based_suggestion = value_suggestions.get_rule_based_suggestion(d)
             if rule_based_suggestion is not None:
                 d.rule_based_corrections[cell] = rule_based_suggestion
 
     def predict_corrections(self, d):
         for j in d.column_errors:
-            x_train = []
-            y_train = []
-            x_test = []
-            test_cell_correction_list = []
-            for error_cell in d.column_errors[j]:
-                correction_suggestions = d.pair_features.get(error_cell, [])
-                if error_cell in d.labeled_cells and d.labeled_cells[error_cell][0] == 1:
-                    # If an error-cell has been labeled by the user, use it to create the training dataset.
-                    # The second condition is always true if error detection and user labeling work without an error.
-                    for suggestion in correction_suggestions:
-                        x_train.append(d.pair_features[error_cell][suggestion])  # put features into x_train
-                        suggestion_is_correction = (suggestion == d.labeled_cells[error_cell][1])
-                        y_train.append(int(suggestion_is_correction))
-                        d.corrected_cells[error_cell] = d.labeled_cells[error_cell][1]  # user input as cleaning result
-                else:  # put all cells that contain an error without user-correction in the "test" set.
-                    for suggestion in correction_suggestions:
-                        x_test.append(d.pair_features[error_cell][suggestion])
-                        test_cell_correction_list.append([error_cell, suggestion])
+            x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions = ml_helpers.generate_train_test_data(j, d.column_errors, d.labeled_cells, d.pair_features)
+            d.corrected_cells = corrected_cells
 
             if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
@@ -744,9 +729,9 @@ class Correction:
                                                                            'n_y_true': sum(y_train)})
                     predicted_labels = gs_clf.predict(x_test)
 
-                # set final cleaning suggestion from meta-learning result.
+                # set final cleaning suggestion from meta-learning result. User corrected cells are not overwritten!
                 for index, predicted_label in enumerate(predicted_labels):
-                    cell, predicted_correction = test_cell_correction_list[index]
+                    cell, predicted_correction = all_error_correction_suggestions[index]  # pick the right suggestion
                     if predicted_label:
                         d.corrected_cells[cell] = predicted_correction
 
@@ -755,7 +740,9 @@ class Correction:
                     # meta-learning result for domain & vicinity features. The idea is that the rule-based value
                     # corrections are super precise and thus should be used if possible.
                     for cell, correction in d.rule_based_corrections.items():
-                        d.corrected_cells[cell] = correction
+                        row, col = cell
+                        if row not in d.labeled_tuples:  # don't overwrite user's corrections
+                            d.corrected_cells[cell] = correction
 
             elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
                 for cell in d.pair_features:
@@ -766,7 +753,7 @@ class Correction:
                         d.corrected_cells[cell] = max_proba_feature[0]
 
             elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
-                pass  # nothing to do here -- just use the manually corrected cell that has been set before.
+                pass  # nothing to do here -- just use the manually corrected cells to correct all errors.
 
             elif len(x_train) == 0:
                 pass  # nothing to learn because x_train is empty.
@@ -817,6 +804,7 @@ class Correction:
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
 
+        len(d.debug_rules)
         print("Number of true classes: {}".format(self.n_true_classes))
         return d.corrected_cells
 ########################################
@@ -824,7 +812,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "rayyan"
+    dataset_name = "bridges"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -863,7 +851,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = True
+    app.RULE_BASED_VALUE_CLEANING = False
 
     seed = None
     correction_dictionary = app.run(data, seed)
