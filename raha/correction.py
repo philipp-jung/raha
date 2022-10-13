@@ -75,7 +75,8 @@ class Correction:
         self.N_BEST_PDEPS = 3  # recommend up to 10. Ignored when using 'naive' feature generator.
 
         # If True, exclude value-based corrections from the training problem.
-        self.RULE_BASED_VALUE_CLEANING = True
+        self.RULE_BASED_VALUE_CLEANING = False
+        self.ML_BASED_VALUE_CLEANING = True
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -618,17 +619,21 @@ class Correction:
         d.pdep_vicinity_corrections[cell] = pdep_vicinity_corrections
         d.imputer_corrections[cell] = imputer_corrections
 
-        if not self.RULE_BASED_VALUE_CLEANING:
+        if not self.RULE_BASED_VALUE_CLEANING and not self.ML_BASED_VALUE_CLEANING:
             models_corrections = value_corrections \
             + domain_corrections \
             + [corrections for order in naive_vicinity_corrections for corrections in order] \
             + [corrections for order in pdep_vicinity_corrections for corrections in order] \
             + imputer_corrections
-        elif self.RULE_BASED_VALUE_CLEANING:
+        else:
             models_corrections = domain_corrections \
             + [corrections for order in naive_vicinity_corrections for corrections in order] \
             + [corrections for order in pdep_vicinity_corrections for corrections in order] \
             + imputer_corrections
+
+        if self.RULE_BASED_VALUE_CLEANING and self.ML_BASED_VALUE_CLEANING:
+            raise ValueError('Pick one not both at the same time.')
+
         # End Philipps Changes
 
         corrections_features = {}
@@ -691,6 +696,38 @@ class Correction:
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
+    def ml_based_value_cleaning(self, d):
+        """ Use machine learning to determine which values to use for cleaning."""
+        d.value_corrected_cells = {}
+        value_pair_features = {}
+        for error_cell, suggestion_dicts in d.value_corrections.items():
+            value_pair_features[error_cell] = {}
+            for mi, model_suggestions in enumerate(suggestion_dicts):
+                for correction, pr in model_suggestions.items():
+                    if correction not in value_pair_features[error_cell]:
+                        value_pair_features[error_cell][correction] = numpy.zeros(len(suggestion_dicts))
+                    value_pair_features[error_cell][correction][mi] = pr
+
+        for j in d.column_errors:
+            x_train, y_train, x_test, _, all_error_correction_suggestions = ml_helpers.generate_train_test_data(d.column_errors[j], d.labeled_cells, value_pair_features)
+
+            if len(x_train) > 0 and len(x_test) > 0:
+                if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
+                    predicted_labels = None
+                elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
+                    predicted_labels = None
+                else:
+                    clf = sklearn.linear_model.LogisticRegression()
+                    clf.fit(x_train, y_train)
+                    predicted_labels = clf.predict(x_test)
+
+                if predicted_labels is not None:
+                    for index, predicted_label in enumerate(predicted_labels):
+                        if predicted_label:
+                            cell, predicted_correction = all_error_correction_suggestions[index]  # pick correction string
+                            d.value_corrected_cells[cell] = predicted_correction
+        a = 1
+
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
         d.rule_based_corrections = {}
@@ -704,8 +741,9 @@ class Correction:
 
     def predict_corrections(self, d):
         for j in d.column_errors:
-            x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions = ml_helpers.generate_train_test_data(j, d.column_errors, d.labeled_cells, d.pair_features)
-            d.corrected_cells = corrected_cells
+            x_train, y_train, x_test, user_corrected_cells, all_error_correction_suggestions = ml_helpers.generate_train_test_data(d.column_errors[j], d.labeled_cells, d.pair_features)
+            for error_cell in user_corrected_cells:
+                d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
 
             if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
@@ -800,6 +838,8 @@ class Correction:
             self.generate_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
+            if self.ML_BASED_VALUE_CLEANING:
+                self.ml_based_value_cleaning(d)
             self.predict_corrections(d)
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
@@ -812,7 +852,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "bridges"
+    dataset_name = "rayyan"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -852,6 +892,7 @@ if __name__ == "__main__":
     app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
     app.IMPUTER_CACHE_MODEL = True
     app.RULE_BASED_VALUE_CLEANING = False
+    app.ML_BASED_VALUE_CLEANING = True
 
     seed = None
     correction_dictionary = app.run(data, seed)

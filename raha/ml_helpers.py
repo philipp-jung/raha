@@ -1,8 +1,7 @@
 from typing import List, Dict, Tuple
 
 
-def generate_train_test_data(col: int,
-                             column_errors: Dict,
+def generate_train_test_data(column_errors: Dict,
                              labeled_cells: Dict[Tuple[int, int], List],
                              pair_features: Dict[Tuple[int, int], Dict[str, List]]):
 
@@ -11,7 +10,7 @@ def generate_train_test_data(col: int,
     x_test = []  # test features vectors
     all_error_correction_suggestions = []  # all cleaning suggestions for all errors flattened in a list
     corrected_cells = {}  # take user input as a cleaning result if available
-    for error_cell in column_errors[col]:
+    for error_cell in column_errors:
         correction_suggestions = pair_features.get(error_cell, [])
         if error_cell in labeled_cells and labeled_cells[error_cell][0] == 1:
             # If an error-cell has been labeled by the user, use it to create the training dataset.
@@ -26,4 +25,4 @@ def generate_train_test_data(col: int,
                 x_test.append(pair_features[error_cell][suggestion])
                 all_error_correction_suggestions.append([error_cell, suggestion])
 
-        return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions
+    return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions
