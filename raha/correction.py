@@ -29,7 +29,8 @@ import sklearn.svm
 import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
-from typing import Dict, Tuple
+import sklearn.tree
+from typing import Dict
 import pandas as pd
 
 import raha
@@ -698,7 +699,8 @@ class Correction:
 
     def ml_based_value_cleaning(self, d):
         """ Use machine learning to determine which values to use for cleaning."""
-        d.value_corrected_cells = {}
+        PROBABILITY_THRESHOLD = 0.8
+        d.ml_based_value_corrections = {}
         value_pair_features = {}
         for error_cell, suggestion_dicts in d.value_corrections.items():
             value_pair_features[error_cell] = {}
@@ -713,31 +715,32 @@ class Correction:
 
             if len(x_train) > 0 and len(x_test) > 0:
                 if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
-                    predicted_labels = None
+                    predicted_probabilities = None
                 elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
-                    predicted_labels = None
+                    predicted_probabilities = None
                 else:
-                    clf = sklearn.linear_model.LogisticRegression()
+                    # clf = sklearn.linear_model.LogisticRegression(class_weight='balanced')
+                    # clf.fit(x_train, y_train)
+                    # predicted_probabilities = clf.decision_function(x_test)
+                    clf = sklearn.tree.DecisionTreeClassifier(class_weight='balanced')
                     clf.fit(x_train, y_train)
-                    predicted_labels = clf.predict(x_test)
+                    predicted_probabilities = clf.predict_proba(x_test)
 
-                if predicted_labels is not None:
-                    for index, predicted_label in enumerate(predicted_labels):
-                        if predicted_label:
+                if predicted_probabilities is not None:
+                    for index, pr in enumerate(predicted_probabilities):
+                        if pr[1] > PROBABILITY_THRESHOLD:
                             cell, predicted_correction = all_error_correction_suggestions[index]  # pick correction string
-                            d.value_corrected_cells[cell] = predicted_correction
-        a = 1
+                            d.ml_based_value_corrections[cell] = predicted_correction
 
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
-        d.rule_based_corrections = {}
-        d.debug_rules = []  # for debugging in get_rule_based_suggestion(d)
+        d.rule_based_value_corrections = {}
 
         for cell, value_corrections in d.value_corrections.items():
             value_suggestions = helpers.ValueSuggestions(cell, value_corrections)
             rule_based_suggestion = value_suggestions.get_rule_based_suggestion(d)
             if rule_based_suggestion is not None:
-                d.rule_based_corrections[cell] = rule_based_suggestion
+                d.rule_based_value_corrections[cell] = rule_based_suggestion
 
     def predict_corrections(self, d):
         for j in d.column_errors:
@@ -777,7 +780,13 @@ class Correction:
                     # write the rule-based value corrections into the corrections dictionary. This overwrites
                     # meta-learning result for domain & vicinity features. The idea is that the rule-based value
                     # corrections are super precise and thus should be used if possible.
-                    for cell, correction in d.rule_based_corrections.items():
+                    for cell, correction in d.rule_based_value_corrections.items():
+                        row, col = cell
+                        if row not in d.labeled_tuples:  # don't overwrite user's corrections
+                            d.corrected_cells[cell] = correction
+
+                if self.ML_BASED_VALUE_CLEANING:
+                    for cell, correction in d.ml_based_value_corrections.items():
                         row, col = cell
                         if row not in d.labeled_tuples:  # don't overwrite user's corrections
                             d.corrected_cells[cell] = correction
@@ -844,7 +853,6 @@ class Correction:
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
 
-        len(d.debug_rules)
         print("Number of true classes: {}".format(self.n_true_classes))
         return d.corrected_cells
 ########################################
@@ -852,7 +860,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "rayyan"
+    dataset_name = "bridges"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
