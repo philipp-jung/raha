@@ -75,9 +75,10 @@ class Correction:
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
         self.N_BEST_PDEPS = 3  # recommend up to 10. Ignored when using 'naive' feature generator.
 
-        # If True, exclude value-based corrections from the training problem.
-        self.RULE_BASED_VALUE_CLEANING = False
-        self.ML_BASED_VALUE_CLEANING = True
+        # If not False, exclude value-based corrections from the training problem.
+        # v1 uses rules from 2022W38
+        # v2 uses rules from 2022W40
+        self.RULE_BASED_VALUE_CLEANING = 'V1'
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -209,7 +210,7 @@ class Correction:
     @staticmethod
     def _to_model_adder(model, key, value):
         """
-        This methods incrementally adds a key-value into a dictionary-implemented model.
+        This method incrementally adds a key-value into a dictionary-implemented model.
         """
         if key not in model:
             model[key] = {}
@@ -217,11 +218,22 @@ class Correction:
             model[key][value] = 0.0
         model[key][value] += 1.0
 
-    def _value_based_models_updater(self, models, ud):
+    @staticmethod
+    def _to_value_model_adder(value_model, enc_error_value, transformation, error_cell):
+        """
+        This method updates the value_model. It is different from _to_model_adder, since value_model contains
+        coordinates of the error_cell from which the transformation originates.
+        """
+        if enc_error_value not in value_model:
+            value_model[enc_error_value] = {}
+        if transformation not in value_model[enc_error_value]:
+            value_model[enc_error_value][transformation] = []
+        value_model[enc_error_value][transformation].append(error_cell)
+
+    def _value_based_models_updater(self, models, ud, cell):
         """
         This method updates the value-based error corrector models with a given update dictionary.
         """
-        # TODO: adding jabeja konannde bakhshahye substring
         if self.ONLINE_PHASE or (ud["new_value"] and len(ud["new_value"]) <= self.MAX_VALUE_LENGTH and
                                  ud["old_value"] and len(ud["old_value"]) <= self.MAX_VALUE_LENGTH and
                                  ud["old_value"] != ud["new_value"] and ud["old_value"].lower() != "n/a" and
@@ -241,12 +253,12 @@ class Correction:
             for encoding in self.VALUE_ENCODINGS:
                 encoded_old_value = self._value_encoder(ud["old_value"], encoding)
                 if remover_transformation:
-                    self._to_model_adder(models[0], encoded_old_value, json.dumps(remover_transformation))
+                    self._to_value_model_adder(models[0], encoded_old_value, json.dumps(remover_transformation), cell)
                 if adder_transformation:
-                    self._to_model_adder(models[1], encoded_old_value, json.dumps(adder_transformation))
+                    self._to_value_model_adder(models[1], encoded_old_value, json.dumps(adder_transformation), cell)
                 if replacer_transformation:
-                    self._to_model_adder(models[2], encoded_old_value, json.dumps(replacer_transformation))
-                self._to_model_adder(models[3], encoded_old_value, ud["new_value"])
+                    self._to_value_model_adder(models[2], encoded_old_value, json.dumps(replacer_transformation), cell)
+                self._to_value_model_adder(models[3], encoded_old_value, ud["new_value"], cell)
 
     def pretrain_value_based_models(self, revision_data_folder):
         """
@@ -282,7 +294,7 @@ class Correction:
                                 "old_value": raha.dataset.Dataset.value_normalizer("".join(rd["old_value"])),
                                 "new_value": raha.dataset.Dataset.value_normalizer("".join(rd["new_value"]))
                             }
-                            self._value_based_models_updater(models, update_dictionary)
+                            self._value_based_models_updater(models, update_dictionary, (0, 0))
         _models_pruner()
         pretrained_models_path = os.path.join(revision_data_folder, "pretrained_value_based_models.dictionary")
         if self.PRETRAINED_VALUE_BASED_MODELS_PATH:
@@ -297,7 +309,7 @@ class Correction:
         """
         self._to_model_adder(model, ud["column"], ud["new_value"])
 
-    def _value_based_corrector(self, models, ed):
+    def _value_based_corrector(self, models, ed, version='V1'):
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
@@ -309,7 +321,8 @@ class Correction:
                 encoded_value_string = self._value_encoder(ed["old_value"], encoding)
                 if encoded_value_string in model:
                     # print(f'{model_name}: {encoded_value_string}')  ## nice when debugging value corrections
-                    sum_scores = sum(model[encoded_value_string].values())
+                    if version == 'V1':
+                        sum_scores = sum([len(x) for x in model[encoded_value_string].values()])
                     if model_name in ["remover", "adder", "replacer"]:
                         for transformation_string in model[encoded_value_string]:
                             index_character_dictionary = {i: c for i, c in enumerate(ed["old_value"])}
@@ -326,14 +339,22 @@ class Correction:
                             new_value = ""
                             for i in range(len(index_character_dictionary)):
                                 new_value += index_character_dictionary[i]
-                            pr = model[encoded_value_string][transformation_string] / sum_scores
-                            if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
-                                results_dictionary[new_value] = pr
+                            if version == 'V1':
+                                pr = len(model[encoded_value_string][transformation_string]) / sum_scores
+                                if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
+                                    results_dictionary[new_value] = pr
+                            elif version == 'V2':
+                                error_cells = model[encoded_value_string][transformation_string]
+                                results_dictionary[new_value] = error_cells
                     if model_name == "swapper":
                         for new_value in model[encoded_value_string]:
-                            pr = model[encoded_value_string][new_value] / sum_scores
-                            if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
-                                results_dictionary[new_value] = pr
+                            if version == 'V1':
+                                pr = len(model[encoded_value_string][new_value]) / sum_scores
+                                if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
+                                    results_dictionary[new_value] = pr
+                            elif version == 'V2':
+                                error_cells = model[encoded_value_string][new_value]
+                                results_dictionary[new_value] = error_cells
                 results_list.append(results_dictionary)
         return results_list
 
@@ -533,7 +554,7 @@ class Correction:
             # if the value in that cell has been labelled an error
             if d.labeled_cells[cell][0] == 1:
                 # update value and vicinity models.
-                self._value_based_models_updater(d.value_models, update_dictionary)
+                self._value_based_models_updater(d.value_models, update_dictionary, cell)
                 self._domain_based_model_updater(d.domain_models, update_dictionary)
                 update_dictionary["vicinity"] = [cv if column != cj else self.IGNORE_SIGN
                                                  for cj, cv in enumerate(cleaned_sampled_tuple)]
@@ -607,20 +628,20 @@ class Correction:
                         f'{self.VICINITY_FEATURE_GENERATOR}')
 
         if "value" in self.FEATURE_GENERATORS:
-            value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
+            value_corrections = self._value_based_corrector(d.value_models, error_dictionary, self.RULE_BASED_VALUE_CLEANING)
         if "domain" in self.FEATURE_GENERATORS:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
         if "imputer" in self.FEATURE_GENERATORS:
             imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
 
         d.value_corrections[cell] = value_corrections
-        # for debugging purposes only
+        # below block is for debugging purposes only.
         d.domain_corrections[cell] = domain_corrections
         d.naive_vicinity_corrections[cell] = naive_vicinity_corrections
         d.pdep_vicinity_corrections[cell] = pdep_vicinity_corrections
         d.imputer_corrections[cell] = imputer_corrections
 
-        if not self.RULE_BASED_VALUE_CLEANING and not self.ML_BASED_VALUE_CLEANING:
+        if not self.RULE_BASED_VALUE_CLEANING:
             models_corrections = value_corrections \
             + domain_corrections \
             + [corrections for order in naive_vicinity_corrections for corrections in order] \
@@ -631,9 +652,6 @@ class Correction:
             + [corrections for order in naive_vicinity_corrections for corrections in order] \
             + [corrections for order in pdep_vicinity_corrections for corrections in order] \
             + imputer_corrections
-
-        if self.RULE_BASED_VALUE_CLEANING and self.ML_BASED_VALUE_CLEANING:
-            raise ValueError('Pick one not both at the same time.')
 
         # End Philipps Changes
 
@@ -697,48 +715,16 @@ class Correction:
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
-    def ml_based_value_cleaning(self, d):
-        """ Use machine learning to determine which values to use for cleaning."""
-        PROBABILITY_THRESHOLD = 0.8
-        d.ml_based_value_corrections = {}
-        value_pair_features = {}
-        for error_cell, suggestion_dicts in d.value_corrections.items():
-            value_pair_features[error_cell] = {}
-            for mi, model_suggestions in enumerate(suggestion_dicts):
-                for correction, pr in model_suggestions.items():
-                    if correction not in value_pair_features[error_cell]:
-                        value_pair_features[error_cell][correction] = numpy.zeros(len(suggestion_dicts))
-                    value_pair_features[error_cell][correction][mi] = pr
-
-        for j in d.column_errors:
-            x_train, y_train, x_test, _, all_error_correction_suggestions = ml_helpers.generate_train_test_data(d.column_errors[j], d.labeled_cells, value_pair_features)
-
-            if len(x_train) > 0 and len(x_test) > 0:
-                if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
-                    predicted_probabilities = None
-                elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
-                    predicted_probabilities = None
-                else:
-                    # clf = sklearn.linear_model.LogisticRegression(class_weight='balanced')
-                    # clf.fit(x_train, y_train)
-                    # predicted_probabilities = clf.decision_function(x_test)
-                    clf = sklearn.tree.DecisionTreeClassifier(class_weight='balanced')
-                    clf.fit(x_train, y_train)
-                    predicted_probabilities = clf.predict_proba(x_test)
-
-                if predicted_probabilities is not None:
-                    for index, pr in enumerate(predicted_probabilities):
-                        if pr[1] > PROBABILITY_THRESHOLD:
-                            cell, predicted_correction = all_error_correction_suggestions[index]  # pick correction string
-                            d.ml_based_value_corrections[cell] = predicted_correction
-
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
         d.rule_based_value_corrections = {}
 
         for cell, value_corrections in d.value_corrections.items():
-            value_suggestions = helpers.ValueSuggestions(cell, value_corrections)
-            rule_based_suggestion = value_suggestions.get_rule_based_suggestion(d)
+            if self.RULE_BASED_VALUE_CLEANING == 'V1':
+                value_suggestions = helpers.ValueSuggestionsV1(cell, value_corrections)
+            elif self.RULE_BASED_VALUE_CLEANING == 'V2':
+                value_suggestions = helpers.ValueSuggestionsV2(cell, value_corrections)
+            rule_based_suggestion = value_suggestions.rule_based_suggestion(d)
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
 
@@ -781,12 +767,6 @@ class Correction:
                     # meta-learning result for domain & vicinity features. The idea is that the rule-based value
                     # corrections are super precise and thus should be used if possible.
                     for cell, correction in d.rule_based_value_corrections.items():
-                        row, col = cell
-                        if row not in d.labeled_tuples:  # don't overwrite user's corrections
-                            d.corrected_cells[cell] = correction
-
-                if self.ML_BASED_VALUE_CLEANING:
-                    for cell, correction in d.ml_based_value_corrections.items():
                         row, col = cell
                         if row not in d.labeled_tuples:  # don't overwrite user's corrections
                             d.corrected_cells[cell] = correction
@@ -847,8 +827,6 @@ class Correction:
             self.generate_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
-            if self.ML_BASED_VALUE_CLEANING:
-                self.ml_based_value_cleaning(d)
             self.predict_corrections(d)
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
@@ -860,7 +838,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "bridges"
+    dataset_name = "cars"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -899,8 +877,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = False
-    app.ML_BASED_VALUE_CLEANING = True
+    app.RULE_BASED_VALUE_CLEANING = 'V2'
 
     seed = None
     correction_dictionary = app.run(data, seed)
