@@ -61,12 +61,38 @@ def run_baran(c: dict):
 
 
 if __name__ == "__main__":
-    rsk_rayyan = Ruska(
-        name="2022-10-18-value-cleaning-v2",
-        description="Ich vergleiche alle Value-Cleaning Ansätze.",
-        commit="6a8262f0ad20163848db1d8a412fe8b9eea1da8e",
+    rsk_renuver = Ruska(
+        name="2022-10-18-value-cleaning-v2-renuver",
+        description="Komplette Benchmark mit den neuen Value-Cleaning Algos.",
+        commit="",
         config={
-            "dataset": "rayyan",
+            "dataset": "bridges",
+            "sampling": "MCAR",
+            "error_fraction": 0.01,
+            "labeling_budget": 20,
+            "feature_generators": ["vicinity", "domain", "value"],
+            "classification_model": "CV",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": True,
+        },
+        ranges={
+            "dataset": ["bridges", "cars", "glass", "restaurant"],
+            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
+            "rule_based_value_cleaning": ["V1", "V2", False],
+        },
+        runs=3,
+        save_path="/root/measurements/",
+    )
+
+    rsk_baran = Ruska(
+        name="2022-10-18-value-cleaning-v2-baran",
+        description="Komplette Benchmark mit den neuen Value-Cleaning Algos.",
+        commit="",
+        config={
+            "dataset": "breast-cancer",
             "sampling": "MCAR",
             "error_fraction": 0.1,
             "labeling_budget": 20,
@@ -76,13 +102,15 @@ if __name__ == "__main__":
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": False,
+            "rule_based_value_cleaning": True,
         },
         ranges={
-            "rule_based_value_cleaning": [False, "V1", "V2"],
+            "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "rule_based_value_cleaning": ["V1", "V2", False],
             },
-        runs=5,
-        save_path="/Users/philipp/code/experimente/2022W42-rule-based-cleaning-v2",
+        runs=3,
+        save_path="/root/measurements/",
     )
 
-    rsk_rayyan.run(experiment=run_baran, parallel=True)
+    rsk_renuver.run(experiment=run_baran, parallel=True)
+    rsk_baran.run(experiment=run_baran, parallel=True)
