@@ -61,56 +61,28 @@ def run_baran(c: dict):
 
 
 if __name__ == "__main__":
-    rsk_renuver = Ruska(
-        name="2022-09-23-improved-value-corrections-renuver",
-        description="Jetzt werden auch doppelte Vorschläge gezählt. Knackt das die Benchmark?",
-        commit="",
-        config={
-            "dataset": "bridges",
-            "sampling": "MCAR",
-            "error_fraction": 0.01,
-            "labeling_budget": 20,
-            "feature_generators": ["vicinity", "domain", "value"],
-            "classification_model": "CV",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": True,
-        },
-        ranges={
-            "dataset": ["bridges", "cars", "glass", "restaurant"],
-            "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "rule_based_value_cleaning": [True, False],
-        },
-        runs=5,
-        save_path="/root/measurements/",
-    )
+     rsk_rayyan = Ruska(
+         name="2022-10-18-value-cleaning-v2",
+         description="Ich vergleiche alle Value-Cleaning Ansätze.",
+         commit="",
+         config={
+             "dataset": "rayyan",
+             "sampling": "MCAR",
+             "error_fraction": 0.1,
+             "labeling_budget": 20,
+             "feature_generators": ["vicinity", "domain", "value"],
+             "classification_model": "CV",
+             "vicinity_orders": [1, 2],
+             "vicinity_feature_generator": "pdep",
+             "n_rows": None,
+             "n_best_pdeps": 3,
+             "rule_based_value_cleaning": False,
+         },
+         ranges={
+             "rule_based_value_cleaning": [False, "V1", "V2"],
+             },
+         runs=5,
+         save_path="/root/measurements/",
+     )
 
-    rsk_baran = Ruska(
-        name="2022-09-23-improved-value-corrections-baran",
-        description="Jetzt werden auch doppelte Vorschläge gezählt. Knackt das die Benchmark?",
-        commit="",
-        config={
-            "dataset": "breast-cancer",
-            "sampling": "MCAR",
-            "error_fraction": 0.1,
-            "labeling_budget": 20,
-            "feature_generators": ["vicinity", "domain", "value"],
-            "classification_model": "CV",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": True,
-        },
-        ranges={
-            "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "rule_based_value_cleaning": True,
-            },
-        runs=5,
-        save_path="/root/measurements/",
-    )
-
-    rsk_renuver.run(experiment=run_baran, parallel=True)
-    rsk_baran.run(experiment=run_baran, parallel=True)
+    rsk_rayyan.run(experiment=run_baran, parallel=True)

@@ -321,7 +321,7 @@ class Correction:
                 encoded_value_string = self._value_encoder(ed["old_value"], encoding)
                 if encoded_value_string in model:
                     # print(f'{model_name}: {encoded_value_string}')  ## nice when debugging value corrections
-                    if version == 'V1':
+                    if version == 'V1' or not version:
                         sum_scores = sum([len(x) for x in model[encoded_value_string].values()])
                     if model_name in ["remover", "adder", "replacer"]:
                         for transformation_string in model[encoded_value_string]:
@@ -339,7 +339,7 @@ class Correction:
                             new_value = ""
                             for i in range(len(index_character_dictionary)):
                                 new_value += index_character_dictionary[i]
-                            if version == 'V1':
+                            if version == 'V1' or not version:
                                 pr = len(model[encoded_value_string][transformation_string]) / sum_scores
                                 if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                     results_dictionary[new_value] = pr
@@ -348,7 +348,7 @@ class Correction:
                                 results_dictionary[new_value] = error_cells
                     if model_name == "swapper":
                         for new_value in model[encoded_value_string]:
-                            if version == 'V1':
+                            if version == 'V1' or not version:
                                 pr = len(model[encoded_value_string][new_value]) / sum_scores
                                 if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                     results_dictionary[new_value] = pr
@@ -877,7 +877,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = 'V2'
+    app.RULE_BASED_VALUE_CLEANING = False
 
     seed = None
     correction_dictionary = app.run(data, seed)
