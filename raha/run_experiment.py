@@ -57,32 +57,32 @@ def run_baran(c: dict):
 
     p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
 
-    return {"result": {"precision": p, "recall": r, "f1": f, "indecisive_value_corrections": d.indecisive_value_corrections}, "config": c}
+    return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
 
 
 if __name__ == "__main__":
-     rsk_rayyan = Ruska(
-         name="2022-10-18-value-cleaning-v2",
-         description="Ich vergleiche alle Value-Cleaning Ansätze.",
-         commit="",
-         config={
-             "dataset": "rayyan",
-             "sampling": "MCAR",
-             "error_fraction": 0.1,
-             "labeling_budget": 20,
-             "feature_generators": ["vicinity", "domain", "value"],
-             "classification_model": "CV",
-             "vicinity_orders": [1, 2],
-             "vicinity_feature_generator": "pdep",
-             "n_rows": None,
-             "n_best_pdeps": 3,
-             "rule_based_value_cleaning": False,
-         },
-         ranges={
-             "rule_based_value_cleaning": [False, "V1", "V2"],
-             },
-         runs=5,
-         save_path="/root/measurements/",
-     )
+    rsk_rayyan = Ruska(
+        name="2022-10-18-value-cleaning-v2",
+        description="Ich vergleiche alle Value-Cleaning Ansätze.",
+        commit="6a8262f0ad20163848db1d8a412fe8b9eea1da8e",
+        config={
+            "dataset": "rayyan",
+            "sampling": "MCAR",
+            "error_fraction": 0.1,
+            "labeling_budget": 20,
+            "feature_generators": ["vicinity", "domain", "value"],
+            "classification_model": "CV",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": False,
+        },
+        ranges={
+            "rule_based_value_cleaning": [False, "V1", "V2"],
+            },
+        runs=5,
+        save_path="/Users/philipp/code/experimente/2022W42-rule-based-cleaning-v2",
+    )
 
     rsk_rayyan.run(experiment=run_baran, parallel=True)
