@@ -79,7 +79,7 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": True,
         },
         ranges={
-            "dataset": ["bridges", "cars", "glass", "restaurant"],
+            "dataset": ["bridges", "cars"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
             "rule_based_value_cleaning": ["V1", "V2", False],
         },
@@ -105,7 +105,7 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": True,
         },
         ranges={
-            "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "dataset": ["beers", "flights", "rayyan"],
             "rule_based_value_cleaning": ["V1", "V2", False],
             },
         runs=3,
