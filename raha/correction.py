@@ -762,15 +762,6 @@ class Correction:
                     if predicted_label:
                         d.corrected_cells[cell] = predicted_correction
 
-                if self.RULE_BASED_VALUE_CLEANING:
-                    # write the rule-based value corrections into the corrections dictionary. This overwrites
-                    # meta-learning result for domain & vicinity features. The idea is that the rule-based value
-                    # corrections are super precise and thus should be used if possible.
-                    for cell, correction in d.rule_based_value_corrections.items():
-                        row, col = cell
-                        if row not in d.labeled_tuples:  # don't overwrite user's corrections
-                            d.corrected_cells[cell] = correction
-
             elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
                 for cell in d.pair_features:
                     correction_dict = d.pair_features[cell]
@@ -828,6 +819,15 @@ class Correction:
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
             self.predict_corrections(d)
+            if self.RULE_BASED_VALUE_CLEANING:
+                # write the rule-based value corrections into the corrections dictionary. This overwrites
+                # meta-learning result for domain & vicinity features. The idea is that the rule-based value
+                # corrections are super precise and thus should be used if possible.
+                for cell, correction in d.rule_based_value_corrections.items():
+                    row, col = cell
+                    if row not in d.labeled_tuples:  # don't overwrite user's corrections
+                        d.corrected_cells[cell] = correction
+
             p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
             print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
 
@@ -838,7 +838,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "cars"
+    dataset_name = "beers"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -875,9 +875,9 @@ if __name__ == "__main__":
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
+    app.FEATURE_GENERATORS = ['value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = False
+    app.RULE_BASED_VALUE_CLEANING = 'V1'
 
     seed = None
     correction_dictionary = app.run(data, seed)
