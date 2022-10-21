@@ -446,9 +446,9 @@ class Correction:
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
 
         # BEGIN Philipp's changes
+        d.value_corrections = {}
 
         # for debugging purposes only
-        d.value_corrections = {}
         d.domain_corrections = {}
         d.naive_vicinity_corrections = {}
         d.pdep_vicinity_corrections = {}

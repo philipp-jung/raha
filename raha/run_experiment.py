@@ -62,15 +62,15 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-10-18-value-cleaning-v2-renuver",
-        description="Komplette Benchmark mit den neuen Value-Cleaning Algos.",
+        name="2022-10-21-value-baseline-renuver",
+        description="Baseline, um Reinigung zu optimieren.",
         commit="",
         config={
             "dataset": "bridges",
             "sampling": "MCAR",
             "error_fraction": 0.01,
             "labeling_budget": 20,
-            "feature_generators": ["vicinity", "domain", "value"],
+            "feature_generators": ["value"],
             "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -88,15 +88,15 @@ if __name__ == "__main__":
     )
 
     rsk_baran = Ruska(
-        name="2022-10-18-value-cleaning-v2-baran",
-        description="Komplette Benchmark mit den neuen Value-Cleaning Algos.",
+        name="2022-10-21-value-baseline-baran",
+        description="Baseline, um Reinigung zu optimieren.",
         commit="",
         config={
             "dataset": "breast-cancer",
             "sampling": "MCAR",
             "error_fraction": 0.1,
             "labeling_budget": 20,
-            "feature_generators": ["vicinity", "domain", "value"],
+            "feature_generators": ["value"],
             "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
