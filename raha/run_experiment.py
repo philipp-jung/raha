@@ -46,17 +46,25 @@ def run_baran(c: dict):
 
     d = app.initialize_dataset(data)
     app.initialize_models(d)
+    # TODO make this use app.run()
     while len(d.labeled_tuples) < app.LABELING_BUDGET:
         app.sample_tuple(d, random_seed=None)
         app.label_with_ground_truth(d)
         app.update_models(d)
+        app.generate_features(d, synchronous=True)
         if app.RULE_BASED_VALUE_CLEANING:
             app.rule_based_value_cleaning(d)
-        app.generate_features(d, synchronous=True)
         app.predict_corrections(d)
+        if app.RULE_BASED_VALUE_CLEANING:
+            # write the rule-based value corrections into the corrections dictionary. This overwrites
+            # meta-learning result for domain & vicinity features. The idea is that the rule-based value
+            # corrections are super precise and thus should be used if possible.
+            for cell, correction in d.rule_based_value_corrections.items():
+                row, col = cell
+                if row not in d.labeled_tuples:  # don't overwrite user's corrections
+                    d.corrected_cells[cell] = correction
 
-    p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
-
+    p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
     return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
 
 
