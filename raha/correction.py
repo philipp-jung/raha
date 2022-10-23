@@ -39,6 +39,7 @@ from raha import pdep
 from raha import hpo
 from raha import helpers
 from raha import ml_helpers
+from raha import value_experiments
 
 ########################################
 
@@ -78,7 +79,7 @@ class Correction:
         # If not False, exclude value-based corrections from the training problem.
         # v1 uses rules from 2022W38
         # v2 uses rules from 2022W40
-        self.RULE_BASED_VALUE_CLEANING = 'V1'
+        self.RULE_BASED_VALUE_CLEANING = 'E1'
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -321,7 +322,7 @@ class Correction:
                 encoded_value_string = self._value_encoder(ed["old_value"], encoding)
                 if encoded_value_string in model:
                     # print(f'{model_name}: {encoded_value_string}')  ## nice when debugging value corrections
-                    if version == 'V1' or not version:
+                    if version in ['V1', 'E1', 'E2', 'E3'] or not version:
                         sum_scores = sum([len(x) for x in model[encoded_value_string].values()])
                     if model_name in ["remover", "adder", "replacer"]:
                         for transformation_string in model[encoded_value_string]:
@@ -339,7 +340,7 @@ class Correction:
                             new_value = ""
                             for i in range(len(index_character_dictionary)):
                                 new_value += index_character_dictionary[i]
-                            if version == 'V1' or not version:
+                            if version in ['V1', 'E1', 'E2', 'E3'] or not version:
                                 pr = len(model[encoded_value_string][transformation_string]) / sum_scores
                                 if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                     results_dictionary[new_value] = pr
@@ -348,7 +349,7 @@ class Correction:
                                 results_dictionary[new_value] = error_cells
                     if model_name == "swapper":
                         for new_value in model[encoded_value_string]:
-                            if version == 'V1' or not version:
+                            if version in ['V1', 'E1', 'E2', 'E3'] or not version:
                                 pr = len(model[encoded_value_string][new_value]) / sum_scores
                                 if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
                                     results_dictionary[new_value] = pr
@@ -720,11 +721,22 @@ class Correction:
         d.rule_based_value_corrections = {}
 
         for cell, value_corrections in d.value_corrections.items():
+            rule_based_suggestion = None
             if self.RULE_BASED_VALUE_CLEANING == 'V1':
                 value_suggestions = helpers.ValueSuggestionsV1(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion(d)
             elif self.RULE_BASED_VALUE_CLEANING == 'V2':
                 value_suggestions = helpers.ValueSuggestionsV2(cell, value_corrections)
-            rule_based_suggestion = value_suggestions.rule_based_suggestion(d)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion(d)
+            elif self.RULE_BASED_VALUE_CLEANING == 'E1':
+                value_suggestions = value_experiments.Experimente(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_e1(d)
+            elif self.RULE_BASED_VALUE_CLEANING == 'E2':
+                value_suggestions = value_experiments.Experimente(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_e2(d)
+            elif self.RULE_BASED_VALUE_CLEANING == 'E3':
+                value_suggestions = value_experiments.Experimente(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_e3(d)
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
 
@@ -838,7 +850,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "beers"
+    dataset_name = "cars"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -877,7 +889,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = 'V1'
+    app.RULE_BASED_VALUE_CLEANING = 'E2'
 
     seed = None
     correction_dictionary = app.run(data, seed)

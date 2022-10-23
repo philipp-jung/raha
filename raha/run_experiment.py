@@ -70,8 +70,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-10-21-value-baseline-renuver",
-        description="Baseline, um Reinigung zu optimieren.",
+        name="2022-10-23-value-experiments-ruska",
+        description="Erste Experimente, um die Value-Modelle zu optimieren.",
         commit="",
         config={
             "dataset": "bridges",
@@ -89,15 +89,15 @@ if __name__ == "__main__":
         ranges={
             "dataset": ["bridges", "cars"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "rule_based_value_cleaning": ["V1", "V2", False],
+            "rule_based_value_cleaning": ["E1", "E2", "E3"],
         },
         runs=3,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-10-21-value-baseline-baran",
-        description="Baseline, um Reinigung zu optimieren.",
+        name="2022-10-23-value-experiments-baran",
+        description="Erste Experimente, um die Value-Modelle zu optimieren.",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -114,7 +114,7 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "rayyan"],
-            "rule_based_value_cleaning": ["V1", "V2", False],
+            "rule_based_value_cleaning": ["E1", "E2", "E3"],
             },
         runs=3,
         save_path="/root/measurements/",
