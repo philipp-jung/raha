@@ -310,7 +310,7 @@ class Correction:
         """
         self._to_model_adder(model, ud["column"], ud["new_value"])
 
-    def _value_based_corrector(self, models, ed, version='V1'):
+    def _value_based_corrector(self, models, ed, version='V1', column_errors=[], column_corrections=[]):
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
@@ -321,41 +321,64 @@ class Correction:
                 results_dictionary = {}
                 encoded_value_string = self._value_encoder(ed["old_value"], encoding)
                 if encoded_value_string in model:
-                    # print(f'{model_name}: {encoded_value_string}')  ## nice when debugging value corrections
-                    if version in ['V1', 'E1', 'E2', 'E3'] or not version:
-                        sum_scores = sum([len(x) for x in model[encoded_value_string].values()])
+                    # Aus V1 urspruenglich.
+                    sum_scores = sum([len(x) for x in model[encoded_value_string].values()])
                     if model_name in ["remover", "adder", "replacer"]:
                         for transformation_string in model[encoded_value_string]:
-                            index_character_dictionary = {i: c for i, c in enumerate(ed["old_value"])}
-                            transformation = json.loads(transformation_string)
-                            for change_range_string in transformation:
-                                change_range = json.loads(change_range_string)
-                                if model_name in ["remover", "replacer"]:
-                                    for i in range(change_range[0], change_range[1]):
-                                        index_character_dictionary[i] = ""
-                                if model_name in ["adder", "replacer"]:
-                                    ov = "" if change_range[0] not in index_character_dictionary else \
-                                        index_character_dictionary[change_range[0]]
-                                    index_character_dictionary[change_range[0]] = transformation[change_range_string] + ov
-                            new_value = ""
-                            for i in range(len(index_character_dictionary)):
-                                new_value += index_character_dictionary[i]
-                            if version in ['V1', 'E1', 'E2', 'E3'] or not version:
-                                pr = len(model[encoded_value_string][transformation_string]) / sum_scores
-                                if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
-                                    results_dictionary[new_value] = pr
-                            elif version == 'V2':
-                                error_cells = model[encoded_value_string][transformation_string]
-                                results_dictionary[new_value] = error_cells
+                            features = {}
+                            new_value = helpers.assemble_cleaning_suggestion(transformation_string,
+                                                                             model_name,
+                                                                             ed['old_value'])
+
+                            # Aus V1 und ursprünglich Baran.
+                            pr_baran = len(model[encoded_value_string][transformation_string]) / sum_scores
+                            features['encoded_string_frequency'] = pr_baran
+
+                            # Aus V2.
+                            error_cells = model[encoded_value_string][transformation_string]
+                            features['error_cells'] = error_cells
+
+                            # Aus V3: Schaue auf allen Fehlern der selben Spalte, wie oft das Pattern
+                            # korrekt reinigt.
+                            correction_was_right = 0
+                            for i, error in enumerate(column_errors):
+                                correction = helpers.assemble_cleaning_suggestion(transformation_string,
+                                                                                  model_name,
+                                                                                  error)
+                                if correction == column_corrections[i]:
+                                    correction_was_right += 1
+
+                            success_rate_on_past_errors = None
+                            if len(column_errors) > 0:
+                                success_rate_on_past_errors = correction_was_right / len(column_errors)
+                            features['success_rate_on_past_errors'] = success_rate_on_past_errors
+                            results_dictionary[new_value] = features
+
                     if model_name == "swapper":
                         for new_value in model[encoded_value_string]:
-                            if version in ['V1', 'E1', 'E2', 'E3'] or not version:
-                                pr = len(model[encoded_value_string][new_value]) / sum_scores
-                                if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
-                                    results_dictionary[new_value] = pr
-                            elif version == 'V2':
-                                error_cells = model[encoded_value_string][new_value]
-                                results_dictionary[new_value] = error_cells
+                            features = {}
+
+                            # Aus V1.
+                            pr_baran = len(model[encoded_value_string][new_value]) / sum_scores
+                            features['encoded_string_frequency'] = pr_baran
+
+                            # Aus V2.
+                            error_cells = model[encoded_value_string][new_value]
+                            features['error_cells'] = error_cells
+
+                            # Aus V3.
+                            correction_was_right = 0
+                            for i, error in enumerate(column_errors):
+                                correction = helpers.assemble_cleaning_suggestion(transformation_string,
+                                                                                  model_name,
+                                                                                  error)
+                                if correction == column_corrections[i]:
+                                    correction_was_right += 1
+                            success_rate_on_past_errors = None
+                            if len(column_errors) > 0:
+                                success_rate_on_past_errors = correction_was_right / len(column_errors)
+                            features['success_rate_on_past_errors'] = success_rate_on_past_errors
+                            results_dictionary[new_value] = features
                 results_list.append(results_dictionary)
         return results_list
 
@@ -393,8 +416,7 @@ class Correction:
             sum_scores = sum(model[ed["column"]].values())
             for new_value in model[ed["column"]]:
                 pr = model[ed["column"]][new_value] / sum_scores
-                if pr >= self.MIN_CORRECTION_CANDIDATE_PROBABILITY:
-                    results_dictionary[new_value] = pr
+                results_dictionary[new_value] = pr
         return [results_dictionary]
 
     def initialize_dataset(self, d):
@@ -629,7 +651,17 @@ class Correction:
                         f'{self.VICINITY_FEATURE_GENERATOR}')
 
         if "value" in self.FEATURE_GENERATORS:
-            value_corrections = self._value_based_corrector(d.value_models, error_dictionary, self.RULE_BASED_VALUE_CLEANING)
+            column_corrections = []
+            column_errors = []
+            for labeled_cell in d.labeled_cells:
+                if labeled_cell in d.column_errors[cell[1]]:
+                    column_errors.append(d.dataframe.iloc[labeled_cell])
+                    column_corrections.append(d.labeled_cells[labeled_cell][1])
+            value_corrections = self._value_based_corrector(d.value_models,
+                                                            error_dictionary,
+                                                            self.RULE_BASED_VALUE_CLEANING,
+                                                            column_errors,
+                                                            column_corrections)
         if "domain" in self.FEATURE_GENERATORS:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
         if "imputer" in self.FEATURE_GENERATORS:
@@ -722,12 +754,13 @@ class Correction:
 
         for cell, value_corrections in d.value_corrections.items():
             rule_based_suggestion = None
+            # TODO continue here updating ValueSuggestionsV... to the new data structure.
             if self.RULE_BASED_VALUE_CLEANING == 'V1':
-                value_suggestions = helpers.ValueSuggestionsV1(cell, value_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion(d)
+                value_suggestions = helpers.ValueSuggestions(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_v1(d)
             elif self.RULE_BASED_VALUE_CLEANING == 'V2':
-                value_suggestions = helpers.ValueSuggestionsV2(cell, value_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion(d)
+                value_suggestions = helpers.ValueSuggestions(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_v2(d)
             elif self.RULE_BASED_VALUE_CLEANING == 'E1':
                 value_suggestions = value_experiments.Experimente(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_e1(d)
@@ -889,7 +922,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = 'E2'
+    app.RULE_BASED_VALUE_CLEANING = 'V2'
 
     seed = None
     correction_dictionary = app.run(data, seed)
