@@ -1,46 +1,5 @@
 import json
-import pandas as pd
-from typing import Tuple, List, Dict, Union
-from Levenshtein import distance as levenshtein_distance
-
-
-def lev_to_original_error(error_cell: Tuple[int, int],
-                          old_error_cells: List[Tuple[int, int]],
-                          df_dirty: pd.DataFrame) -> List[float]:
-    """
-    Bei mehreren unicode-encodeten Suggestions müssen wir eine Suggestion auswählen. Unser Maß hierzu ist
-    lev(ursprünglicher Fehler, Fehler aus dem die Regel erstellt wurde). Allgemein gibt es mehrere Fehler, aus denen
-    die Regel stammt.
-    @param error_cell: Coordinates of the error currently being corrected.
-    @param old_error_cells: List of Coordinates of the errors whose corrections were used to create the correcting rule.
-    @param df_dirty: Table that is being cleaned.
-    @return: Mean levenshtein distance between the error being corrected and the errors used to create the correcting
-    rule.
-    """
-    distances = []
-    error_value = df_dirty.iloc[error_cell]
-    for old_error_cell in old_error_cells:
-        old_error_value = df_dirty.iloc[old_error_cell]
-        distances.append(levenshtein_distance(error_value, old_error_value))
-    return distances
-
-
-def lev_to_original_corrections(correction_suggestion: str,
-                                old_error_cells: List[Tuple[int, int]],
-                                labeled_cells: Dict[Tuple[int, int], List]) -> List[float]:
-    """
-    Wenn lev_to_original_error keine minimale Distanz birgt, berechnen wir die Levenshtein-Distanz zwischen der ur-
-    sprünglichen Korrektur, der zur Operation geführt hat, und dem Korrekturvorschlag.
-    @param correction_suggestion: Suggestion to correct the current error
-    @param old_error_cells: List of Coordinates of the errors whose corrections were used to create the correcting rule
-    @param labeled_cells: Dictionary containing user input
-    @return: List of levenshtein distances.
-    """
-    distances = []
-    old_corrections = [labeled_cells[cell] for cell in old_error_cells]
-    for old_correction in old_corrections:
-        distances.append(levenshtein_distance(correction_suggestion, old_correction))
-    return distances
+from typing import Union
 
 
 def assemble_cleaning_suggestion(transformation_string: str, model_name: str, old_value: str) -> Union[str, None]:
