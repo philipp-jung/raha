@@ -341,7 +341,7 @@ class Correction:
                             # Aus V3: Schaue auf allen Fehlern der selben Spalte, wie oft das Pattern
                             # korrekt reinigt.
                             # Die Ausführung ist ziemlich teuer. Deshalb verstecke ich sie hinter dieser Abfrage.
-                            if self.RULE_BASED_VALUE_CLEANING == 'E4':
+                            if self.RULE_BASED_VALUE_CLEANING in ['E4', 'E5', 'E6']:
                                 correction_was_right = 0
                                 corrections = []
                                 for i, error in enumerate(column_errors):
@@ -374,7 +374,7 @@ class Correction:
                             features['error_cells'] = error_cells
 
                             # Aus V3.
-                            if self.RULE_BASED_VALUE_CLEANING == 'E4':
+                            if self.RULE_BASED_VALUE_CLEANING in ['E4', 'E5', 'E6']:
                                 correction_was_right = 0
                                 for i, error in enumerate(column_errors):
                                     if new_value == column_corrections[i]:
@@ -765,6 +765,9 @@ class Correction:
             elif self.RULE_BASED_VALUE_CLEANING == 'V2':
                 value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_v2(d)
+            elif self.RULE_BASED_VALUE_CLEANING == 'V3':
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_v3(d)
             elif self.RULE_BASED_VALUE_CLEANING == 'E1':
                 value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_e1()
@@ -777,6 +780,12 @@ class Correction:
             elif self.RULE_BASED_VALUE_CLEANING == 'E4':
                 value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_e4(d)
+            elif self.RULE_BASED_VALUE_CLEANING == 'E5':
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_e5()
+            elif self.RULE_BASED_VALUE_CLEANING == 'E6':
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_e6()
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
 
@@ -890,7 +899,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "rayyan"
+    dataset_name = "beers"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -929,7 +938,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = 'E4'
+    app.RULE_BASED_VALUE_CLEANING = 'V3'
 
     seed = None
     correction_dictionary = app.run(data, seed)

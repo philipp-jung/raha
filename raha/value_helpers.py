@@ -155,6 +155,26 @@ class ValueSuggestions:
                 return sorted_mean_distances[0][0]  # random choice
         return None
 
+    def rule_based_suggestion_v3(self, d) -> Union[str, None]:
+        choice = None
+        if self.n_certain_suggestions('encoded_string_frequency') == 0:  # No certain suggestion at all.
+            return choice
+
+        if self.n_certain_suggestions('encoded_string_frequency') == 1:  # Use the one certain suggestion.
+            choice = [suggestion for model_suggestions in self.suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1]
+            if len(choice) > 1:
+                raise ValueError(f"More than one certain suggestion: {choice}")
+            choice = choice[0]
+
+        elif self.n_certain_unicode_suggestions('encoded_string_frequency') == 1:  #  Use the one certain unicode-encoded suggestion.
+            # Das funktioniert in der Praxis nicht perfekt. Ich bekomme auf rayyan z.B. "1/13" als Vorschlag, obwohl ich
+            # einen datestring %m/%d/%y erwarte.
+            choice = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1]
+            if len(choice) > 1:
+                raise ValueError(f"More than one certain suggestion: {choice}")
+            choice = choice[0]
+        return choice
+
     def rule_based_suggestion_e1(self) -> Union[str, None]:
         """
         Aufbau E1, siehe Excalidraw für Flussdiagramm.
@@ -245,4 +265,58 @@ class ValueSuggestions:
             if len(unique_suggestions) == 1:
                 choice = list(unique_suggestions)[0]
 
+        return choice
+
+    def rule_based_suggestion_e5(self) -> Union[str, None]:
+        """
+        Aus der Sync mit Felix und Thorsten 2022-10-28 definiert.
+        @return:
+        """
+        choice = None
+
+        if self.n_certain_suggestions('success_rate_on_past_errors') == 0:
+            return None
+
+        elif self.n_certain_suggestions('success_rate_on_past_errors') == 1:
+            choice = [suggestion for model in self.suggestions for suggestion, features in model.items()
+                      if features['success_rate_on_past_errors'] == 1][0]
+        elif self.n_certain_suggestions('success_rate_on_past_errors') > 1:
+            if self.n_certain_suggestions('encoded_string_frequency') == 1:
+                choice = [sug for model in self.suggestions for sug, features in model.items() if
+                          features['encoded_string_frequency'] == 1][0]
+            elif self.n_certain_suggestions('encoded_string_frequency') > 1:
+                unique_sugs = {sug for model in self.suggestions for sug, features in model.items()
+                               if features['encoded_string_frequency'] == 1}
+                if len(unique_sugs) == 1:
+                    choice = list(unique_sugs)[0]
+
+        return choice
+
+    def rule_based_suggestion_e6(self) -> Union[str, None]:
+        """
+        E2 war das vielversprechendste Experiment. Kann ich es weiter aufbauen?
+        """
+        choice = None
+        if self.n_certain_suggestions('encoded_string_frequency') == 0:  # No certain suggestion at all.
+            return choice
+
+        if self.n_certain_suggestions('encoded_string_frequency') == 1:  # Use the one certain suggestion.
+            choice = [suggestion for model_suggestions in self.suggestions for suggestion, features in
+                      model_suggestions.items() if features['encoded_string_frequency'] == 1]
+            if len(choice) > 1:
+                raise ValueError(f"More than one certain suggestion: {choice}")
+            choice = choice[0]
+
+        elif self.n_certain_unicode_suggestions('encoded_string_frequency') == 1:  # Use the one certain unicode-encoded suggestion.
+            # Das funktioniert in der Praxis nicht perfekt. Ich bekomme auf rayyan z.B. "1/13" als Vorschlag, obwohl ich
+            # einen datestring %m/%d/%y erwarte.
+            choice = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, features in
+                      model_suggestions.items() if features['encoded_string_frequency'] == 1]
+            if len(choice) > 1:
+                raise ValueError(f"More than one certain suggestion: {choice}")
+            choice = choice[0]
+
+        elif self.n_certain_suggestions('success_rate_on_past_errors') == 1:
+            choice = [suggestion for model in self.suggestions for suggestion, features in model.items()
+                      if features['success_rate_on_past_errors'] == 1][0]
         return choice
