@@ -70,8 +70,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-10-23-value-experiments-ruska",
-        description="Erste Experimente, um die Value-Modelle zu optimieren.",
+        name="2022-10-28-e4-renuver",
+        description="Experiment 4",
         commit="",
         config={
             "dataset": "bridges",
@@ -84,20 +84,19 @@ if __name__ == "__main__":
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": True,
+            "rule_based_value_cleaning": "E4",
         },
         ranges={
             "dataset": ["bridges", "cars"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "rule_based_value_cleaning": ["E1", "E2", "E3"],
         },
         runs=3,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-10-23-value-experiments-baran",
-        description="Erste Experimente, um die Value-Modelle zu optimieren.",
+        name="2022-10-28-e4-baran",
+        description="Experiment 4",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -110,11 +109,10 @@ if __name__ == "__main__":
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": True,
+            "rule_based_value_cleaning": "E4",
         },
         ranges={
             "dataset": ["beers", "flights", "rayyan"],
-            "rule_based_value_cleaning": ["E1", "E2", "E3"],
             },
         runs=3,
         save_path="/root/measurements/",

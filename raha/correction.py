@@ -39,7 +39,7 @@ from raha import pdep
 from raha import hpo
 from raha import helpers
 from raha import ml_helpers
-from raha import value_experiments
+from raha import value_helpers
 
 ########################################
 
@@ -310,7 +310,7 @@ class Correction:
         """
         self._to_model_adder(model, ud["column"], ud["new_value"])
 
-    def _value_based_corrector(self, models, ed, version='V1', column_errors=[], column_corrections=[]):
+    def _value_based_corrector(self, models, ed, column_errors=[], column_corrections=[]):
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
@@ -340,18 +340,25 @@ class Correction:
 
                             # Aus V3: Schaue auf allen Fehlern der selben Spalte, wie oft das Pattern
                             # korrekt reinigt.
-                            correction_was_right = 0
-                            for i, error in enumerate(column_errors):
-                                correction = helpers.assemble_cleaning_suggestion(transformation_string,
-                                                                                  model_name,
-                                                                                  error)
-                                if correction == column_corrections[i]:
-                                    correction_was_right += 1
+                            # Die Ausführung ist ziemlich teuer. Deshalb verstecke ich sie hinter dieser Abfrage.
+                            if self.RULE_BASED_VALUE_CLEANING == 'E4':
+                                correction_was_right = 0
+                                corrections = []
+                                for i, error in enumerate(column_errors):
+                                    correction = helpers.assemble_cleaning_suggestion(transformation_string,
+                                                                                      model_name,
+                                                                                      error)
+                                    corrections.append(correction)
+                                    if correction == column_corrections[i]:
+                                        correction_was_right += 1
 
-                            success_rate_on_past_errors = None
-                            if len(column_errors) > 0:
-                                success_rate_on_past_errors = correction_was_right / len(column_errors)
-                            features['success_rate_on_past_errors'] = success_rate_on_past_errors
+                                success_rate_on_past_errors = None
+                                if len(column_errors) > 0:
+                                    success_rate_on_past_errors = correction_was_right / len(column_errors)
+                                    # nice for debugging rayyan date corrections.
+                                    # if ed['column'] == 8 and len(corrections) > 1:
+                                    #     a = 1
+                                features['success_rate_on_past_errors'] = success_rate_on_past_errors
                             results_dictionary[new_value] = features
 
                     if model_name == "swapper":
@@ -367,18 +374,16 @@ class Correction:
                             features['error_cells'] = error_cells
 
                             # Aus V3.
-                            correction_was_right = 0
-                            for i, error in enumerate(column_errors):
-                                correction = helpers.assemble_cleaning_suggestion(transformation_string,
-                                                                                  model_name,
-                                                                                  error)
-                                if correction == column_corrections[i]:
-                                    correction_was_right += 1
-                            success_rate_on_past_errors = None
-                            if len(column_errors) > 0:
-                                success_rate_on_past_errors = correction_was_right / len(column_errors)
-                            features['success_rate_on_past_errors'] = success_rate_on_past_errors
-                            results_dictionary[new_value] = features
+                            if self.RULE_BASED_VALUE_CLEANING == 'E4':
+                                correction_was_right = 0
+                                for i, error in enumerate(column_errors):
+                                    if new_value == column_corrections[i]:
+                                        correction_was_right += 1
+                                success_rate_on_past_errors = None
+                                if len(column_errors) > 0:
+                                    success_rate_on_past_errors = correction_was_right / len(column_errors)
+                                features['success_rate_on_past_errors'] = success_rate_on_past_errors
+                                results_dictionary[new_value] = features
                 results_list.append(results_dictionary)
         return results_list
 
@@ -659,7 +664,6 @@ class Correction:
                     column_corrections.append(d.labeled_cells[labeled_cell][1])
             value_corrections = self._value_based_corrector(d.value_models,
                                                             error_dictionary,
-                                                            self.RULE_BASED_VALUE_CLEANING,
                                                             column_errors,
                                                             column_corrections)
         if "domain" in self.FEATURE_GENERATORS:
@@ -756,20 +760,23 @@ class Correction:
             rule_based_suggestion = None
             # TODO continue here updating ValueSuggestionsV... to the new data structure.
             if self.RULE_BASED_VALUE_CLEANING == 'V1':
-                value_suggestions = helpers.ValueSuggestions(cell, value_corrections)
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_v1(d)
             elif self.RULE_BASED_VALUE_CLEANING == 'V2':
-                value_suggestions = helpers.ValueSuggestions(cell, value_corrections)
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_v2(d)
             elif self.RULE_BASED_VALUE_CLEANING == 'E1':
-                value_suggestions = value_experiments.Experimente(cell, value_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion_e1(d)
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_e1()
             elif self.RULE_BASED_VALUE_CLEANING == 'E2':
-                value_suggestions = value_experiments.Experimente(cell, value_corrections)
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_e2(d)
             elif self.RULE_BASED_VALUE_CLEANING == 'E3':
-                value_suggestions = value_experiments.Experimente(cell, value_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion_e3(d)
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_e3()
+            elif self.RULE_BASED_VALUE_CLEANING == 'E4':
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_e4(d)
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
 
@@ -883,7 +890,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "cars"
+    dataset_name = "rayyan"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -922,7 +929,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = 'V2'
+    app.RULE_BASED_VALUE_CLEANING = 'E4'
 
     seed = None
     correction_dictionary = app.run(data, seed)
