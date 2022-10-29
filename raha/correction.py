@@ -40,6 +40,7 @@ from raha import hpo
 from raha import helpers
 from raha import ml_helpers
 from raha import value_helpers
+from raha import value_moonshot
 
 ########################################
 
@@ -172,6 +173,7 @@ class Correction:
                             a = [t for t in self._wikitext_segmenter(previous_text) if t]
                             b = [t for t in self._wikitext_segmenter(revision_text) if t]
                             s = difflib.SequenceMatcher(None, a, b)
+
                             for tag, i1, i2, j1, j2 in s.get_opcodes():
                                 if tag == "equal":
                                     continue
@@ -235,31 +237,13 @@ class Correction:
         """
         This method updates the value-based error corrector models with a given update dictionary.
         """
-        if self.ONLINE_PHASE or (ud["new_value"] and len(ud["new_value"]) <= self.MAX_VALUE_LENGTH and
-                                 ud["old_value"] and len(ud["old_value"]) <= self.MAX_VALUE_LENGTH and
-                                 ud["old_value"] != ud["new_value"] and ud["old_value"].lower() != "n/a" and
-                                 not ud["old_value"][0].isdigit()):
-            remover_transformation = {}
-            adder_transformation = {}
-            replacer_transformation = {}
-            s = difflib.SequenceMatcher(None, ud["old_value"], ud["new_value"])
-            for tag, i1, i2, j1, j2 in s.get_opcodes():
-                index_range = json.dumps([i1, i2])
-                if tag == "delete":
-                    remover_transformation[index_range] = ""
-                if tag == "insert":
-                    adder_transformation[index_range] = ud["new_value"][j1:j2]
-                if tag == "replace":
-                    replacer_transformation[index_range] = ud["new_value"][j1:j2]
-            for encoding in self.VALUE_ENCODINGS:
-                encoded_old_value = self._value_encoder(ud["old_value"], encoding)
-                if remover_transformation:
-                    self._to_value_model_adder(models[0], encoded_old_value, json.dumps(remover_transformation), cell)
-                if adder_transformation:
-                    self._to_value_model_adder(models[1], encoded_old_value, json.dumps(adder_transformation), cell)
-                if replacer_transformation:
-                    self._to_value_model_adder(models[2], encoded_old_value, json.dumps(replacer_transformation), cell)
-                self._to_value_model_adder(models[3], encoded_old_value, ud["new_value"], cell)
+        if (ud["new_value"] and len(ud["new_value"]) <= self.MAX_VALUE_LENGTH and
+            ud["old_value"] and len(ud["old_value"]) <= self.MAX_VALUE_LENGTH and
+            ud["old_value"] != ud["new_value"] and ud["old_value"].lower() != "n/a"):
+            s = difflib.SequenceMatcher(None, ud["old_value"], ud["new_value"], autojunk=False)
+            o = s.get_opcodes()
+            models.update_rules(ud['old_value'], json.dumps(o), cell)
+
 
     def pretrain_value_based_models(self, revision_data_folder):
         """
@@ -373,7 +357,6 @@ class Correction:
                             error_cells = model[encoded_value_string][new_value]
                             features['error_cells'] = error_cells
 
-                            # Aus V3.
                             if self.RULE_BASED_VALUE_CLEANING in ['E4', 'E5', 'E6']:
                                 correction_was_right = 0
                                 for i, error in enumerate(column_errors):
@@ -444,13 +427,9 @@ class Correction:
         """
         This method initializes the error corrector models.
         """
-        d.value_models = [{}, {}, {}, {}]
+        d.value_models = value_moonshot.ValueCleaning()
         d.pdeps = {c: {cc: {} for cc in range(d.dataframe.shape[1])}
                    for c in range(d.dataframe.shape[1])}
-        if os.path.exists(self.PRETRAINED_VALUE_BASED_MODELS_PATH):
-            d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
-            if self.VERBOSE:
-                print("The pretrained value-based models are loaded.")
 
         d.domain_models = {}
 
@@ -878,7 +857,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "beers"
+    dataset_name = "rayyan"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
