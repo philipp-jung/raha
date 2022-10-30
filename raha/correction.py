@@ -240,9 +240,7 @@ class Correction:
         if (ud["new_value"] and len(ud["new_value"]) <= self.MAX_VALUE_LENGTH and
             ud["old_value"] and len(ud["old_value"]) <= self.MAX_VALUE_LENGTH and
             ud["old_value"] != ud["new_value"] and ud["old_value"].lower() != "n/a"):
-            s = difflib.SequenceMatcher(None, ud["old_value"], ud["new_value"], autojunk=False)
-            o = s.get_opcodes()
-            models.update_rules(ud['old_value'], json.dumps(o), cell)
+            models.update_rules(ud['old_value'], ud['new_value'], cell)
 
 
     def pretrain_value_based_models(self, revision_data_folder):
@@ -298,77 +296,8 @@ class Correction:
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
-        results_list = []
-        for m, model_name in enumerate(["remover", "adder", "replacer", "swapper"]):
-            model = models[m]
-            for encoding in self.VALUE_ENCODINGS:
-                results_dictionary = {}
-                encoded_value_string = self._value_encoder(ed["old_value"], encoding)
-                if encoded_value_string in model:
-                    # Aus V1 urspruenglich.
-                    sum_scores = sum([len(x) for x in model[encoded_value_string].values()])
-                    if model_name in ["remover", "adder", "replacer"]:
-                        for transformation_string in model[encoded_value_string]:
-                            features = {}
-                            new_value = helpers.assemble_cleaning_suggestion(transformation_string,
-                                                                             model_name,
-                                                                             ed['old_value'])
-
-                            # Aus V1 und ursprünglich Baran.
-                            pr_baran = len(model[encoded_value_string][transformation_string]) / sum_scores
-                            features['encoded_string_frequency'] = pr_baran
-
-                            # Aus V2. Muss jemals optimiert werden, kann das weg.
-                            error_cells = model[encoded_value_string][transformation_string]
-                            features['error_cells'] = error_cells
-
-                            # Aus V3: Schaue auf allen Fehlern der selben Spalte, wie oft das Pattern
-                            # korrekt reinigt.
-                            # Die Ausführung ist ziemlich teuer. Deshalb verstecke ich sie hinter dieser Abfrage.
-                            if self.RULE_BASED_VALUE_CLEANING in ['E4', 'E5', 'E6']:
-                                correction_was_right = 0
-                                corrections = []
-                                for i, error in enumerate(column_errors):
-                                    correction = helpers.assemble_cleaning_suggestion(transformation_string,
-                                                                                      model_name,
-                                                                                      error)
-                                    corrections.append(correction)
-                                    if correction == column_corrections[i]:
-                                        correction_was_right += 1
-
-                                success_rate_on_past_errors = None
-                                if len(column_errors) > 0:
-                                    success_rate_on_past_errors = correction_was_right / len(column_errors)
-                                    # nice for debugging rayyan date corrections.
-                                    # if ed['column'] == 8 and len(corrections) > 1:
-                                    #     a = 1
-                                features['success_rate_on_past_errors'] = success_rate_on_past_errors
-                            results_dictionary[new_value] = features
-
-                    if model_name == "swapper":
-                        for new_value in model[encoded_value_string]:
-                            features = {}
-
-                            # Aus V1.
-                            pr_baran = len(model[encoded_value_string][new_value]) / sum_scores
-                            features['encoded_string_frequency'] = pr_baran
-
-                            # Aus V2.
-                            error_cells = model[encoded_value_string][new_value]
-                            features['error_cells'] = error_cells
-
-                            if self.RULE_BASED_VALUE_CLEANING in ['E4', 'E5', 'E6']:
-                                correction_was_right = 0
-                                for i, error in enumerate(column_errors):
-                                    if new_value == column_corrections[i]:
-                                        correction_was_right += 1
-                                success_rate_on_past_errors = None
-                                if len(column_errors) > 0:
-                                    success_rate_on_past_errors = correction_was_right / len(column_errors)
-                                features['success_rate_on_past_errors'] = success_rate_on_past_errors
-                                results_dictionary[new_value] = features
-                results_list.append(results_dictionary)
-        return results_list
+        features = models.cleaning_features(ed['old_value'], column_errors, column_corrections)
+        return features
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
         """
@@ -641,10 +570,10 @@ class Correction:
                 if labeled_cell in d.column_errors[cell[1]]:
                     column_errors.append(d.dataframe.iloc[labeled_cell])
                     column_corrections.append(d.labeled_cells[labeled_cell][1])
-            value_corrections = self._value_based_corrector(d.value_models,
-                                                            error_dictionary,
-                                                            column_errors,
-                                                            column_corrections)
+            value_corrections: dict = self._value_based_corrector(d.value_models,
+                                                                  error_dictionary,
+                                                                  column_errors,
+                                                                  column_corrections)
         if "domain" in self.FEATURE_GENERATORS:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
         if "imputer" in self.FEATURE_GENERATORS:
@@ -735,17 +664,29 @@ class Correction:
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
         d.rule_based_value_corrections = {}
 
-        for cell, value_corrections in d.value_corrections.items():
-            rule_based_suggestion = None
-            # TODO continue here updating ValueSuggestionsV... to the new data structure.
-            if self.RULE_BASED_VALUE_CLEANING == 'V1':
-                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion_v1(d)
-            elif self.RULE_BASED_VALUE_CLEANING == 'V3':
-                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion_v3(d)
-            if rule_based_suggestion is not None:
-                d.rule_based_value_corrections[cell] = rule_based_suggestion
+        for cell, cleaning_features in d.value_corrections.items():
+            perfect_created = []
+            perfect_success = []
+            if cleaning_features is not None:
+                for correction in cleaning_features:
+                    if cleaning_features[correction]['relative_times_created'] == 1.0:
+                        perfect_created.append(correction)
+                    if cleaning_features[correction]['relative_success_old_errors'] == 1.0:
+                        perfect_success.append(correction)
+
+            if len(perfect_created) == 0 and len(perfect_success) == 0:
+                pass
+            elif len(perfect_created) == 0 and len(perfect_success) == 1:
+                d.rule_based_value_corrections[cell] = perfect_success[0]
+            elif len(perfect_created) == 1 and len(perfect_success) == 0:
+                d.rule_based_value_corrections[cell] = perfect_created[0]
+            elif len(perfect_created) == 1 and len(perfect_success) == 1:
+                if perfect_created[0] == perfect_success[0]:
+                    d.rule_based_value_corrections[cell] = perfect_created[0]
+            else:
+                # Hier muss ich weiterentwickeln
+                breakpoint()
+                a = 1
 
     def predict_corrections(self, d):
         for j in d.column_errors:
@@ -857,7 +798,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "rayyan"
+    dataset_name = "beers"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -896,7 +837,7 @@ if __name__ == "__main__":
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['value']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = 'V3'
+    app.RULE_BASED_VALUE_CLEANING = 'MOONSHOT'
 
     seed = None
     correction_dictionary = app.run(data, seed)
