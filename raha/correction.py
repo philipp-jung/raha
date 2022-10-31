@@ -369,7 +369,7 @@ class Correction:
                             pr_baran = len(model[encoded_value_string][new_value]) / sum_scores
                             features['encoded_string_frequency'] = pr_baran
 
-                            # Aus V2.
+                            # Aus V2. Wird zzt. nicht benutzt und kann eigentlich weg.
                             error_cells = model[encoded_value_string][new_value]
                             features['error_cells'] = error_cells
 
@@ -915,7 +915,7 @@ if __name__ == "__main__":
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['value']
+    app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
     app.IMPUTER_CACHE_MODEL = True
     app.RULE_BASED_VALUE_CLEANING = 'V3'
 

@@ -129,3 +129,4 @@ class ValueSuggestions:
             if len(choice) > 1:
                 raise ValueError(f"More than one certain suggestion: {choice}")
             choice = choice[0]
+        return choice
