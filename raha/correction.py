@@ -758,7 +758,6 @@ class Correction:
 
         for cell, value_corrections in d.value_corrections.items():
             rule_based_suggestion = None
-            # TODO continue here updating ValueSuggestionsV... to the new data structure.
             if self.RULE_BASED_VALUE_CLEANING == 'V1':
                 value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_v1(d)
@@ -770,7 +769,11 @@ class Correction:
 
     def predict_corrections(self, d):
         for j in d.column_errors:
-            x_train, y_train, x_test, user_corrected_cells, all_error_correction_suggestions = ml_helpers.generate_train_test_data(d.column_errors[j], d.labeled_cells, d.pair_features)
+            x_train, y_train, x_test, user_corrected_cells, all_error_correction_suggestions = ml_helpers.generate_train_test_data(d.column_errors[j],
+                                                                                                                                   d.labeled_cells,
+                                                                                                                                   d.pair_features,
+                                                                                                                                   d.dataframe,
+                                                                                                                                   5)
             for error_cell in user_corrected_cells:
                 d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
 
