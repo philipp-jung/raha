@@ -75,6 +75,7 @@ class Correction:
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
         self.N_BEST_PDEPS = 3  # recommend up to 10. Ignored when using 'naive' feature generator.
+        self.SYNTHESIZE_TRAIN_DATA = True  # leverages error-free tuples to synthesize training data.
 
         # If not False, exclude value-based corrections from the training problem.
         # v1 uses rules from 2022W38
@@ -773,7 +774,7 @@ class Correction:
                                                                                                                                    d.labeled_cells,
                                                                                                                                    d.pair_features,
                                                                                                                                    d.dataframe,
-                                                                                                                                   5)
+                                                                                                                                   self.SYNTHESIZE_TRAIN_DATA)
             for error_cell in user_corrected_cells:
                 d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
 
@@ -921,6 +922,7 @@ if __name__ == "__main__":
     app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
     app.IMPUTER_CACHE_MODEL = True
     app.RULE_BASED_VALUE_CLEANING = 'V3'
+    app.SYNTHESIZE_TRAIN_DATA = True  # leverages error-free tuples to synthesize training data.
 
     seed = None
     correction_dictionary = app.run(data, seed)

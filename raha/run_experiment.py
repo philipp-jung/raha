@@ -43,10 +43,12 @@ def run_baran(c: dict):
     app.VICINITY_FEATURE_GENERATOR = c["vicinity_feature_generator"]
     app.N_BEST_PDEPS = c["n_best_pdeps"]
     app.RULE_BASED_VALUE_CLEANING = c['rule_based_value_cleaning']
+    app.SYNTHESIZE_TRAIN_DATA = c['synthesize_train_data']
 
     d = app.initialize_dataset(data)
     app.initialize_models(d)
     # TODO make this use app.run()
+    precisions, recalls, f1s = [], [], []
     while len(d.labeled_tuples) < app.LABELING_BUDGET:
         app.sample_tuple(d, random_seed=None)
         app.label_with_ground_truth(d)
@@ -64,14 +66,15 @@ def run_baran(c: dict):
                 if row not in d.labeled_tuples:  # don't overwrite user's corrections
                     d.corrected_cells[cell] = correction
 
-    p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
-    return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
+        p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
+        precisions.append(p), recalls.append(r), f1s.append(f)
+    return {"result": {"precision": precisions, "recall": recalls, "f1": f1s}, "config": c}
 
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-10-28-e4-renuver",
-        description="Experiment 4",
+        name="2022-11-03-synthesize-train-data-renuver",
+        description="See if synthesizing train data improves cleaning.",
         commit="",
         config={
             "dataset": "bridges",
@@ -85,18 +88,20 @@ if __name__ == "__main__":
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V3",
+            "synthesize_train_data": False,
         },
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
+            "synthesize_train_data": [True, False],
         },
         runs=3,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-10-28-e4-baran",
-        description="Experiment 4",
+        name="2022-11-03-synthesize-train-data-baran",
+        description="See if synthesizing train data improves cleaning.",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -110,9 +115,11 @@ if __name__ == "__main__":
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V3",
+            "synthesize_train_data": False,
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "synthesize_train_data": [True, False],
             },
         runs=3,
         save_path="/root/measurements/",
