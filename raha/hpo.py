@@ -1,3 +1,4 @@
+import math
 import sklearn.linear_model
 from sklearn.model_selection import GridSearchCV
 
@@ -11,7 +12,7 @@ def cross_validated_estimator(x_train, y_train):
     Darum lasse ich zuerst das baseline-Modell durchlaufen. Wenn das schon einen perfekten Score erzielt, wird es
     direkt genommen.
     """
-    cv = 2 if sum(y_train) < 4 else 3
+    cv = 2 if sum(y_train) < 4 else math.floor(math.log2(sum(y_train)))  # okayer Wert: 3-5
     classifiers = {
         'baseline': {
             'name': 'Baseline',

@@ -1,4 +1,3 @@
-import random
 import pandas as pd
 from typing import List, Dict, Tuple
 
@@ -33,12 +32,13 @@ def generate_train_test_data(column_errors: Dict,
                 x_test.append(pair_features[error_cell][suggestion])
                 all_error_correction_suggestions.append([error_cell, suggestion])
 
-    for synth_cell in synthetic_error_cells:
-        correction_suggestions = pair_features.get(synth_cell, [])
-        for suggestion in correction_suggestions:
-            x_train.append(pair_features[synth_cell][suggestion])
-            all_error_correction_suggestions.append([synth_cell, suggestion])
-            suggestion_is_correction = (suggestion == df_dirty.iloc[synth_cell])
-            y_train.append(int(suggestion_is_correction))
+    if synthesize_train_data:
+        for synth_cell in synthetic_error_cells:
+            correction_suggestions = pair_features.get(synth_cell, [])
+            for suggestion in correction_suggestions:
+                x_train.append(pair_features[synth_cell][suggestion])
+                all_error_correction_suggestions.append([synth_cell, suggestion])
+                suggestion_is_correction = (suggestion == df_dirty.iloc[synth_cell])
+                y_train.append(int(suggestion_is_correction))
 
     return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions

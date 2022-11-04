@@ -70,7 +70,7 @@ class Correction:
 
         # Philipps changes
         # Choose from "value", "domain", "vicinity", "imputer". Original Baran uses all of them.
-        self.FEATURE_GENERATORS = ["value", "domain", "vicinity"]
+        self.FEATURE_GENERATORS = ["value", "domain", "vicinity", "imputer"]
         self.VICINITY_ORDERS = [1]  # Baran default
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
@@ -882,7 +882,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "beers"
+    dataset_name = "bridges"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -911,7 +911,7 @@ if __name__ == "__main__":
     data = raha.dataset.Dataset(data_dict, n_rows=N_ROWS)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
-    app.LABELING_BUDGET = 20
+    app.LABELING_BUDGET = 1
     app.VERBOSE = True
 
     app.VICINITY_ORDERS = [1, 2]

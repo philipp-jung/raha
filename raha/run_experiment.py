@@ -73,7 +73,7 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-11-03-synthesize-train-data-renuver",
+        name="2022-11-04-synthesize-train-data-renuver",
         description="See if synthesizing train data improves cleaning.",
         commit="",
         config={
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     )
 
     rsk_baran = Ruska(
-        name="2022-11-03-synthesize-train-data-baran",
+        name="2022-11-04-synthesize-train-data-baran",
         description="See if synthesizing train data improves cleaning.",
         commit="",
         config={
