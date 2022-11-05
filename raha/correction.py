@@ -75,12 +75,13 @@ class Correction:
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
         self.N_BEST_PDEPS = 3  # recommend up to 10. Ignored when using 'naive' feature generator.
-        self.SYNTHESIZE_TRAIN_DATA = True  # leverages error-free tuples to synthesize training data.
+        # samples (factor * error_cells - error_cells) synthetic errors in the vincinity model.
+        self.SYNTH_ERROR_FACTOR = 1.0
 
         # If not False, exclude value-based corrections from the training problem.
         # v1 uses rules from 2022W38
         # v2 uses rules from 2022W40
-        self.RULE_BASED_VALUE_CLEANING = 'E1'
+        self.RULE_BASED_VALUE_CLEANING = 'V3'
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -774,7 +775,7 @@ class Correction:
                                                                                                                                    d.labeled_cells,
                                                                                                                                    d.pair_features,
                                                                                                                                    d.dataframe,
-                                                                                                                                   self.SYNTHESIZE_TRAIN_DATA)
+                                                                                                                                   self.SYNTH_ERROR_FACTOR)
             for error_cell in user_corrected_cells:
                 d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
 
@@ -802,8 +803,9 @@ class Correction:
 
                 # set final cleaning suggestion from meta-learning result. User corrected cells are not overwritten!
                 for index, predicted_label in enumerate(predicted_labels):
-                    cell, predicted_correction = all_error_correction_suggestions[index]  # pick the right suggestion
                     if predicted_label:
+                        cell, predicted_correction = all_error_correction_suggestions[
+                        index]  # pick the right suggestion
                         d.corrected_cells[cell] = predicted_correction
 
             elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
@@ -882,7 +884,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "bridges"
+    dataset_name = "cars"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -911,7 +913,7 @@ if __name__ == "__main__":
     data = raha.dataset.Dataset(data_dict, n_rows=N_ROWS)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
-    app.LABELING_BUDGET = 1
+    app.LABELING_BUDGET = 20
     app.VERBOSE = True
 
     app.VICINITY_ORDERS = [1, 2]
@@ -919,10 +921,11 @@ if __name__ == "__main__":
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['domain', 'vicinity', 'value']
+    app.FEATURE_GENERATORS = ['vicinity']
     app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = 'V3'
-    app.SYNTHESIZE_TRAIN_DATA = True  # leverages error-free tuples to synthesize training data.
+    app.RULE_BASED_VALUE_CLEANING = False
+    app.SYNTH_ERROR_FACTOR = 1.0  # factor > 1 leverages error-free tuples to synthesize training data.
+    # factor = 1 is without synthesized training data.
 
     seed = None
     correction_dictionary = app.run(data, seed)

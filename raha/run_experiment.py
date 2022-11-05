@@ -43,7 +43,7 @@ def run_baran(c: dict):
     app.VICINITY_FEATURE_GENERATOR = c["vicinity_feature_generator"]
     app.N_BEST_PDEPS = c["n_best_pdeps"]
     app.RULE_BASED_VALUE_CLEANING = c['rule_based_value_cleaning']
-    app.SYNTHESIZE_TRAIN_DATA = c['synthesize_train_data']
+    app.SYNTH_ERROR_FACTOR = c['synth_error_factor']
 
     d = app.initialize_dataset(data)
     app.initialize_models(d)
@@ -73,53 +73,53 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-11-04-synthesize-train-data-renuver",
-        description="See if synthesizing train data improves cleaning.",
+        name="2022-11-05-augment-train-data-renuver",
+        description="Carefully sparkle in some synthetic training data.",
         commit="",
         config={
             "dataset": "bridges",
             "sampling": "MCAR",
             "error_fraction": 0.01,
             "labeling_budget": 20,
-            "feature_generators": ["domain", "vicinity", "value"],
+            "feature_generators": ["vicinity"],
             "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V3",
-            "synthesize_train_data": False,
+            "rule_based_value_cleaning": False,
+            "synth_error_factor": 1
         },
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "synthesize_train_data": [True, False],
+            "synth_error_factor": [1, 2, 3, 5, 10, 50],
         },
         runs=3,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-11-04-synthesize-train-data-baran",
-        description="See if synthesizing train data improves cleaning.",
+        name="2022-11-05-augment-train-data-baran",
+        description="Carefully sparkle in some synthetic training data.",
         commit="",
         config={
             "dataset": "breast-cancer",
             "sampling": "MCAR",
             "error_fraction": 0.1,
             "labeling_budget": 20,
-            "feature_generators": ["domain", "vicinity", "value"],
+            "feature_generators": ["vicinity"],
             "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V3",
-            "synthesize_train_data": False,
+            "rule_based_value_cleaning": False,
+            "synth_error_factor": 1
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "synthesize_train_data": [True, False],
+            "synth_error_factor": [1, 2, 3, 5, 10, 50],
             },
         runs=3,
         save_path="/root/measurements/",
