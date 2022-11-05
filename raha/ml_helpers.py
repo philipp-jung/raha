@@ -38,7 +38,10 @@ def generate_train_test_data(column_errors: Dict,
     n_synthetic_cells = math.floor(len(corrected_cells)*(synth_error_factor - 1))
     if n_synthetic_cells > 0:
         possible_synthetic_cells = [cell for cell in pair_features if cell not in column_errors]
-        synthetic_error_cells = random.sample(possible_synthetic_cells, k=n_synthetic_cells)
+        try:
+            synthetic_error_cells = random.sample(possible_synthetic_cells, k=n_synthetic_cells)
+        except ValueError:  # sample larger than population
+            synthetic_error_cells = possible_synthetic_cells
 
     for synth_cell in synthetic_error_cells:
         correction_suggestions = pair_features.get(synth_cell, [])
