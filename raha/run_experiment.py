@@ -73,21 +73,21 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-11-05-augment-train-data-renuver",
-        description="Carefully sparkle in some synthetic training data.",
+        name="2022-11-06-augment-train-data-renuver",
+        description="Sparkle in some synthetic training data with all models.",
         commit="",
         config={
             "dataset": "bridges",
             "sampling": "MCAR",
             "error_fraction": 0.01,
             "labeling_budget": 20,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["domain", "vicinity", "value"],
             "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": False,
+            "rule_based_value_cleaning": "V3",
             "synth_error_factor": 1
         },
         ranges={
@@ -100,21 +100,21 @@ if __name__ == "__main__":
     )
 
     rsk_baran = Ruska(
-        name="2022-11-05-augment-train-data-baran",
-        description="Carefully sparkle in some synthetic training data.",
+        name="2022-11-06-augment-train-data-baran",
+        description="Sparkle in some synthetic training data with all models.",
         commit="",
         config={
             "dataset": "breast-cancer",
             "sampling": "MCAR",
             "error_fraction": 0.1,
             "labeling_budget": 20,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["domain", "vicinity", "value"],
             "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": False,
+            "rule_based_value_cleaning": "V3",
             "synth_error_factor": 1
         },
         ranges={

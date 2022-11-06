@@ -45,7 +45,7 @@ def cross_validated_estimator(x_train, y_train):
         est = classifiers[classifier]['estimator']
         params = classifiers[classifier]['parameters']
         # DEBUG: Warum geht scoring='precision' nicht?
-        grid_search = GridSearchCV(estimator=est, param_grid=params, cv=cv, n_jobs=5, scoring='f1')
+        grid_search = GridSearchCV(estimator=est, param_grid=params, cv=cv, n_jobs=1, scoring='f1')
         gs_clf = grid_search.fit(x_train, y_train)
         clfs.append(gs_clf)
         if gs_clf.best_score_ > best_score:
