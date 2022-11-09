@@ -884,7 +884,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "cars"
+    dataset_name = "bridges"
 
     if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
         data_dict = {
@@ -917,15 +917,16 @@ if __name__ == "__main__":
     app.VERBOSE = True
 
     app.VICINITY_ORDERS = [1, 2]
-    app.CLASSIFICATION_MODEL = "CV"
+    app.CLASSIFICATION_MODEL = "ABC"
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
     app.FEATURE_GENERATORS = ['vicinity']
     app.IMPUTER_CACHE_MODEL = True
     app.RULE_BASED_VALUE_CLEANING = False
-    app.SYNTH_ERROR_FACTOR = 1.0  # factor > 1 leverages error-free tuples to synthesize training data.
-    # factor = 1 is without synthesized training data.
+    # factor > 1 leverages error-free tuples to synthesize training data.
+    # factor = 1 is the same as not synthesizing training data.
+    app.SYNTH_ERROR_FACTOR = 1.5
 
     seed = None
     correction_dictionary = app.run(data, seed)
