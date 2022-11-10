@@ -9,14 +9,15 @@ openml_ids_binary = [725, 310, 1046, 823, 137, 42493, 4135, 251, 151, 40922]
 openml_ids_multiclass = [40498, 30, 1459, 1481, 184, 375, 32, 41027, 6, 40685]
 
 fractions = [0.01, 0.05, 0.1, 0.3, 0.5]
-corruptions = {'swapped_values': SwappedValues, 'categorical_shift': CategoricalShift}
+corruptions = {# 'swapped_values': SwappedValues,
+               'categorical_shift': CategoricalShift}
 
 
-def dataset_paths(data_id: int, corruption: str, error_pct: int) -> Tuple[Path, Path]:
+def dataset_paths(data_id: int, corruption: str, error_fraction: int) -> Tuple[Path, Path]:
     directory = Path(f'openml/{data_id}')
     directory.mkdir(exist_ok=True)
     clean_path = directory / 'clean.csv'
-    corrupt_path = directory / f'{corruption}_{error_pct}'
+    corrupt_path = directory / f'{corruption}_{int(100*error_fraction)}'
     return clean_path, corrupt_path
 
 
@@ -45,8 +46,9 @@ def fetch_corrupt_dataset(data_id: int) -> List[Dict]:
                              'fraction':  fraction,
                              'error_pct': error_pct})
 
-            clean_path, corrupt_path = dataset_paths(data_id, corruption_name, error_pct)
-            df_corrupted.to_csv(corrupt_path, index=False)
+            clean_path, corrupt_path = dataset_paths(data_id, corruption_name, fraction)
+            df_corrupted.to_parquet(str(corrupt_path) + '.parquet', index=False)
+            df_corrupted.to_csv(str(corrupt_path) + '.csv', index=False)
 
     return metadata
 
@@ -56,10 +58,10 @@ if __name__ == '__main__':
     for dataset_id in openml_ids_binary:
         metadata = fetch_corrupt_dataset(dataset_id)
         metadata = [{**x, 'dataset_type': 'binary classification'} for x in metadata]
-        metadatas.append(metadata)
+        metadatas.extend(metadata)
     for dataset_id in openml_ids_multiclass:
         metadata = fetch_corrupt_dataset(dataset_id)
         metadata = [{**x, 'dataset_type': 'multiclass classification'} for x in metadata]
-        metadatas.append(metadata)
+        metadatas.extend(metadata)
     errors = pd.DataFrame(metadatas)
     errors.to_csv("error_stats.csv", index=False)
