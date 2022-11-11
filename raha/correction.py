@@ -884,7 +884,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "bridges"
+    dataset_name = "30"
     error_fraction = 1
     version = 1
 
@@ -904,9 +904,10 @@ if __name__ == "__main__":
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['domain', 'value']
+    app.FEATURE_GENERATORS = ['domain', 'vicinity', 'imputer']
     app.IMPUTER_CACHE_MODEL = True
     app.RULE_BASED_VALUE_CLEANING = False
+    app.TRAINING_TIME_LIMIT = 30
     # factor > 1 leverages error-free tuples to synthesize training data.
     # factor = 1 is the same as not synthesizing training data.
     app.SYNTH_ERROR_FACTOR = 1.5
