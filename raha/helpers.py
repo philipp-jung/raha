@@ -1,8 +1,81 @@
 import json
-from typing import Union
+from typing import Union, Dict
 
 
-def assemble_cleaning_suggestion(transformation_string: str, model_name: str, old_value: str) -> Union[str, None]:
+def get_data_dict(
+    dataset_name: str,
+    error_fraction: Union[int, None] = None,
+    version: Union[int, None] = None,
+) -> Dict:
+    """
+    I currently use three different sources of datasets: the original Baran paper, the RENUVER paper, and datasets that
+    I assemble from OpenML. Depending on the source, the datasets differ:
+    - Datasets from the Baran paper are uniquely identified by their name.
+    - Datasets from the RENUVER paper are uniquely identified by their name, error_fraction and version in [1, 5].
+    - Datasets that I generate from OpenML are identified by their name and error_fraction.
+    @param dataset_name: Name of the dataset.
+    @param error_fraction: Baran datasets don't have this. The % of cells containing errors in RENUVER datasets. The %
+    of values in a column in OpenML datasets.
+    @param version: generating errors in Jenga is not deterministic. So it makes sense to create a couple of versions
+    to avoid outlier corruptions.
+    @return: A data dictionary as expected by Baran. I hacked this to make the imputer feature generator use a version
+    of the dataset that comes with dtypes.
+    """
+    if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
+        data_dict = {
+            "name": dataset_name,
+            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_{error_fraction}_{version}.csv",
+            "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
+        }
+    elif dataset_name in [
+        "beers",
+        "flights",
+        "hospital",
+        "tax",
+        "rayyan",
+        "toy",
+    ]:  # Baran dataset
+        data_dict = {
+            "name": dataset_name,
+            "path": f"../datasets/{dataset_name}/dirty.csv",
+            "clean_path": f"../datasets/{dataset_name}/clean.csv",
+        }
+    elif dataset_name in [str(x) for x in [
+        725,
+        310,
+        1046,
+        823,
+        137,
+        42493,
+        4135,
+        251,
+        151,
+        40922,
+        40498,
+        30,
+        1459,
+        1481,
+        184,
+        375,
+        32,
+        41027,
+        6,
+        40685]
+    ]:  # OpenML dataset
+        data_dict = {
+            "name": dataset_name,
+            "path": f"../datasets/openml/{dataset_name}/categorical_shift_{error_fraction}.csv",
+            "parquet_path": f"../datasets/openml/{dataset_name}/categorical_shift_{error_fraction}.parquet",
+            "clean_path": f"../datasets/openml/{dataset_name}/clean.csv",
+        }
+    else:
+        raise ValueError("Dataset not supported.")
+    return data_dict
+
+
+def assemble_cleaning_suggestion(
+    transformation_string: str, model_name: str, old_value: str
+) -> Union[str, None]:
     """
     Use the operation encoded in transform_string and the model_name to identify the operation to transform old_value
     into a cleaning suggestion
@@ -19,9 +92,14 @@ def assemble_cleaning_suggestion(transformation_string: str, model_name: str, ol
             for i in range(change_range[0], change_range[1]):
                 index_character_dictionary[i] = ""
         if model_name in ["adder", "replacer"]:
-            ov = "" if change_range[0] not in index_character_dictionary else \
-                index_character_dictionary[change_range[0]]
-            index_character_dictionary[change_range[0]] = transformation[change_range_string] + ov
+            ov = (
+                ""
+                if change_range[0] not in index_character_dictionary
+                else index_character_dictionary[change_range[0]]
+            )
+            index_character_dictionary[change_range[0]] = (
+                transformation[change_range_string] + ov
+            )
     new_value = ""
     try:
         for i in range(len(index_character_dictionary)):

@@ -134,7 +134,7 @@ def get_clean_table(df: pd.DataFrame, detected_cells: dict) -> pd.DataFrame:
     """
     Returns the biggest subset of a dataframe that doesn't contain any errors.
 
-    @param df: The dataframe to be cleaned, containing errors.
+    @param df: The typed dataframe to be cleaned, containing errors.
     @param detected_cells: Baran standard way of storing information on cells with errors.
     @return: Dataframe that doesn't contain values that contain errors.
     """

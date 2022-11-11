@@ -64,17 +64,17 @@ class Correction:
         self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
         self.REVISION_WINDOW_SIZE = 5
-
         # debug variable
         self.n_true_classes = {}
 
         # Philipps changes
         # Choose from "value", "domain", "vicinity", "imputer". Original Baran uses all of them.
-        self.FEATURE_GENERATORS = ["value", "domain", "vicinity", "imputer"]
+        self.FEATURE_GENERATORS = ["imputer"]
         self.VICINITY_ORDERS = [1]  # Baran default
         self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
         self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
         self.N_BEST_PDEPS = 3  # recommend up to 10. Ignored when using 'naive' feature generator.
+        self.TRAINING_TIME_LIMIT = 30
         # samples (factor * error_cells - error_cells) synthetic errors in the vincinity model.
         self.SYNTH_ERROR_FACTOR = 1.0
 
@@ -407,7 +407,7 @@ class Correction:
 
         result = {}
         for correction, probability in prob_d_sorted.items():
-            # make sure that suggested correction is likely and isn't the old error
+            # make sure that suggested correction is likely and isn't the error.
             if probability > 0 and correction != ed['old_value']:
                 result[correction] = probability
         # TODO normalize probabilities when old error gets deleted
@@ -719,7 +719,7 @@ class Correction:
 
         # train imputer model for each column.
         if 'imputer' in self.FEATURE_GENERATORS:
-            df_clean_subset = imputer.get_clean_table(d.dataframe, d.detected_cells)
+            df_clean_subset = imputer.get_clean_table(d.typed_dataframe, d.detected_cells)
             for i_col, col in enumerate(df_clean_subset.columns):
                 imp = imputer.train_cleaning_model(df_clean_subset,
                                                    d.name,
@@ -885,27 +885,10 @@ class Correction:
 ########################################
 if __name__ == "__main__":
     dataset_name = "bridges"
+    error_fraction = 1
+    version = 1
 
-    if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
-        data_dict = {
-            "name": dataset_name,
-            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_5_3.csv",
-            "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
-        }
-    elif dataset_name in ["beers", "flights", "hospital", "tax",  "rayyan", "toy"]:
-        data_dict = {
-            "name": dataset_name,
-            "path": f"../datasets/{dataset_name}/dirty.csv",
-            "clean_path": f"../datasets/{dataset_name}/clean.csv",
-        }
-    elif dataset_name in ["adult", "breast-cancer", "letter", "nursery"]:
-        data_dict = {
-            "name": dataset_name,
-            "path": f"../datasets/{dataset_name}/MCAR/dirty_5.csv",
-            "clean_path": f"../datasets/{dataset_name}/clean.csv",
-        }
-    else:
-        raise ValueError("Dataset not supported.")
+    data_dict = helpers.get_data_dict(dataset_name, error_fraction, version)
 
     # Set this parameter to keep runtimes low when debugging
     N_ROWS = None
@@ -921,7 +904,7 @@ if __name__ == "__main__":
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['vicinity']
+    app.FEATURE_GENERATORS = ['domain', 'value']
     app.IMPUTER_CACHE_MODEL = True
     app.RULE_BASED_VALUE_CLEANING = False
     # factor > 1 leverages error-free tuples to synthesize training data.
