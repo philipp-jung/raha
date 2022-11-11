@@ -13,6 +13,7 @@
 import re
 import sys
 import html
+from typing import Union
 
 import pandas
 ########################################
@@ -34,6 +35,7 @@ class Dataset:
         self.name = dataset_dictionary["name"]
         self.path = dataset_dictionary["path"]
         self.dataframe = self.read_csv_dataset(dataset_dictionary["path"])
+        self.typed_dataframe = self.read_parquet_dataset(dataset_dictionary.get('parquet_path'))
         if n_rows is not None:
             self.dataframe = self.dataframe.iloc[:n_rows, :]
         if "clean_path" in dataset_dictionary:
@@ -58,6 +60,18 @@ class Dataset:
         value = re.sub("[\t\n ]+", " ", value, re.UNICODE)
         value = value.strip("\t\n ")
         return value
+
+    def read_parquet_dataset(self, dataset_path: Union[str, None]):
+        """
+        This method reads a dataset from a parquet file path. This is nice for the imputer because
+        parquet preserves dtypes.
+        I did not figure out how to apply the value_normalizer function to solely non-numerical
+        columns. Hope this still works!
+        """
+        if dataset_path is None:
+            return None
+        dataframe = pandas.read_parquet(dataset_path)
+        return dataframe
 
     def read_csv_dataset(self, dataset_path):
         """
