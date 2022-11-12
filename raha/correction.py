@@ -681,6 +681,8 @@ class Correction:
         d.imputer_corrections[cell] = imputer_corrections
 
         if not self.RULE_BASED_VALUE_CLEANING:
+            # construct value corrections as in original Baran
+            value_corrections = [{correction: d[correction]['encoded_string_frequency']} for d in value_corrections for correction in d]
             models_corrections = value_corrections \
             + domain_corrections \
             + [corrections for order in naive_vicinity_corrections for corrections in order] \
@@ -884,8 +886,8 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "30"
-    error_fraction = 1
+    dataset_name = "725"
+    error_fraction = 5
     version = 1
 
     data_dict = helpers.get_data_dict(dataset_name, error_fraction, version)
@@ -904,7 +906,7 @@ if __name__ == "__main__":
     app.VICINITY_FEATURE_GENERATOR = "pdep"
     app.N_BEST_PDEPS = 3
     app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['domain', 'vicinity', 'imputer']
+    app.FEATURE_GENERATORS = ['value']
     app.IMPUTER_CACHE_MODEL = True
     app.RULE_BASED_VALUE_CLEANING = False
     app.TRAINING_TIME_LIMIT = 30
@@ -916,8 +918,3 @@ if __name__ == "__main__":
     correction_dictionary = app.run(data, seed)
     p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
     print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
-
-    # --------------------
-    # app.extract_revisions(wikipedia_dumps_folder="../wikipedia-data")
-    # app.pretrain_value_based_models(revision_data_folder="../wikipedia-data/revision-data")
-########################################
