@@ -3,44 +3,28 @@ from typing import Union, Dict
 
 
 def get_data_dict(
-    dataset_name: str,
+    dataset_name: Union[str, int],
     error_fraction: Union[int, None] = None,
     version: Union[int, None] = None,
 ) -> Dict:
     """
-    I currently use three different sources of datasets: the original Baran paper, the RENUVER paper, and datasets that
-    I assemble from OpenML. Depending on the source, the datasets differ:
+    I currently use four different sources of datasets: the original Baran paper, the RENUVER paper, datasets that
+    I assemble from OpenML, and hand-selected datasets from the UCI website. Depending on the source, the datasets
+    differ:
     - Datasets from the Baran paper are uniquely identified by their name.
     - Datasets from the RENUVER paper are uniquely identified by their name, error_fraction and version in [1, 5].
     - Datasets that I generate from OpenML are identified by their name and error_fraction.
+    - Datasets that I generate from UCI are identified by their name and error_fraction.
     @param dataset_name: Name of the dataset.
-    @param error_fraction: Baran datasets don't have this. The % of cells containing errors in RENUVER datasets. The %
-    of values in a column in OpenML datasets.
+    @param error_fraction: Baran datasets don't have this. The % of cells containing errors in RENUVER datasets and the
+    Ruska-corrupted datasets. The % of values in a column in OpenML datasets. Value between 0 - 100.
     @param version: generating errors in Jenga is not deterministic. So it makes sense to create a couple of versions
     to avoid outlier corruptions.
     @return: A data dictionary as expected by Baran. I hacked this to make the imputer feature generator use a version
     of the dataset that comes with dtypes.
     """
-    if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
-        data_dict = {
-            "name": dataset_name,
-            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_{error_fraction}_{version}.csv",
-            "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
-        }
-    elif dataset_name in [
-        "beers",
-        "flights",
-        "hospital",
-        "tax",
-        "rayyan",
-        "toy",
-    ]:  # Baran dataset
-        data_dict = {
-            "name": dataset_name,
-            "path": f"../datasets/{dataset_name}/dirty.csv",
-            "clean_path": f"../datasets/{dataset_name}/clean.csv",
-        }
-    elif dataset_name in [str(x) for x in [
+    dataset_name = str(dataset_name)
+    openml_dataset_ids = [
         725,
         310,
         1046,
@@ -60,14 +44,51 @@ def get_data_dict(
         32,
         41027,
         6,
-        40685]
-    ]:  # OpenML dataset
+        40685,
+    ]
+    openml_dataset_ids = [str(x) for x in openml_dataset_ids]
+
+    if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
+        data_dict = {
+            "name": dataset_name,
+            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_{error_fraction}_{version}.csv",
+            "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
+        }
+
+    elif dataset_name in [
+        "beers",
+        "flights",
+        "hospital",
+        "tax",
+        "rayyan",
+        "toy",
+    ]:  # Baran dataset
+        data_dict = {
+            "name": dataset_name,
+            "path": f"../datasets/{dataset_name}/dirty.csv",
+            "clean_path": f"../datasets/{dataset_name}/clean.csv",
+        }
+
+    elif dataset_name in openml_dataset_ids:  # OpenML dataset
         data_dict = {
             "name": dataset_name,
             "path": f"../datasets/openml/{dataset_name}/categorical_shift_{error_fraction}.csv",
             "parquet_path": f"../datasets/openml/{dataset_name}/categorical_shift_{error_fraction}.parquet",
             "clean_path": f"../datasets/openml/{dataset_name}/clean.csv",
         }
+
+    elif dataset_name in [
+        "adult",
+        "breast-cancer",
+        "letter",
+        "nursery",
+    ]:  # ruska-corrupted datasets
+        data_dict = {
+            "name": dataset_name,
+            "path": f"../datasets/{dataset_name}/MCAR/dirty_{error_fraction}.csv",
+            "clean_path": f"../datasets/{dataset_name}/clean.csv",
+        }
+
     else:
         raise ValueError("Dataset not supported.")
     return data_dict

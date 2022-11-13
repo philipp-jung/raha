@@ -51,15 +51,18 @@ class Correction:
     The main class.
     """
 
-    def __init__(self, labeling_budget: int, feature_generators: List[str], vicinity_orders: List[int], vicinity_feature_generator: str,
-                 imputer_cache_model: bool, n_best_pdeps: int, training_time_limit: int, synth_error_factor: float,
+    def __init__(self, labeling_budget: int, classification_model: str, feature_generators: List[str],
+                 vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
+                 n_best_pdeps: int, training_time_limit: int, synth_error_factor: float,
                  rule_based_value_cleaning: Union[str, bool]):
         """
         Parameters of the cleaning experiment.
+        @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
+        @param classification_model: "ABC" for sklearn's AdaBoostClassifier with n_estimators=100, "CV" for
+        cross-validation. Baran default is "ABC".
         @param feature_generators: Four feature generators are available: 'imputer', 'domain', 'vicinity' and 'value'.
         Pass them as strings in a list to make Baran use them, e.g. ['domain', 'vicinity', 'imputer']. The Baran
-        defautl is ['domain', 'vicinity', 'value'].
-        @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
+        default is ['domain', 'vicinity', 'value'].
         @param vicinity_orders: The pdep approach enables the usage of higher-order dependencies to clean data. Each
         order that Baran shall use is passed as an integer, e.g. [1, 2]. The Baran default is [1].
         @param vicinity_feature_generator: How vicinity features are generated. Either 'pdep' or 'naive'. The Baran
@@ -899,10 +902,12 @@ class Correction:
                     if row not in d.labeled_tuples:  # don't overwrite user's corrections
                         d.corrected_cells[cell] = correction
 
-            p, r, f = data.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
-            print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
+            if self.VERBOSE:
+                p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
+                print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
 
-        print("Number of true classes: {}".format(self.n_true_classes))
+        if self.VERBOSE:
+            print("Number of true classes: {}".format(self.n_true_classes))
         return d.corrected_cells
 ########################################
 
@@ -935,9 +940,9 @@ if __name__ == "__main__":
     # factor = 1 is the same as not synthesizing training data.
     synth_error_factor = 1.5
 
-    app = Correction(labeling_budget, feature_generators, vicinity_orders, vicinity_feature_generator,
-                     imputer_cache_model, n_best_pdeps, training_time_limit, synth_error_factor,
-                     rule_based_value_cleaning)
+    app = Correction(labeling_budget, classification_model,  feature_generators, vicinity_orders,
+                     vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
+                     synth_error_factor, rule_based_value_cleaning)
     app.VERBOSE = True
     seed = None
     correction_dictionary = app.run(data, seed)
