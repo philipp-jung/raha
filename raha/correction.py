@@ -30,7 +30,7 @@ import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
 import sklearn.tree
-from typing import Dict
+from typing import Dict, List, Union
 import pandas as pd
 
 import raha
@@ -51,15 +51,38 @@ class Correction:
     The main class.
     """
 
-    def __init__(self):
+    def __init__(self, labeling_budget: int, feature_generators: List[str], vicinity_orders: List[int], vicinity_feature_generator: str,
+                 imputer_cache_model: bool, n_best_pdeps: int, training_time_limit: int, synth_error_factor: float,
+                 rule_based_value_cleaning: Union[str, bool]):
+        """
+        Parameters of the cleaning experiment.
+        @param feature_generators: Four feature generators are available: 'imputer', 'domain', 'vicinity' and 'value'.
+        Pass them as strings in a list to make Baran use them, e.g. ['domain', 'vicinity', 'imputer']. The Baran
+        defautl is ['domain', 'vicinity', 'value'].
+        @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
+        @param vicinity_orders: The pdep approach enables the usage of higher-order dependencies to clean data. Each
+        order that Baran shall use is passed as an integer, e.g. [1, 2]. The Baran default is [1].
+        @param vicinity_feature_generator: How vicinity features are generated. Either 'pdep' or 'naive'. The Baran
+        default is 'naive'.
+        @param imputer_cache_model: Whether or not the AutoGluon model used in the imputer model is stored after
+        training and used from cache. Otherwise, a model is retrained with every user-provided tuple. If true, reduces
+        cleaning time significantly.
+        @param n_best_pdeps: When using vicinity_feature_generator = 'pdep', dependencies are ranked via the pdep
+        measure. After ranking, the n_best_pdeps dependencies are used to provide cleaning suggestions. A good heuristic
+        is to set this to 3.
+        @param training_time_limit: Limit in seconds of how long the AutoGluon imputer model is trained.
+        @param synth_error_factor:
+        @param rule_based_value_cleaning: Use rule based cleaning approach if 'V1' or 'V3'. Set to False to have value
+        cleaning be part of the meta learning, which is the Baran default.
+        """
         self.PRETRAINED_VALUE_BASED_MODELS_PATH = ""
         self.VALUE_ENCODINGS = ["identity", "unicode"]
-        self.CLASSIFICATION_MODEL = "ABC"   # "ABC" oder irgendwas anderes, was dann zu crossvalidation fuehrt.
+        self.CLASSIFICATION_MODEL = "ABC"   # "ABC" oder "CV", was zu Crossvalidation führt.
         self.IGNORE_SIGN = "<<<IGNORE_THIS_VALUE>>>"
         self.VERBOSE = False
-        self.SAVE_RESULTS = True
+        self.SAVE_RESULTS = False
         self.ONLINE_PHASE = False
-        self.LABELING_BUDGET = 20
+        self.LABELING_BUDGET = labeling_budget
         self.MIN_CORRECTION_CANDIDATE_PROBABILITY = 0.00
         self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
@@ -69,19 +92,19 @@ class Correction:
 
         # Philipps changes
         # Choose from "value", "domain", "vicinity", "imputer". Original Baran uses all of them.
-        self.FEATURE_GENERATORS = ["imputer"]
-        self.VICINITY_ORDERS = [1]  # Baran default
-        self.VICINITY_FEATURE_GENERATOR = "naive"  # "naive" or "pdep". naive is Baran's original strategy.
-        self.IMPUTER_CACHE_MODEL = True  # use cached model if true. train new imputer model otherwise.
-        self.N_BEST_PDEPS = 3  # recommend up to 10. Ignored when using 'naive' feature generator.
-        self.TRAINING_TIME_LIMIT = 30
+        self.FEATURE_GENERATORS = feature_generators # ["imputer"]
+        self.VICINITY_ORDERS = vicinity_orders  # Baran default [1]
+        self.VICINITY_FEATURE_GENERATOR = vicinity_feature_generator  # "naive" or "pdep". naive is Baran's original strategy.
+        self.IMPUTER_CACHE_MODEL = imputer_cache_model  # use cached model if true. train new imputer model otherwise.
+        self.N_BEST_PDEPS = n_best_pdeps # 3. recommend up to 10. Ignored when using 'naive' feature generator.
+        self.TRAINING_TIME_LIMIT = training_time_limit
         # samples (factor * error_cells - error_cells) synthetic errors in the vincinity model.
-        self.SYNTH_ERROR_FACTOR = 1.0
+        self.SYNTH_ERROR_FACTOR = synth_error_factor
 
         # If not False, exclude value-based corrections from the training problem.
         # v1 uses rules from 2022W38
         # v2 uses rules from 2022W40
-        self.RULE_BASED_VALUE_CLEANING = 'V3'
+        self.RULE_BASED_VALUE_CLEANING = rule_based_value_cleaning
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -886,34 +909,36 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
+    # Load Dataset object
     dataset_name = "725"
     error_fraction = 5
     version = 1
-
     data_dict = helpers.get_data_dict(dataset_name, error_fraction, version)
 
     # Set this parameter to keep runtimes low when debugging
     N_ROWS = None
-
     data = raha.dataset.Dataset(data_dict, n_rows=N_ROWS)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
-    app = Correction()
-    app.LABELING_BUDGET = 20
-    app.VERBOSE = True
 
-    app.VICINITY_ORDERS = [1, 2]
-    app.CLASSIFICATION_MODEL = "ABC"
-    app.VICINITY_FEATURE_GENERATOR = "pdep"
-    app.N_BEST_PDEPS = 3
-    app.SAVE_RESULTS = False
-    app.FEATURE_GENERATORS = ['value']
-    app.IMPUTER_CACHE_MODEL = True
-    app.RULE_BASED_VALUE_CLEANING = False
-    app.TRAINING_TIME_LIMIT = 30
+    # configure Cleaning object
+    labeling_budget = 20
+    vicinity_orders = [1, 2]
+    classification_model = "ABC"
+    vicinity_feature_generator = "pdep"
+    n_best_pdeps = 3
+    feature_generators = ['value']
+    imputer_cache_model = True
+    rule_based_value_cleaning = False
+    training_time_limit = 30
+
     # factor > 1 leverages error-free tuples to synthesize training data.
     # factor = 1 is the same as not synthesizing training data.
-    app.SYNTH_ERROR_FACTOR = 1.5
+    synth_error_factor = 1.5
 
+    app = Correction(labeling_budget, feature_generators, vicinity_orders, vicinity_feature_generator,
+                     imputer_cache_model, n_best_pdeps, training_time_limit, synth_error_factor,
+                     rule_based_value_cleaning)
+    app.VERBOSE = True
     seed = None
     correction_dictionary = app.run(data, seed)
     p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
