@@ -54,7 +54,7 @@ class Correction:
     def __init__(self, labeling_budget: int, classification_model: str, feature_generators: List[str],
                  vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
                  n_best_pdeps: int, training_time_limit: int, synth_error_factor: float,
-                 rule_based_value_cleaning: Union[str, bool]):
+                 rule_based_value_cleaning: Union[str, bool], synth_mode: str):
         """
         Parameters of the cleaning experiment.
         @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
@@ -74,13 +74,27 @@ class Correction:
         measure. After ranking, the n_best_pdeps dependencies are used to provide cleaning suggestions. A good heuristic
         is to set this to 3.
         @param training_time_limit: Limit in seconds of how long the AutoGluon imputer model is trained.
-        @param synth_error_factor:
+        @param synth_error_factor: samples (factor * error_cells - error_cells) synthetic errors in the vincinity model.
         @param rule_based_value_cleaning: Use rule based cleaning approach if 'V1' or 'V3'. Set to False to have value
-        cleaning be part of the meta learning, which is the Baran default.
+        cleaning be part of the meta learning, which is the Baran default. V1 uses rules from 2022W38, V3 from 2022W40.
+        @param synth_mode: 'original' or 'parity'.
         """
+        # Philipps changes
+        self.SYNTH_MODE = synth_mode
+        self.SYNTH_ERROR_FACTOR = synth_error_factor
+
+        self.FEATURE_GENERATORS = feature_generators
+        self.VICINITY_ORDERS = vicinity_orders
+        self.VICINITY_FEATURE_GENERATOR = vicinity_feature_generator
+        self.IMPUTER_CACHE_MODEL = imputer_cache_model
+        self.N_BEST_PDEPS = n_best_pdeps
+        self.TRAINING_TIME_LIMIT = training_time_limit
+        self.RULE_BASED_VALUE_CLEANING = rule_based_value_cleaning
+        self.CLASSIFICATION_MODEL = classification_model
+
+        # original Baran
         self.PRETRAINED_VALUE_BASED_MODELS_PATH = ""
         self.VALUE_ENCODINGS = ["identity", "unicode"]
-        self.CLASSIFICATION_MODEL = "ABC"   # "ABC" oder "CV", was zu Crossvalidation führt.
         self.IGNORE_SIGN = "<<<IGNORE_THIS_VALUE>>>"
         self.VERBOSE = False
         self.SAVE_RESULTS = False
@@ -90,24 +104,9 @@ class Correction:
         self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
         self.REVISION_WINDOW_SIZE = 5
-        # debug variable
+
+        # variable for debugging CV
         self.n_true_classes = {}
-
-        # Philipps changes
-        # Choose from "value", "domain", "vicinity", "imputer". Original Baran uses all of them.
-        self.FEATURE_GENERATORS = feature_generators # ["imputer"]
-        self.VICINITY_ORDERS = vicinity_orders  # Baran default [1]
-        self.VICINITY_FEATURE_GENERATOR = vicinity_feature_generator  # "naive" or "pdep". naive is Baran's original strategy.
-        self.IMPUTER_CACHE_MODEL = imputer_cache_model  # use cached model if true. train new imputer model otherwise.
-        self.N_BEST_PDEPS = n_best_pdeps # 3. recommend up to 10. Ignored when using 'naive' feature generator.
-        self.TRAINING_TIME_LIMIT = training_time_limit
-        # samples (factor * error_cells - error_cells) synthetic errors in the vincinity model.
-        self.SYNTH_ERROR_FACTOR = synth_error_factor
-
-        # If not False, exclude value-based corrections from the training problem.
-        # v1 uses rules from 2022W38
-        # v2 uses rules from 2022W40
-        self.RULE_BASED_VALUE_CLEANING = rule_based_value_cleaning
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -803,7 +802,8 @@ class Correction:
                                                                                                                                    d.labeled_cells,
                                                                                                                                    d.pair_features,
                                                                                                                                    d.dataframe,
-                                                                                                                                   self.SYNTH_ERROR_FACTOR)
+                                                                                                                                   self.SYNTH_ERROR_FACTOR,
+                                                                                                                                   self.SYNTH_MODE)
             for error_cell in user_corrected_cells:
                 d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
 
@@ -821,13 +821,17 @@ class Correction:
                         self.n_true_classes[len(d.labeled_tuples)].append({'clf': str(gs_clf),
                                                                            'clf__n_estimators': 100,
                                                                            'n_y_true': sum(y_train)})
-                    else:
+                    elif self.CLASSIFICATION_MODEL == "CV":
                         gs_clf = hpo.cross_validated_estimator(x_train, y_train)
                         self.n_true_classes[len(d.labeled_tuples)].append({'clf': gs_clf.best_estimator_,
                                                                            'score': gs_clf.best_score_,
                                                                            **gs_clf.best_params_,
                                                                            'n_y_true': sum(y_train)})
+                    else:
+                        raise ValueError('Unknown model.')
                     predicted_labels = gs_clf.predict(x_test)
+
+
 
                 # set final cleaning suggestion from meta-learning result. User corrected cells are not overwritten!
                 for index, predicted_label in enumerate(predicted_labels):
@@ -909,13 +913,11 @@ class Correction:
         if self.VERBOSE:
             print("Number of true classes: {}".format(self.n_true_classes))
         return d.corrected_cells
-########################################
 
 
-########################################
 if __name__ == "__main__":
     # Load Dataset object
-    dataset_name = "725"
+    dataset_name = "cars"
     error_fraction = 5
     version = 1
     data_dict = helpers.get_data_dict(dataset_name, error_fraction, version)
@@ -928,21 +930,20 @@ if __name__ == "__main__":
     # configure Cleaning object
     labeling_budget = 20
     vicinity_orders = [1, 2]
-    classification_model = "ABC"
+    classification_model = "CV"
     vicinity_feature_generator = "pdep"
     n_best_pdeps = 3
-    feature_generators = ['value']
+    feature_generators = ['vicinity']
     imputer_cache_model = True
     rule_based_value_cleaning = False
     training_time_limit = 30
 
-    # factor > 1 leverages error-free tuples to synthesize training data.
-    # factor = 1 is the same as not synthesizing training data.
-    synth_error_factor = 1.5
+    synth_error_factor = 3
+    synth_mode = 'parity'
 
     app = Correction(labeling_budget, classification_model,  feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
-                     synth_error_factor, rule_based_value_cleaning)
+                     synth_error_factor, rule_based_value_cleaning, synth_mode)
     app.VERBOSE = True
     seed = None
     correction_dictionary = app.run(data, seed)

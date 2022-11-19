@@ -8,40 +8,75 @@ def generate_train_test_data(column_errors: Dict,
                              labeled_cells: Dict[Tuple[int, int], List],
                              pair_features: Dict[Tuple[int, int], Dict[str, List]],
                              df_dirty: pd.DataFrame,
-                             synth_error_factor: float):
+                             synth_error_factor: float,
+                             mode: str):
     """
     If the product of synth_error_factor * (number of error correction suggestions) is larger than the number of
     error correction suggestions, the difference gets filled with synthesized errors.
     """
+    MIN_POSITIVE_SAMPLES = 8  # willkürlich gesetzt gerade
     x_train = []  # train feature vectors
     y_train = []  # train labels
     x_test = []  # test features vectors
     all_error_correction_suggestions = []  # all cleaning suggestions for all errors flattened in a list
     corrected_cells = {}  # take user input as a cleaning result if available
 
-    for error_cell in column_errors:
-        correction_suggestions = pair_features.get(error_cell, [])
-        if error_cell in labeled_cells and labeled_cells[error_cell][0] == 1:
-            # If an error-cell has been labeled by the user, use it to create the training dataset.
-            # The second condition is always true if error detection and user labeling work without an error.
-            for suggestion in correction_suggestions:
-                x_train.append(pair_features[error_cell][suggestion])  # Puts features into x_train
-                suggestion_is_correction = (suggestion == labeled_cells[error_cell][1])
-                y_train.append(int(suggestion_is_correction))
-                corrected_cells[error_cell] = labeled_cells[error_cell][1]  # user input as cleaning result
-        else:  # put all cells that contain an error without user-correction in the "test" set.
-            for suggestion in correction_suggestions:
-                x_test.append(pair_features[error_cell][suggestion])
-                all_error_correction_suggestions.append([error_cell, suggestion])
-
-    synthetic_error_cells = []
-    n_synthetic_cells = math.floor(len(corrected_cells)*(synth_error_factor - 1))
-    if n_synthetic_cells > 0:
+    if mode == 'parity':  # 50/50 as suggested by Thorsten in 2022W45
         possible_synthetic_cells = [cell for cell in pair_features if cell not in column_errors]
-        try:
-            synthetic_error_cells = random.sample(possible_synthetic_cells, k=n_synthetic_cells)
-        except ValueError:  # sample larger than population
-            synthetic_error_cells = possible_synthetic_cells
+        n_synthetic_cells = min(MIN_POSITIVE_SAMPLES, math.floor(len(possible_synthetic_cells) / 2))
+        synthetic_error_cells = random.sample(possible_synthetic_cells, n_synthetic_cells)
+
+        for error_cell in column_errors:
+            correction_suggestions = pair_features.get(error_cell, [])
+            if error_cell in labeled_cells and labeled_cells[error_cell][0] == 1:
+                # If an error-cell has been labeled by the user, use it to create the training dataset.
+                # The second condition is always true if error detection and user labeling work without an error.
+                for suggestion in correction_suggestions:
+                    x_train.append(pair_features[error_cell][suggestion])  # Puts features into x_train
+                    suggestion_is_correction = (suggestion == labeled_cells[error_cell][1])
+                    y_train.append(int(suggestion_is_correction))
+                    corrected_cells[error_cell] = labeled_cells[error_cell][1]  # user input as cleaning result
+            else:  # put all cells that contain an error without user-correction in the "test" set.
+                for suggestion in correction_suggestions:
+                    x_test.append(pair_features[error_cell][suggestion])
+                    all_error_correction_suggestions.append([error_cell, suggestion])
+
+        if sum(y_train) > 0:  # extend x_train with its own user-sampled input
+            # Es ist nicht so einfach, die Anzahl der user-inputs an dieser Stelle zu duplizieren. Weiter oben im code
+            # ist es auch nicht offensichtlich. Also füge ich so lange tupel an x_train und y_train an, bis
+            # sum(y_train) == n_synthetic_error_cells gilt. Das sollte halbwegs ok sein :)
+            i = 0
+            while sum(y_train) <= n_synthetic_cells:
+                if i == len(y_train):
+                    i = 0
+                x_train.append(x_train[i])
+                y_train.append(y_train[i])
+                i += 1
+
+    elif mode == 'original':  # as defined originally in 2022W44
+        for error_cell in column_errors:
+            correction_suggestions = pair_features.get(error_cell, [])
+            if error_cell in labeled_cells and labeled_cells[error_cell][0] == 1:
+                # If an error-cell has been labeled by the user, use it to create the training dataset.
+                # The second condition is always true if error detection and user labeling work without an error.
+                for suggestion in correction_suggestions:
+                    x_train.append(pair_features[error_cell][suggestion])  # Puts features into x_train
+                    suggestion_is_correction = (suggestion == labeled_cells[error_cell][1])
+                    y_train.append(int(suggestion_is_correction))
+                    corrected_cells[error_cell] = labeled_cells[error_cell][1]  # user input as cleaning result
+            else:  # put all cells that contain an error without user-correction in the "test" set.
+                for suggestion in correction_suggestions:
+                    x_test.append(pair_features[error_cell][suggestion])
+                    all_error_correction_suggestions.append([error_cell, suggestion])
+
+        synthetic_error_cells = []
+        n_synthetic_cells = math.floor(len(corrected_cells)*(synth_error_factor - 1))
+        if n_synthetic_cells > 0:
+            possible_synthetic_cells = [cell for cell in pair_features if cell not in column_errors]
+            try:
+                synthetic_error_cells = random.sample(possible_synthetic_cells, k=n_synthetic_cells)
+            except ValueError:  # sample larger than population
+                synthetic_error_cells = possible_synthetic_cells
 
     for synth_cell in synthetic_error_cells:
         correction_suggestions = pair_features.get(synth_cell, [])
@@ -51,4 +86,5 @@ def generate_train_test_data(column_errors: Dict,
             suggestion_is_correction = (suggestion == df_dirty.iloc[synth_cell])
             y_train.append(int(suggestion_is_correction))
 
+    print(f'GENERATED {len(y_train)} TRAINING DATA.')
     return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions

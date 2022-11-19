@@ -67,8 +67,10 @@ def train_cleaning_model(df: pd.DataFrame,
             if verbosity > 0:
                 print(f'Could not traind an imputer for rhs {label}: Something went wrong calibrating class probabilities.')
             return None
-        except ValueError:
+        # TODO debug what happens when KeyError is raised.
+        except (ValueError, KeyError) as e:
             if verbosity > 0:
+                print(e)
                 print(f'Could not traind an imputer for rhs {label}: AutoGluon did not train a single model successfully.')
             return None
     imputer.save()

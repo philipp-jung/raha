@@ -1,6 +1,8 @@
 import math
-import sklearn.linear_model
 from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import AdaBoostClassifier
+import warnings
+warnings.filterwarnings('ignore')  # "error", "ignore", "always", "default", "module" or "once"
 
 
 def cross_validated_estimator(x_train, y_train):
@@ -13,45 +15,13 @@ def cross_validated_estimator(x_train, y_train):
     direkt genommen.
     """
     cv = 2 if sum(y_train) < 4 else math.floor(math.log2(sum(y_train)))
-    #cv = 2 if sum(y_train) < 4 else min(4, math.floor(math.log2(sum(y_train))))  # okayer Wert: 3-5
-    classifiers = {
-        'baseline': {
-            'name': 'Baseline',
-            'estimator': sklearn.ensemble.AdaBoostClassifier(),
-            'parameters': {
-                'n_estimators': [100],
-            }
-        },
-        'abc': {
-            'name': 'AdaBoost Classifier',
-            'estimator': sklearn.ensemble.AdaBoostClassifier(),
-            'parameters': {
-                'n_estimators': [10, 300],
-            }
-        },
-        'logr': {
-            'name': 'Logistic Regression',
-            'estimator': sklearn.linear_model.LogisticRegression(),
-            'parameters': {
-                'C': [00.1, 0.1, 10, 100],
-            },
-        },
-    }
+    params = {'n_estimators': [10, 100, 200],
+              'learning_rate': [0.1, 1]}
 
-    best_score = 0
-    clfs = []
-    best_clf = None
-    for classifier in classifiers:
-        est = classifiers[classifier]['estimator']
-        params = classifiers[classifier]['parameters']
-        # DEBUG: Warum geht scoring='precision' nicht?
-        grid_search = GridSearchCV(estimator=est, param_grid=params, cv=cv, n_jobs=1, scoring='f1')
-        gs_clf = grid_search.fit(x_train, y_train)
-        clfs.append(gs_clf)
-        if gs_clf.best_score_ > best_score:
-            best_score = gs_clf.best_score_
-            best_clf = gs_clf
-
-        if best_clf is None:
-            best_clf = clfs[0]
-    return best_clf
+    grid_search = GridSearchCV(estimator=AdaBoostClassifier(),
+                               param_grid=params,
+                               cv=cv,
+                               n_jobs=1,
+                               scoring='precision')
+    gs_clf = grid_search.fit(x_train, y_train)
+    return gs_clf
