@@ -953,7 +953,7 @@ class Correction:
 
 if __name__ == "__main__":
     # Load Dataset object
-    dataset_name = "restaurant"
+    dataset_name = "hospital"
     error_fraction = 1
     version = 1
     data_dict = helpers.get_data_dict(dataset_name, error_fraction, version)
@@ -966,8 +966,8 @@ if __name__ == "__main__":
     # configure Cleaning object
     labeling_budget = 20
     synth_tuples = 20
-    vicinity_orders = [1]
-    classification_model = "ABC"
+    vicinity_orders = [1, 2]
+    classification_model = "CV"
     vicinity_feature_generator = "pdep"
     n_best_pdeps = 3
     feature_generators = ['vicinity']

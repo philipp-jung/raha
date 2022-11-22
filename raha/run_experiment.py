@@ -16,8 +16,8 @@ def run_baran(c: dict):
 
     app = raha.Correction(c['labeling_budget'], c["classification_model"], c['feature_generators'],
                           c['vicinity_orders'], c["vicinity_feature_generator"], c["imputer_cache_model"],
-                          c["n_best_pdeps"], c['training_time_limit'], c['synth_error_factor'],
-                          c['rule_based_value_cleaning'])
+                          c["n_best_pdeps"], c['training_time_limit'], c['rule_based_value_cleaning'],
+                          c['synth_tuples'])
     app.VERBOSE = False
     seed = None
     correction_dictionary = app.run(data, seed)
@@ -27,8 +27,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_renuver = Ruska(
-        name="2022-11-06-augment-train-data-renuver",
-        description="Sparkle in some synthetic training data with all models.",
+        name="2022-11-22-augment-working-renover",
+        description="I finally got the augmented data approach to work.",
         commit="",
         config={
             "dataset": "bridges",
@@ -43,20 +43,20 @@ if __name__ == "__main__":
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V3",
-            "synth_error_factor": 1
+            "synth_tuples": 0
         },
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],
             "error_fraction": [1, 2, 3, 4, 5],
-            "synth_error_factor": [1, 2, 3, 5, 10, 50],
+            "synth_tuples": [0, 10, 20],
         },
         runs=3,
         save_path="/root/measurements/",
     )
 
     rsk_baran = Ruska(
-        name="2022-11-06-augment-train-data-baran",
-        description="Sparkle in some synthetic training data with all models.",
+        name="2022-11-22-augment-working-baran",
+        description="I finally got the augmented data approach to work.",
         commit="",
         config={
             "dataset": "breast-cancer",
@@ -71,11 +71,12 @@ if __name__ == "__main__":
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V3",
-            "synth_error_factor": 1.5
+            "synth_tuples": 0
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
             "error_fraction": [1, 5, 10, 30, 50],
+            "synth_tuples": [0, 10, 20]
             },
         runs=3,
         save_path="/root/measurements/",
@@ -98,7 +99,6 @@ if __name__ == "__main__":
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V3",
-            "synth_error_factor": 1
         },
         ranges={
             "dataset": [725, 310, 1046, 823, 137, 42493, 4135, 251, 151, 40922, 40498, 30, 1459, 1481, 184, 375, 32, 41027, 6, 40685],
@@ -108,6 +108,6 @@ if __name__ == "__main__":
         save_path="/root/measurements/",
     )
 
-    # rsk_renuver.run(experiment=run_baran, parallel=False)
-    # rsk_baran.run(experiment=run_baran, parallel=False)
-    rsk_openml.run(experiment=run_baran, parallel=False)
+    rsk_renuver.run(experiment=run_baran, parallel=False)
+    rsk_baran.run(experiment=run_baran, parallel=False)
+    # rsk_openml.run(experiment=run_baran, parallel=False)
