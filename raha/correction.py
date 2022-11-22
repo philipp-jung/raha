@@ -458,7 +458,7 @@ class Correction:
         d.results_folder = os.path.join(os.path.dirname(d.path), "raha-baran-results-" + d.name)
         if self.SAVE_RESULTS and not os.path.exists(d.results_folder):
             os.mkdir(d.results_folder)
-        d.column_errors = {}
+        d.column_errors = {i: {} for i in range(d.dataframe.shape[1])}
         d.row_errors = {i: 0 for i in range(d.dataframe.shape[0])}
         for cell in d.detected_cells:
             self._to_model_adder(d.column_errors, cell[1], cell)
@@ -953,7 +953,7 @@ class Correction:
 
 if __name__ == "__main__":
     # Load Dataset object
-    dataset_name = "hospital"
+    dataset_name = "bridges"
     error_fraction = 1
     version = 1
     data_dict = helpers.get_data_dict(dataset_name, error_fraction, version)
@@ -967,12 +967,12 @@ if __name__ == "__main__":
     labeling_budget = 20
     synth_tuples = 20
     vicinity_orders = [1, 2]
-    classification_model = "CV"
+    classification_model = "ABC"
     vicinity_feature_generator = "pdep"
     n_best_pdeps = 3
-    feature_generators = ['vicinity']
+    feature_generators = ['vicinity', 'value', 'domain']
     imputer_cache_model = True
-    rule_based_value_cleaning = False
+    rule_based_value_cleaning = 'V1'
     training_time_limit = 30
 
     app = Correction(labeling_budget, classification_model,  feature_generators, vicinity_orders,
