@@ -336,7 +336,7 @@ class Correction:
         """
         self._to_model_adder(model, ud["column"], ud["new_value"])
 
-    def _value_based_corrector(self, models, ed, column_errors=[], column_corrections=[]):
+    def _value_based_corrector(self, models, ed, column_errors, column_corrections):
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
@@ -648,7 +648,7 @@ class Correction:
         Depending on the value of `synchronous` in `generate_features()`, the method will
         be executed in parallel or not.
         """
-        d, cell = args
+        d, cell, is_synth = args
 
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
         error_dictionary = {"column": cell[1],
@@ -683,7 +683,7 @@ class Correction:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
                         f'{self.VICINITY_FEATURE_GENERATOR}')
 
-        if "value" in self.FEATURE_GENERATORS:
+        if "value" in self.FEATURE_GENERATORS and not is_synth:
             column_corrections = []
             column_errors = []
             for labeled_cell in d.labeled_cells:
@@ -699,14 +699,15 @@ class Correction:
         if "imputer" in self.FEATURE_GENERATORS:
             imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
 
-        d.value_corrections[cell] = value_corrections
+        if not is_synth:
+            d.value_corrections[cell] = value_corrections
         # below block is for debugging purposes only.
         d.domain_corrections[cell] = domain_corrections
         d.naive_vicinity_corrections[cell] = naive_vicinity_corrections
         d.pdep_vicinity_corrections[cell] = pdep_vicinity_corrections
         d.imputer_corrections[cell] = imputer_corrections
 
-        if not self.RULE_BASED_VALUE_CLEANING:
+        if not self.RULE_BASED_VALUE_CLEANING and not is_synth:
             # construct value corrections as in original Baran
             value_corrections = [{correction: d[correction]['encoded_string_frequency']} for d in value_corrections for correction in d]
             models_corrections = value_corrections \
@@ -714,12 +715,14 @@ class Correction:
             + [corrections for order in naive_vicinity_corrections for corrections in order] \
             + [corrections for order in pdep_vicinity_corrections for corrections in order] \
             + imputer_corrections
+        elif not self.RULE_BASED_VALUE_CLEANING and is_synth:
+            raise ValueError('It is impossible to synthesize tuples and use the meta-learner to apply value-corrections'
+                             ' at the same time. Either perform RULE_BASED_VALUE_CLEANING, or set n_synth_tuples=0.')
         else:
             models_corrections = domain_corrections \
             + [corrections for order in naive_vicinity_corrections for corrections in order] \
             + [corrections for order in pdep_vicinity_corrections for corrections in order] \
             + imputer_corrections
-
         # End Philipps Changes
 
         corrections_features = {}
@@ -766,7 +769,7 @@ class Correction:
         d.pair_features = {}
         d.synth_pair_features = {}
         pairs_counter = 0
-        process_args_list = [[d, cell] for cell in d.detected_cells]
+        process_args_list = [[d, cell, False] for cell in d.detected_cells]
         if not synchronous:
             pool = multiprocessing.Pool()
             feature_generation_results = pool.map(self._feature_generator_process, process_args_list)
@@ -794,7 +797,7 @@ class Correction:
             except ValueError:  # not enough synthetic data to sample from.
                 synthetic_error_rows = synth_tuples_choice
             synthetic_error_cells = [(i, j) for i in synthetic_error_rows for j in range(d.dataframe.shape[1])]
-            synth_args_list = [[d, cell] for cell in synthetic_error_cells]
+            synth_args_list = [[d, cell, True] for cell in synthetic_error_cells]
 
             if not synchronous:
                 pool = multiprocessing.Pool()
@@ -935,7 +938,7 @@ class Correction:
             self.predict_corrections(d)
             if self.RULE_BASED_VALUE_CLEANING:
                 # write the rule-based value corrections into the corrections dictionary. This overwrites
-                # meta-learning result for domain & vicinity features. The idea is that the rule-based value
+                # results for domain & vicinity features. The idea is that the rule-based value
                 # corrections are super precise and thus should be used if possible.
                 for cell, correction in d.rule_based_value_corrections.items():
                     row, col = cell
@@ -952,28 +955,29 @@ class Correction:
 
 
 if __name__ == "__main__":
-    # Load Dataset object
+
+    # configure Cleaning object
+    classification_model = "ABC"
     dataset_name = "bridges"
+    version = 2
     error_fraction = 1
-    version = 1
+    feature_generators = ['domain', 'vicinity', 'value']
+    imputer_cache_model = True
+    labeling_budget = 15
+    n_best_pdeps = 3
+    n_rows = None
+    rule_based_value_cleaning = 'V1'
+    synth_tuples = 10
+    training_time_limit = 30
+    vicinity_feature_generator = "pdep"
+    vicinity_orders = [1, 2]
+
+    # Load Dataset object
     data_dict = helpers.get_data_dict(dataset_name, error_fraction, version)
 
     # Set this parameter to keep runtimes low when debugging
-    N_ROWS = None
-    data = raha.dataset.Dataset(data_dict, n_rows=N_ROWS)
+    data = raha.dataset.Dataset(data_dict, n_rows=n_rows)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
-
-    # configure Cleaning object
-    labeling_budget = 20
-    synth_tuples = 20
-    vicinity_orders = [1, 2]
-    classification_model = "ABC"
-    vicinity_feature_generator = "pdep"
-    n_best_pdeps = 3
-    feature_generators = ['vicinity', 'value', 'domain']
-    imputer_cache_model = True
-    rule_based_value_cleaning = 'V1'
-    training_time_limit = 30
 
     app = Correction(labeling_budget, classification_model,  feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,

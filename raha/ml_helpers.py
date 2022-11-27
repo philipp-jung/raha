@@ -83,5 +83,4 @@ def generate_train_test_data(column_errors: Dict,
             suggestion_is_correction = (suggestion == df_dirty.iloc[synth_cell])
             y_train.append(int(suggestion_is_correction))
 
-    print(f'GENERATED {len(y_train)} SYNTHETIC TRAINING DATA.')
     return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions

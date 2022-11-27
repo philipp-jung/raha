@@ -26,88 +26,29 @@ def run_baran(c: dict):
 
 
 if __name__ == "__main__":
-    rsk_renuver = Ruska(
-        name="2022-11-22-augment-working-renover",
-        description="I finally got the augmented data approach to work.",
-        commit="",
+    rsk = Ruska(
+        name="test",
+        description="test",
+        commit="test",
         config={
-            "dataset": "bridges",
+            "dataset": "hospital",
             "error_fraction": 1,
-            "labeling_budget": 20,
-            "imputer_cache_model": True,
+            "labeling_budget": 5,
+            "synth_tuples": 5,
+            "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "CV",
+            "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V3",
-            "synth_tuples": 0
-        },
-        ranges={
-            "dataset": ["bridges", "cars", "glass", "restaurant"],
-            "error_fraction": [1, 2, 3, 4, 5],
-            "synth_tuples": [0, 10, 20],
-        },
-        runs=3,
-        save_path="/root/measurements/",
-    )
-
-    rsk_baran = Ruska(
-        name="2022-11-22-augment-working-baran",
-        description="I finally got the augmented data approach to work.",
-        commit="",
-        config={
-            "dataset": "breast-cancer",
-            "error_fraction": 1,
-            "labeling_budget": 20,
-            "imputer_cache_model": True,
-            "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "CV",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V3",
-            "synth_tuples": 0
-        },
-        ranges={
-            "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "error_fraction": [1, 5, 10, 30, 50],
-            "synth_tuples": [0, 10, 20]
-            },
-        runs=3,
-        save_path="/root/measurements/",
-    )
-
-    rsk_openml = Ruska(
-        name="2022-11-13-openml-datasets",
-        description="Try the new datasets",
-        commit="",
-        config={
-            "dataset": "breast-cancer",
-            "error_fraction": 1,
-            "labeling_budget": 20,
-            "imputer_cache_model": True,
-            "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "CV",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
+            "n_rows": 50,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V3",
         },
         ranges={
-            "dataset": [725, 310, 1046, 823, 137, 42493, 4135, 251, 151, 40922, 40498, 30, 1459, 1481, 184, 375, 32, 41027, 6, 40685],
-            "feature_generators": [['domain', 'vicinity', 'value'], ['domain', 'vicinity', 'value', 'imputer']]
-            },
-        runs=3,
-        save_path="/root/measurements/",
+        },
+        runs=1,
+        save_path="/Users/philipp/code/raha/raha",
     )
 
-    rsk_renuver.run(experiment=run_baran, parallel=False)
-    rsk_baran.run(experiment=run_baran, parallel=False)
-    # rsk_openml.run(experiment=run_baran, parallel=False)
+    rsk.run(experiment=run_baran, parallel=False)
