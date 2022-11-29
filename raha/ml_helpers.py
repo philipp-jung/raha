@@ -73,7 +73,8 @@ def generate_train_test_data(column_errors: Dict,
                 all_error_correction_suggestions.append([error_cell, suggestion])
 
     if len(synth_pair_features) == 0:
-        print('No features exist to synthesize training data with.')
+        # for debugging
+        # print('No features exist to synthesize training data with.')
         return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions
 
     for synth_cell in synth_pair_features:

@@ -26,29 +26,64 @@ def run_baran(c: dict):
 
 
 if __name__ == "__main__":
-    rsk = Ruska(
-        name="test",
-        description="test",
-        commit="test",
+    rsk_baran = Ruska(
+        name="2022-11-29-measure-current-state-baran",
+        description="Ich habe ein paar Bugs im Value-Modell behoben. Ich habe "
+        "ohne diese Bugs zwar auf meinem Laptop gemessen, möchte aber noch "
+        "eine Messung auf allen Datensätzen durchführen.",
+        commit="",
         config={
             "dataset": "hospital",
             "error_fraction": 1,
-            "labeling_budget": 5,
-            "synth_tuples": 5,
+            "labeling_budget": 20,
+            "synth_tuples": 20,
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
-            "n_rows": 50,
+            "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V3",
         },
         ranges={
+            "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "synth_tuples": [0, 10, 20]
         },
-        runs=1,
+        runs=3,
         save_path="/Users/philipp/code/raha/raha",
     )
 
-    rsk.run(experiment=run_baran, parallel=False)
+    rsk_renuver = Ruska(
+        name="2022-11-29-measure-current-state-renuver",
+        description="Ich habe ein paar Bugs im Value-Modell behoben. Ich habe "
+        "ohne diese Bugs zwar auf meinem Laptop gemessen, möchte aber noch "
+        "eine Messung auf allen Datensätzen durchführen.",
+        commit="",
+        config={
+            "dataset": "bridges",
+            "error_fraction": 1,
+            "labeling_budget": 20,
+            "synth_tuples": 20,
+            "imputer_cache_model": False,
+            "training_time_limit": 30,
+            "feature_generators": ["domain", "vicinity", "value"],
+            "classification_model": "ABC",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": "V3"
+        },
+        ranges={
+            "dataset": ["bridges", "cars", "glass", "restaurant"],
+            "error_fraction": [1, 2, 3, 4, 5],
+            "synth_tuples": [0, 10, 20]
+        },
+        runs=5,
+        save_path="/root/measurements/",
+    )
+
+    rsk_renuver.run(experiment=run_baran, parallel=True)
+    rsk_baran.run(experiment=run_baran, parallel=True)

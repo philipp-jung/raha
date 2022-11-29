@@ -819,8 +819,10 @@ class Correction:
 
             if self.VERBOSE:
                 print(f"{synth_pairs_counter} pairs of synthetic (error, potential correction) are featurized.")
-        elif len(synth_tuples_choice) == 0:
-            print('No error-free rows to sample data from.')
+
+        # for debugging synth tuples sampling
+        # elif len(synth_tuples_choice) == 0:
+        #     print('No error-free rows to sample data from.')
 
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
@@ -940,9 +942,12 @@ class Correction:
                 # write the rule-based value corrections into the corrections dictionary. This overwrites
                 # results for domain & vicinity features. The idea is that the rule-based value
                 # corrections are super precise and thus should be used if possible.
+
+                # for value-performance debugging
+                # print(f'{len(d.rule_based_value_corrections)} value corrections')
                 for cell, correction in d.rule_based_value_corrections.items():
                     row, col = cell
-                    if row not in d.labeled_tuples:  # don't overwrite user's corrections
+                    if row not in d.labeled_tuples:  # don't overwrite user-given corrections
                         d.corrected_cells[cell] = correction
 
             if self.VERBOSE:
@@ -958,16 +963,16 @@ if __name__ == "__main__":
 
     # configure Cleaning object
     classification_model = "ABC"
-    dataset_name = "bridges"
+    dataset_name = "flights"
     version = 2
     error_fraction = 1
     feature_generators = ['domain', 'vicinity', 'value']
     imputer_cache_model = True
-    labeling_budget = 15
+    labeling_budget = 20
     n_best_pdeps = 3
     n_rows = None
     rule_based_value_cleaning = 'V1'
-    synth_tuples = 10
+    synth_tuples = 20
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
     vicinity_orders = [1, 2]
