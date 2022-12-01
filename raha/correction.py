@@ -364,7 +364,7 @@ class Correction:
                             error_cells = model[encoded_value_string][transformation_string]
                             features['error_cells'] = error_cells
 
-                            # Aus V3: Schaue auf allen Fehlern der selben Spalte, wie oft das Pattern
+                            # Aus E4: Schaue auf allen Fehlern der selben Spalte, wie oft das Pattern
                             # korrekt reinigt.
                             # Die Ausführung ist ziemlich teuer. Deshalb verstecke ich sie hinter dieser Abfrage.
                             if self.RULE_BASED_VALUE_CLEANING in ['E4', 'E5', 'E6']:
@@ -836,6 +836,9 @@ class Correction:
             elif self.RULE_BASED_VALUE_CLEANING == 'V3':
                 value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_v3(d)
+            elif self.RULE_BASED_VALUE_CLEANING == 'V4':
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_v4()
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
 
@@ -963,7 +966,7 @@ if __name__ == "__main__":
 
     # configure Cleaning object
     classification_model = "ABC"
-    dataset_name = "flights"
+    dataset_name = "hospital"
     version = 2
     error_fraction = 1
     feature_generators = ['domain', 'vicinity', 'value']
@@ -971,8 +974,8 @@ if __name__ == "__main__":
     labeling_budget = 20
     n_best_pdeps = 3
     n_rows = None
-    rule_based_value_cleaning = 'V1'
-    synth_tuples = 20
+    rule_based_value_cleaning = 'V4'
+    synth_tuples = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
     vicinity_orders = [1, 2]

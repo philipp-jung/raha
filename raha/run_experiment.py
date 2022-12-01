@@ -27,10 +27,8 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_baran = Ruska(
-        name="2022-11-29-measure-current-state-baran",
-        description="Ich habe ein paar Bugs im Value-Modell behoben. Ich habe "
-        "ohne diese Bugs zwar auf meinem Laptop gemessen, möchte aber noch "
-        "eine Messung auf allen Datensätzen durchführen.",
+        name="2022-12-01-v4-baran",
+        description="I think V4 beats Baran."
         commit="",
         config={
             "dataset": "hospital",
@@ -45,21 +43,19 @@ if __name__ == "__main__":
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V3",
+            "rule_based_value_cleaning": "V4",
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
             "synth_tuples": [0, 10, 20]
         },
         runs=3,
-        save_path="/Users/philipp/code/raha/raha",
+        save_path="/root/measurements/",
     )
 
     rsk_renuver = Ruska(
-        name="2022-11-29-measure-current-state-renuver",
-        description="Ich habe ein paar Bugs im Value-Modell behoben. Ich habe "
-        "ohne diese Bugs zwar auf meinem Laptop gemessen, möchte aber noch "
-        "eine Messung auf allen Datensätzen durchführen.",
+        name="2022-12-01-v4-renuver",
+        description="I think V4 beats Baran."
         commit="",
         config={
             "dataset": "bridges",
@@ -74,7 +70,7 @@ if __name__ == "__main__":
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V3"
+            "rule_based_value_cleaning": "V4"
         },
         ranges={
             "dataset": ["bridges", "cars", "glass", "restaurant"],

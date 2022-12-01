@@ -81,8 +81,6 @@ class ValueSuggestions:
 
         if self.n_certain_suggestions('encoded_string_frequency') == 1:  # Use the one certain suggestion.
             choice = [suggestion for model_suggestions in self.suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1]
-            if len(choice) > 1:
-                raise ValueError(f"More than one certain suggestion: {choice}")
             choice = choice[0]
 
         elif self.n_certain_unicode_suggestions('encoded_string_frequency') == 1:  # Use the one certain unicode-encoded suggestion.
@@ -90,8 +88,6 @@ class ValueSuggestions:
             # einen datestring %m/%d/%y erwarte.
             choice = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, features in model_suggestions.items()
                       if features['encoded_string_frequency'] == 1]
-            if len(choice) > 1:
-                raise ValueError(f"More than one certain suggestion: {choice}")
             choice = choice[0]
 
         else:  # sum up the probabilities of both encodings of all certain corrections and take the max.
@@ -118,15 +114,29 @@ class ValueSuggestions:
 
         if self.n_certain_suggestions('encoded_string_frequency') == 1:  # Use the one certain suggestion.
             choice = [suggestion for model_suggestions in self.suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1]
-            if len(choice) > 1:
-                raise ValueError(f"More than one certain suggestion: {choice}")
             choice = choice[0]
 
         elif self.n_certain_unicode_suggestions('encoded_string_frequency') == 1:  #  Use the one certain unicode-encoded suggestion.
             # Das funktioniert in der Praxis nicht perfekt. Ich bekomme auf rayyan z.B. "1/13" als Vorschlag, obwohl ich
             # einen datestring %m/%d/%y erwarte.
             choice = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1]
-            if len(choice) > 1:
-                raise ValueError(f"More than one certain suggestion: {choice}")
             choice = choice[0]
+        return choice
+
+    def rule_based_suggestion_v4(self) -> Union[str, None]:
+        choice = None
+        threshold = 3
+        if self.n_certain_suggestions('encoded_string_frequency') == 0:  # No certain suggestion at all.
+            return choice
+
+        if self.n_certain_suggestions('encoded_string_frequency') == 1:  # Use the one certain suggestion, if it was generated from >= 3 user inputs.
+            choices = [suggestion for model_suggestions in self.suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1 and len(features['error_cells']) >= threshold]
+            if len(choices) == 1:
+                choice = choices[0]
+
+        elif self.n_certain_unicode_suggestions('encoded_string_frequency') == 1:  #  Use the one certain unicode-encoded suggestion, if it was generated from >= inputs.
+            choices = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1 and len(features['error_cells']) >= threshold]
+            if len(choices) == 1:
+                choice = choices[0]
+
         return choice
