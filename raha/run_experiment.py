@@ -26,12 +26,13 @@ def run_baran(c: dict):
 
 
 if __name__ == "__main__":
-    rsk_baran = Ruska(
-        name="2022-12-01-v4-baran",
-        description="I think V4 beats Baran."
+    rsk_uci = Ruska(
+        name="2022-12-02-v4-uci-datasets",
+        description="Ich will sehen, wie der neuste Stand auf den alten UCI "
+        "Daten performt.",
         commit="",
         config={
-            "dataset": "hospital",
+            "dataset": "letter",
             "error_fraction": 1,
             "labeling_budget": 20,
             "synth_tuples": 20,
@@ -46,40 +47,11 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": "V4",
         },
         ranges={
-            "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "synth_tuples": [0, 10, 20]
+            "dataset": ["letter", "adult", "breast-cancer", "nursery"],
+            "error_fraction": [1, 2, 5]
         },
         runs=3,
         save_path="/root/measurements/",
     )
 
-    rsk_renuver = Ruska(
-        name="2022-12-01-v4-renuver",
-        description="I think V4 beats Baran."
-        commit="",
-        config={
-            "dataset": "bridges",
-            "error_fraction": 1,
-            "labeling_budget": 20,
-            "synth_tuples": 20,
-            "imputer_cache_model": False,
-            "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "ABC",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V4"
-        },
-        ranges={
-            "dataset": ["bridges", "cars", "glass", "restaurant"],
-            "error_fraction": [1, 2, 3, 4, 5],
-            "synth_tuples": [0, 10, 20]
-        },
-        runs=5,
-        save_path="/root/measurements/",
-    )
-
-    rsk_renuver.run(experiment=run_baran, parallel=True)
-    rsk_baran.run(experiment=run_baran, parallel=True)
+    rsk_uci.run(experiment=run_baran, parallel=True)

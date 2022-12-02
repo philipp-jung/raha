@@ -966,7 +966,7 @@ if __name__ == "__main__":
 
     # configure Cleaning object
     classification_model = "ABC"
-    dataset_name = "hospital"
+    dataset_name = "nursery"
     version = 2
     error_fraction = 1
     feature_generators = ['domain', 'vicinity', 'value']
