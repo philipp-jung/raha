@@ -54,4 +54,4 @@ if __name__ == "__main__":
         save_path="/root/measurements/",
     )
 
-    rsk_uci.run(experiment=run_baran, parallel=True)
+    rsk_uci.run(experiment=run_baran, parallel=True, n_workers=4)
