@@ -6,6 +6,7 @@ def get_data_dict(
     dataset_name: Union[str, int],
     error_fraction: Union[int, None] = None,
     version: Union[int, None] = None,
+    error_class: Union[str, None] = None
 ) -> Dict:
     """
     I currently use four different sources of datasets: the original Baran paper, the RENUVER paper, datasets that
@@ -71,10 +72,12 @@ def get_data_dict(
         }
 
     elif dataset_name in openml_dataset_ids:  # OpenML dataset
+        if error_class is None:
+            raise ValueError('Please specify the error class with which the openml dataset has been corrupted.')
         data_dict = {
             "name": dataset_name,
-            "path": f"../datasets/openml/{dataset_name}/categorical_shift_{error_fraction}.csv",
-            "parquet_path": f"../datasets/openml/{dataset_name}/categorical_shift_{error_fraction}.parquet",
+            "path": f"../datasets/openml/{dataset_name}/{error_class}_{error_fraction}.csv",
+            "parquet_path": f"../datasets/openml/{dataset_name}/{error_class}_{error_fraction}.parquet",
             "clean_path": f"../datasets/openml/{dataset_name}/clean.csv",
         }
 

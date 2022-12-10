@@ -875,7 +875,6 @@ class Correction:
                     else:
                         raise ValueError('Unknown model.')
                     predicted_labels = gs_clf.predict(x_test)
-                    a = 1
 
                 # set final cleaning suggestion from meta-learning result. User corrected cells are not overwritten!
                 for index, predicted_label in enumerate(predicted_labels):
@@ -923,6 +922,8 @@ class Correction:
                   "---------------------Initialize the Dataset Object----------------------\n"
                   "------------------------------------------------------------------------")
         d = self.initialize_dataset(d)
+        if len(d.detected_cells) == 0:
+            raise ValueError('There are no errors in the data to correct.')
         if self.VERBOSE:
             print("------------------------------------------------------------------------\n"
                   "--------------------Initialize Error Corrector Models-------------------\n"
@@ -966,9 +967,12 @@ if __name__ == "__main__":
 
     # configure Cleaning object
     classification_model = "ABC"
-    dataset_name = "nursery"
+
+    dataset_name = "1459"
     version = 2
-    error_fraction = 1
+    error_fraction = 10
+    error_class = 'simple_mcar'
+
     feature_generators = ['domain', 'vicinity', 'value']
     imputer_cache_model = True
     labeling_budget = 20
@@ -981,7 +985,7 @@ if __name__ == "__main__":
     vicinity_orders = [1, 2]
 
     # Load Dataset object
-    data_dict = helpers.get_data_dict(dataset_name, error_fraction, version)
+    data_dict = helpers.get_data_dict(dataset_name, error_fraction, version, error_class)
 
     # Set this parameter to keep runtimes low when debugging
     data = raha.dataset.Dataset(data_dict, n_rows=n_rows)
