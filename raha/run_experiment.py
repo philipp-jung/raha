@@ -9,7 +9,7 @@ def run_baran(c: dict):
     @return: A dictionary containing measurements and the configuration of the measurement.
     """
     version = c['run'] + 1  # dataset versions are 1-indexed, Ruska runs are 0-indexed.
-    data_dict = raha.helpers.get_data_dict(c['dataset'], c['error_fraction'], version)
+    data_dict = raha.helpers.get_data_dict(c['dataset'], c['error_fraction'], version, c['error_class'])
 
     data = raha.Dataset(data_dict, n_rows=c["n_rows"])
     data.detected_cells = dict(data.get_actual_errors_dictionary())
