@@ -747,7 +747,10 @@ class Correction:
                 d.inv_vicinity_gpdeps[order] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
         if 'imputer' in self.FEATURE_GENERATORS:
-            df_clean_subset = imputer.get_clean_table(d.typed_dataframe, d.detected_cells)
+            # simulate user input by reading labeled data from the typed dataframe
+            inputted_rows = list(d.labeled_tuples.keys())
+            typed_user_input = d.typed_clean_dataframe.iloc[inputted_rows, :]
+            df_clean_subset = imputer.get_clean_table(d.typed_dataframe, d.detected_cells, typed_user_input)
             for i_col, col in enumerate(df_clean_subset.columns):
                 imp = imputer.train_cleaning_model(df_clean_subset,
                                                    d.name,
@@ -956,6 +959,8 @@ class Correction:
 
             if self.VERBOSE:
                 p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
+                if p < .9:
+                    a = 1
                 print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
 
         if self.VERBOSE:
@@ -971,13 +976,13 @@ if __name__ == "__main__":
     dataset_name = "1459"
     version = 2
     error_fraction = 10
-    error_class = 'simple_mcar'
+    error_class = 'imputer_simple_mcar'
 
-    feature_generators = ['domain', 'vicinity', 'value']
-    imputer_cache_model = True
+    feature_generators = ['imputer']
+    imputer_cache_model = False
     labeling_budget = 20
     n_best_pdeps = 3
-    n_rows = None
+    n_rows = 8000
     rule_based_value_cleaning = 'V4'
     synth_tuples = 0
     training_time_limit = 30
