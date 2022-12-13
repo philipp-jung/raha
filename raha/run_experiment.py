@@ -32,6 +32,7 @@ if __name__ == "__main__":
         commit="",
         config={
             "dataset": "letter",
+            "error_class": 'simple_mcar',
             "error_fraction": 1,
             "labeling_budget": 20,
             "synth_tuples": 20,
