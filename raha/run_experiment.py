@@ -26,10 +26,9 @@ def run_baran(c: dict):
 
 
 if __name__ == "__main__":
-    rsk_uci = Ruska(
-        name="2022-12-02-v4-uci-datasets",
-        description="Ich will sehen, wie der neuste Stand auf den alten UCI "
-        "Daten performt.",
+    rsk_openml = Ruska(
+        name="2022-12-13-openml",
+        description="Measure all openml datasets to benchmark with Baran.",
         commit="",
         config={
             "dataset": "letter",
@@ -47,11 +46,11 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": "V4",
         },
         ranges={
-            "dataset": ["letter", "adult", "breast-cancer", "nursery"],
-            "error_fraction": [1, 2, 5]
+            "dataset": [1046, 137, 1459, 1481, 151, 184, 251, 30, 310, 32, 375, 40498, 40685, 40922, 41027, 4135, 42493, 6, 725, 823],
+            "error_fraction": [1, 5, 10, 30, 50]
         },
         runs=3,
         save_path="/root/measurements/",
     )
 
-    rsk_uci.run(experiment=run_baran, parallel=True, n_workers=4)
+    rsk_openml.run(experiment=run_baran, parallel=True)
