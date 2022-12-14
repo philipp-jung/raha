@@ -32,7 +32,7 @@ if __name__ == "__main__":
         commit="",
         config={
             "dataset": "letter",
-            "error_class": 'simple_mcar',
+            "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
             "synth_tuples": 20,
@@ -48,10 +48,10 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": [1046, 137, 1459, 1481, 151, 184, 251, 30, 310, 32, 375, 40498, 40685, 40922, 41027, 4135, 42493, 6, 725, 823],
-            "error_fraction": [1, 5, 10, 30, 50]
+            "error_fraction": [1, 5, 10]
         },
         runs=3,
         save_path="/root/measurements/",
     )
 
-    rsk_openml.run(experiment=run_baran, parallel=True)
+    rsk_openml.run(experiment=run_baran, parallel=True, workers=4)
