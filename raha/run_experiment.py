@@ -47,11 +47,11 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": "V4",
         },
         ranges={
-            "dataset": [1046, 137, 1459, 1481, 151, 184, 251, 30, 310, 32, 375, 40498, 40685, 40922, 41027, 4135, 42493, 6, 725, 823],
+            "dataset": [137, 1481, 184, 41027, 4135, 42493, 6],
             "error_fraction": [1, 5, 10]
         },
         runs=3,
         save_path="/root/measurements/",
     )
 
-    rsk_openml.run(experiment=run_baran, parallel=True, workers=4)
+    rsk_openml.run(experiment=run_baran, parallel=True)
