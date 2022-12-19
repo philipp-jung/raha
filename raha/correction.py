@@ -31,6 +31,7 @@ import sklearn.naive_bayes
 import sklearn.linear_model
 
 import raha
+import helpers
 ########################################
 
 
@@ -49,7 +50,7 @@ class Correction:
         self.CLASSIFICATION_MODEL = "ABC"   # ["ABC", "DTC", "GBC", "GNB", "KNC" ,"SGDC", "SVC"]
         self.IGNORE_SIGN = "<<<IGNORE_THIS_VALUE>>>"
         self.VERBOSE = False
-        self.SAVE_RESULTS = True
+        self.SAVE_RESULTS = False
         self.ONLINE_PHASE = False
         self.LABELING_BUDGET = 20
         self.MIN_CORRECTION_CANDIDATE_PROBABILITY = 0.0
@@ -587,6 +588,11 @@ class Correction:
             self.update_models(d)
             self.generate_features(d)
             self.predict_corrections(d)
+
+            if self.VERBOSE:
+                p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
+                print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
+
             if self.VERBOSE:
                 print("------------------------------------------------------------------------")
         if self.SAVE_RESULTS:
@@ -594,24 +600,27 @@ class Correction:
                 print("------------------------------------------------------------------------\n"
                       "---------------------------Storing the Results--------------------------\n"
                       "------------------------------------------------------------------------")
-            self.store_results(d)
-        return d.corrected_cells
+            # self.store_results(d)
+        p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
+        return p, r, f
 ########################################
 
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "flights"
-    dataset_dictionary = {
-        "name": dataset_name,
-        "path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "dirty.csv")),
-        "clean_path": os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "datasets", dataset_name, "clean.csv"))
-    }
+    dataset_name = "137"
+    version = 2
+    error_fraction = 10
+    error_class = 'simple_mcar'
+    dataset_dictionary = helpers.get_data_dict(dataset_name,
+                                               error_fraction,
+                                               version,
+                                               error_class)
     data = raha.dataset.Dataset(dataset_dictionary)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction()
-    correction_dictionary = app.run(data)
-    p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
+    app.VERBOSE = True
+    p, r, f = app.run(data)
     print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
     # --------------------
     # app.extract_revisions(wikipedia_dumps_folder="../wikipedia-data")
