@@ -140,3 +140,35 @@ class ValueSuggestions:
                 choice = choices[0]
 
         return choice
+
+    def rule_based_suggestion_v5(self) -> Union[str, None]:
+        """
+        Gleicher Ansatz wie v4, aber ohne threshold. Stattdessen wird die Regel auf *alle* Werte der
+        selben Spalte angewandt. Kommt es zu einer falschen Korrektur, wird die Regel aussortiert.
+        @return:
+        """
+        # TODO use new features['is_correct_on_column'].
+        choice = None
+        if self.n_certain_suggestions('encoded_string_frequency') == 0:  # No certain suggestion at all.
+            return choice
+
+        # Use the one certain suggestion, if it is correct on column.
+        if self.n_certain_suggestions('encoded_string_frequency') == 1:
+            choices = [s for model_suggestions in self.suggestions for s, features in model_suggestions.items() if features['encoded_string_frequency'] == 1 and features['is_correct_on_column'] == True]
+            if len(choices) == 1:
+                choice = choices[0]
+
+        # If two certain suggestions exist, check, if they are both correct. If they are, take the unicode rule.
+        elif self.n_certain_suggestions('encoded_string_frequency') > 1:
+            unicode_choices = [s for model_suggestions in self.unicode_suggestions for s, features in model_suggestions.items() if features['encoded_string_frequency'] == 1 and features['is_correct_on_column'] == True]
+            if len(set(unicode_choices)) > 1:
+                breakpoint()
+            if len(unicode_choices) == 1:
+                choice = unicode_choices[0]
+            if len(unicode_choices) == 0:
+                identity_choices = [s for model_suggestions in self.unicode_suggestions for s, features in model_suggestions.items() if features['encoded_string_frequency'] == 1 and features['is_correct_on_column'] == True]
+                if len(identity_choices) != 1:
+                    breakpoint()
+                choice = identity_choices[0]
+
+        return choice

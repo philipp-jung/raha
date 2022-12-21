@@ -15,6 +15,7 @@ import re
 import sys
 import html
 from typing import Union
+from pathlib import Path
 
 import pandas
 ########################################
@@ -44,7 +45,8 @@ class Dataset:
             self.clean_path = dataset_dictionary["clean_path"]
             self.clean_dataframe = self.read_csv_dataset(dataset_dictionary["clean_path"])
             typed_clean_path = os.path.splitext(dataset_dictionary['clean_path'])[0] + '.parquet'
-            self.typed_clean_dataframe = self.read_parquet_dataset(typed_clean_path)
+            if Path(typed_clean_path).exists():
+                self.typed_clean_dataframe = self.read_parquet_dataset(typed_clean_path)
             if n_rows is not None:
                 self.clean_dataframe = self.clean_dataframe.iloc[:n_rows, :]
                 self.typed_clean_dataframe = self.typed_clean_dataframe.iloc[:n_rows, :]
