@@ -22,7 +22,7 @@ class ValueSuggestions:
 
     @property
     def identity_suggestions(self) -> List[Dict[str, Suggestions]]:
-        return [self.suggestions[0], self.suggestions[2], self.suggestions[4], self.suggestions[6]]
+        return [x for x in self.suggestions if x['encoding'] == 'identity']
 
     @property
     def n_identity_suggestions(self) -> int:
@@ -30,7 +30,7 @@ class ValueSuggestions:
 
     @property
     def unicode_suggestions(self) -> List[Dict[str, Suggestions]]:
-        return [self.suggestions[1], self.suggestions[3], self.suggestions[5], self.suggestions[7]]
+        return [x for x in self.suggestions if x['encoding'] == 'unicode']
 
     @property
     def n_unicode_suggestions(self) -> int:
@@ -57,86 +57,89 @@ class ValueSuggestions:
 
     def n_certain_suggestions(self, feature: str) -> int:
         """Number of suggestions with probability 1.0"""
-        return sum([1 for model_suggestions in self.suggestions for features in model_suggestions.values() if features[feature] == 1])
+        return sum([1 for suggestion in self.suggestions if suggestion[feature] == 1.0])
 
     def get_certain_suggestions(self, feature: str) -> List:
         """Return all certain suggestions."""
-        return [s for model_suggestions in self.suggestions for s, features in model_suggestions.items() if features[feature] == 1]
+        return [suggestion for suggestion in self.suggestions if suggestion[feature] == 1.0]
 
     def n_certain_unicode_suggestions(self, feature: str) -> int:
         """Number of unicode suggestions with probability 1.0"""
-        return sum([1 for model_suggestions in self.unicode_suggestions for features in model_suggestions.values() if features[feature] == 1])
+        return sum([1 for suggestion in self.unicode_suggestions if suggestion[feature] == 1.0])
 
     def n_certain_identity_suggestions(self, feature: str) -> int:
         """Number of identity suggestions with probability 1.0"""
-        return sum([1 for model_suggestions in self.identity_suggestions for features in model_suggestions.values() if features[feature] == 1])
+        return sum([1 for suggestion in self.identity_suggestions if suggestion[feature] == 1.0])
 
     def rule_based_suggestion_v1(self, d) -> Union[str, None]:
         """
         Cleaning heuristic to determine the best rule-based suggestion. Documentation on this can be found in
         the experiment from 2022W38.
         """
-        if self.n_certain_suggestions('encoded_string_frequency') == 0:  # No certain suggestion at all.
+        if self.n_certain_suggestions('relative_string_frequency') == 0:  # No certain suggestion at all.
             return None
 
-        if self.n_certain_suggestions('encoded_string_frequency') == 1:  # Use the one certain suggestion.
-            choice = [suggestion for model_suggestions in self.suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1]
+        if self.n_certain_suggestions('relative_string_frequency') == 1:  # Use the one certain suggestion.
+            choice = [suggestion for model_suggestions in self.suggestions for suggestion, features in model_suggestions.items() if features['relative_string_frequency'] == 1]
             choice = choice[0]
 
-        elif self.n_certain_unicode_suggestions('encoded_string_frequency') == 1:  # Use the one certain unicode-encoded suggestion.
+        elif self.n_certain_unicode_suggestions('relative_string_frequency') == 1:  # Use the one certain unicode-encoded suggestion.
             # Das funktioniert in der Praxis nicht perfekt. Ich bekomme auf rayyan z.B. "1/13" als Vorschlag, obwohl ich
             # einen datestring %m/%d/%y erwarte.
             choice = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, features in model_suggestions.items()
-                      if features['encoded_string_frequency'] == 1]
+                      if features['relative_string_frequency'] == 1]
             choice = choice[0]
 
         else:  # sum up the probabilities of both encodings of all certain corrections and take the max.
             suggestion_sums = {}
-            indices, suggestions = self.certain_model_type_indices_and_suggestions('encoded_string_frequency')
+            indices, suggestions = self.certain_model_type_indices_and_suggestions('relative_string_frequency')
             for i, s in zip(indices, suggestions):
                 if i % 2 == 0:
                     corresponding_index = i + 1
                 else:
                     corresponding_index = i - 1
                 corresponding_features = self.suggestions[corresponding_index].get(s, {})
-                corresponding_score = corresponding_features.get('encoded_string_frequency', 0)
+                corresponding_score = corresponding_features.get('relative_string_frequency', 0)
                 if suggestion_sums.get(s) is None:
-                    suggestion_sums[s] = self.suggestions[i][s]['encoded_string_frequency'] + corresponding_score
+                    suggestion_sums[s] = self.suggestions[i][s]['relative_string_frequency'] + corresponding_score
                 else:
-                    suggestion_sums[s] += self.suggestions[i][s]['encoded_string_frequency'] + corresponding_score
+                    suggestion_sums[s] += self.suggestions[i][s]['relative_string_frequency'] + corresponding_score
             choice = max(suggestion_sums, key=suggestion_sums.get)
         return choice
 
     def rule_based_suggestion_v3(self, d) -> Union[str, None]:
         choice = None
-        if self.n_certain_suggestions('encoded_string_frequency') == 0:  # No certain suggestion at all.
+        if self.n_certain_suggestions('relative_string_frequency') == 0:  # No certain suggestion at all.
             return choice
 
-        if self.n_certain_suggestions('encoded_string_frequency') == 1:  # Use the one certain suggestion.
-            choice = [suggestion for model_suggestions in self.suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1]
+        if self.n_certain_suggestions('relative_string_frequency') == 1:  # Use the one certain suggestion.
+            choice = [suggestion for model_suggestions in self.suggestions for suggestion, features in model_suggestions.items() if features['relative_string_frequency'] == 1]
             choice = choice[0]
 
-        elif self.n_certain_unicode_suggestions('encoded_string_frequency') == 1:  #  Use the one certain unicode-encoded suggestion.
+        elif self.n_certain_unicode_suggestions('relative_string_frequency') == 1:  #  Use the one certain unicode-encoded suggestion.
             # Das funktioniert in der Praxis nicht perfekt. Ich bekomme auf rayyan z.B. "1/13" als Vorschlag, obwohl ich
             # einen datestring %m/%d/%y erwarte.
-            choice = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1]
+            choice = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, features in model_suggestions.items() if features['relative_string_frequency'] == 1]
             choice = choice[0]
         return choice
 
     def rule_based_suggestion_v4(self) -> Union[str, None]:
         choice = None
         threshold = 3
-        if self.n_certain_suggestions('encoded_string_frequency') == 0:  # No certain suggestion at all.
+        if self.n_certain_suggestions('relative_string_frequency') == 0:  # No certain suggestion at all.
             return choice
 
-        if self.n_certain_suggestions('encoded_string_frequency') == 1:  # Use the one certain suggestion, if it was generated from >= 3 user inputs.
-            choices = [suggestion for model_suggestions in self.suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1 and len(features['error_cells']) >= threshold]
-            if len(choices) == 1:
-                choice = choices[0]
+        if self.n_certain_suggestions('relative_string_frequency') == 1:  # Use the one certain suggestion, if it was generated from >= 3 user inputs.
+            certain_choices = [sug for sug in self.suggestions if sug['relative_string_frequency'] == 1.0]
+            certain_above_threshold = [sug for sug in certain_choices if len(sug['error_cells']) >= threshold]
+            if len(certain_above_threshold) == 1:
+                choice = certain_above_threshold[0]
 
-        elif self.n_certain_unicode_suggestions('encoded_string_frequency') == 1:  #  Use the one certain unicode-encoded suggestion, if it was generated from >= inputs.
-            choices = [suggestion for model_suggestions in self.unicode_suggestions for suggestion, features in model_suggestions.items() if features['encoded_string_frequency'] == 1 and len(features['error_cells']) >= threshold]
-            if len(choices) == 1:
-                choice = choices[0]
+        elif self.n_certain_unicode_suggestions('relative_string_frequency') == 1:  #  Use the one certain unicode-encoded suggestion, if it was generated from >= inputs.
+            certain_choices = [sug for sug in self.unicode_suggestions if sug['relative_string_frequency'] == 1.0]
+            certain_above_threshold = [sug for sug in certain_choices if len(sug['error_cells']) >= threshold]
+
+            if len(certain_above_threshold) == 1:
+                choice = certain_above_threshold[0]
 
         return choice
