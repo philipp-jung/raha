@@ -746,7 +746,7 @@ class Correction:
                                                        d.dataframe, d.detected_cells, order)
                 d.inv_vicinity_gpdeps[order] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
-        if 'imputer' in self.FEATURE_GENERATORS:
+        if 'imputer' in self.FEATURE_GENERATORS and len(d.labeled_tuples) == self.LABELING_BUDGET:
             # simulate user input by reading labeled data from the typed dataframe
             inputted_rows = list(d.labeled_tuples.keys())
             typed_user_input = d.typed_clean_dataframe.iloc[inputted_rows, :]
@@ -957,10 +957,12 @@ class Correction:
                     if row not in d.labeled_tuples:  # don't overwrite user-given corrections
                         d.corrected_cells[cell] = correction
 
+            # just to be sure, overwrite corrections with user-input.
+            for error_cell in d.detected_cells:
+                if error_cell in d.labeled_cells:
+                    d.corrected_cells[error_cell] = d.labeled_cells[error_cell][1]
             if self.VERBOSE:
                 p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
-                if p < .9:
-                    a = 1
                 print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
 
         if self.VERBOSE:
@@ -969,7 +971,6 @@ class Correction:
 
 
 if __name__ == "__main__":
-
     # configure Cleaning object
     classification_model = "ABC"
 
@@ -982,7 +983,7 @@ if __name__ == "__main__":
     imputer_cache_model = False
     labeling_budget = 20
     n_best_pdeps = 3
-    n_rows = 8000
+    n_rows = None
     rule_based_value_cleaning = 'V4'
     synth_tuples = 0
     training_time_limit = 30

@@ -27,12 +27,12 @@ def run_baran(c: dict):
 
 if __name__ == "__main__":
     rsk_openml = Ruska(
-        name="2022-12-13-openml",
-        description="Measure all openml datasets to benchmark with Baran.",
+        name="2022-12-25-openml",
+        description="Misst den Effekt des imputer feature generators auf den generierten openml Datensätzen.",
         commit="",
         config={
             "dataset": "letter",
-            "error_class": "simple_mcar",
+            "error_class": "simple_mcar_imputer",
             "error_fraction": 1,
             "labeling_budget": 20,
             "synth_tuples": 20,
@@ -48,7 +48,9 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": [137, 1481, 184, 41027, 4135, 42493, 6],
-            "error_fraction": [1, 5, 10]
+            "error_fraction": [1, 5, 10],
+            "error_class": ["simple_mcar_imputer", "simple_mcar"],
+            "feature_generators": [["domain", "vicinity", "value"], ["domain", "vicinity", "value", "imputer"]]
         },
         runs=3,
         save_path="/root/measurements/",
