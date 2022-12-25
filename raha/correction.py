@@ -107,6 +107,7 @@ class Correction:
 
         # variable for debugging CV
         self.n_true_classes = {}
+        self.sampled_tuples = 0
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -320,7 +321,10 @@ class Correction:
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
-        return models.cleaning_features(ed['old_value'])
+        features = models.cleaning_features(ed['old_value'])
+        if ed['column'] == 8 and self.sampled_tuples == 4:  # col 8 enthaelt die daten.
+            a = 1
+        return features
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
         """
@@ -481,6 +485,7 @@ class Correction:
         d.sampled_tuple = rng.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
         if self.VERBOSE:
             print("Tuple {} is sampled.".format(d.sampled_tuple))
+        self.sampled_tuples += 1
 
     def label_with_ground_truth(self, d):
         """
@@ -880,14 +885,14 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "beers"
+    dataset_name = "rayyan"
     version = 2
     error_fraction = 10
     error_class = 'imputer_simple_mcar'
 
     feature_generators = ['value']
     imputer_cache_model = False
-    labeling_budget = 20
+    labeling_budget = 5
     n_best_pdeps = 3
     n_rows = None
     rule_based_value_cleaning = 'V4'

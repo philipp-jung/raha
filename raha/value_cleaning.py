@@ -119,17 +119,16 @@ class ValueCleaning:
 
     def update_rules(self, error: str, correction: str, error_cell: Tuple[int, int]):
         rule = rule_from_correction(error, correction)
-        # TODO optimised_rule benutzen.
-        # optimised_rule = optimise_rule(rule, error)
+        optimised_rule = optimise_rule(rule, error)
 
         for encoded_error in encode_error(error):
             if self.map_error_to_rules.get(encoded_error) is None:
                 self.map_error_to_rules[encoded_error] = {}
-            if self.map_error_to_rules[encoded_error].get(rule) is None:
-                self.map_error_to_rules[encoded_error][rule] = {'times_created': 0,
-                                                                'error_cells': []}
-            self.map_error_to_rules[encoded_error][rule]['times_created'] += 1
-            self.map_error_to_rules[encoded_error][rule]['error_cells'].append(error_cell)
+            if self.map_error_to_rules[encoded_error].get(optimised_rule) is None:
+                self.map_error_to_rules[encoded_error][optimised_rule] = {'times_created': 0,
+                                                                          'error_cells': []}
+            self.map_error_to_rules[encoded_error][optimised_rule]['times_created'] += 1
+            self.map_error_to_rules[encoded_error][optimised_rule]['error_cells'].append(error_cell)
 
     def cleaning_features(self, error: str) -> List[Dict]:
         identity_encoded, unicode_encoded = encode_error(error)
