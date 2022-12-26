@@ -49,7 +49,7 @@ if __name__ == "__main__":
         ranges={
             "dataset": [137, 1481, 184, 41027, 4135, 42493, 6],
             "error_fraction": [1, 5, 10],
-            "error_class": ["simple_mcar_imputer", "simple_mcar"],
+            "error_class": ["imputer_simple_mcar", "simple_mcar"],
             "feature_generators": [["domain", "vicinity", "value"], ["domain", "vicinity", "value", "imputer"]]
         },
         runs=3,
