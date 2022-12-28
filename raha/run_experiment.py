@@ -4,12 +4,15 @@ import raha
 from pathlib import Path
 
 
-def run_baran(c: dict):
+def run_baran(i: int, c: dict):
     """
     Wrapper for Ruska to run parameterized Cleaning Experiments.
     @param c: a dictionary that contains all parameters the Cleaning Experiment requires.
     @return: A dictionary containing measurements and the configuration of the measurement.
     """
+    logger = logging.getLogger('ruska')
+    logger.info(f'Started experiment {i}.')
+    logger.debug(f'Started experiment {i} with config {c}.')
     version = c['run'] + 1  # dataset versions are 1-indexed, Ruska runs are 0-indexed.
     data_dict = raha.helpers.get_data_dict(c['dataset'], c['error_fraction'], version, c['error_class'])
 
@@ -40,14 +43,16 @@ def run_baran(c: dict):
         seed = None
         correction_dictionary = app.run(data, seed)
         p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
+        logger.info(f'Finished experiment {i}.')
         return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
     except Exception as e:
+        logger.error(f'Finished experiment {i} with an error: {e}.')
         return {"result": e, "config": c}
 
 
 if __name__ == "__main__":
     experiment_name = "2022-12-27-openml-imputer"
-    save_path = "/Users/philipp/code/raha/raha"
+    save_path = "/root/measurements/"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
     logging.getLogger("ruska").setLevel(logging.DEBUG)
@@ -59,7 +64,7 @@ if __name__ == "__main__":
 
     # create console handler with a higher log level to reduce noise
     ch = logging.StreamHandler()
-    ch.setLevel(logging.WARNING)
+    ch.setLevel(logging.INFO)
     # ch.setLevel(logging.DEBUG)
 
     ch.setFormatter(formatter)
@@ -78,7 +83,7 @@ if __name__ == "__main__":
             "dataset": "debug",
             "error_class": "imputer_simple_mcar",
             "error_fraction": 1,
-            "labeling_budget": 3,
+            "labeling_budget": 20,
             "synth_tuples": 20,
             "imputer_cache_model": False,
             "training_time_limit": 30,
@@ -86,22 +91,20 @@ if __name__ == "__main__":
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
-            "n_rows": 2500,
+            "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V4",
         },
         ranges={
-            "dataset": ['rayyan', 'beers'],
-            # "dataset": [137, 1481, 184, 41027, 4135, 42493, 6],
-            # "feature_generators": [
-            #     ["domain", "vicinity", "value"],
-            #     ["domain", "vicinity", "value", "imputer"],
-            # ],
-            # "error_class": ["imputer_simple_mcar", "simple_mcar"]
+            "dataset": [137, 1481, 184, 41027, 4135, 42493, 6],
+            "feature_generators": [
+                ["domain", "vicinity", "value"],
+                ["domain", "vicinity", "value", "imputer"],
+            ],
+            "error_class": ["imputer_simple_mcar", "simple_mcar"]
         },
-        runs=1,
+        runs=3,
         save_path=save_path
-        # save_path="/root/measurements/",
     )
 
     rsk_openml.run(experiment=run_baran, parallel=True)

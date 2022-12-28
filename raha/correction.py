@@ -974,16 +974,16 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "1459"
+    dataset_name = "beers"
     version = 2
     error_fraction = 10
     error_class = 'imputer_simple_mcar'
 
-    feature_generators = ['imputer']
+    feature_generators = ['value', 'vicinity', 'domain']
     imputer_cache_model = False
-    labeling_budget = 20
+    labeling_budget = 3
     n_best_pdeps = 3
-    n_rows = None
+    n_rows = 2500
     rule_based_value_cleaning = 'V4'
     synth_tuples = 0
     training_time_limit = 30
