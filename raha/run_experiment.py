@@ -1,7 +1,11 @@
+import os
+import raha
 import logging
 from ruska import Ruska
-import raha
 from pathlib import Path
+
+import dotenv
+dotenv.load_dotenv()
 
 
 def run_baran(i: int, c: dict):
@@ -65,7 +69,6 @@ if __name__ == "__main__":
     # create console handler with a higher log level to reduce noise
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
-    # ch.setLevel(logging.DEBUG)
 
     ch.setFormatter(formatter)
     logging.root.addHandler(ch)
@@ -104,7 +107,9 @@ if __name__ == "__main__":
             "error_class": ["imputer_simple_mcar", "simple_mcar"]
         },
         runs=3,
-        save_path=save_path
+        save_path=save_path,
+        chat_id=os.environ['TELEGRAM_CHAT_ID'],
+        token=os.environ['TELEGRAM_BOT_TOKEN']
     )
 
     rsk_openml.run(experiment=run_baran, parallel=True)
