@@ -758,7 +758,7 @@ class Correction:
                                                    time_limit=self.TRAINING_TIME_LIMIT,
                                                    use_cache=self.IMPUTER_CACHE_MODEL)
                 if imp is not None:
-                    d.imputer_models[i_col] = imp.predict_proba(d.dataframe)
+                    d.imputer_models[i_col] = imp.predict_proba(d.typed_dataframe)
                 else:
                     d.imputer_models[i_col] = None
 
@@ -974,18 +974,18 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "beers"
-    version = 2
-    error_fraction = 10
-    error_class = 'imputer_simple_mcar'
+    dataset_name = '1481'
+    version = 1
+    error_class = 'simple_mcar'
+    error_fraction = 1
 
-    feature_generators = ['value', 'vicinity', 'domain']
+    feature_generators = ['value', 'vicinity', 'domain', 'imputer']
     imputer_cache_model = False
-    labeling_budget = 3
+    labeling_budget = 20
     n_best_pdeps = 3
-    n_rows = 2500
+    n_rows = None
     rule_based_value_cleaning = 'V4'
-    synth_tuples = 0
+    synth_tuples = 20
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
     vicinity_orders = [1, 2]
