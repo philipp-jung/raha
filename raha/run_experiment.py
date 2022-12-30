@@ -55,8 +55,8 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2022-12-27-openml-imputer"
-    save_path = "/root/measurements/"
+    experiment_name = "2022-12-30-debug-imputer"
+    save_path = "/Users/philipp/code/raha/raha"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
     logging.getLogger("ruska").setLevel(logging.DEBUG)
@@ -80,17 +80,17 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=experiment_name,
-        description="Misst den Effekt des imputer feature generators auf den generierten openml Datensätzen.",
+        description="Die Messung auf 2022-12-30-openml-imputer funzt nicht. Ich debugge einzelne Konfigurationen.",
         commit="",
         config={
-            "dataset": "debug",
+            "dataset": "1481",
             "error_class": "imputer_simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
             "synth_tuples": 20,
             "imputer_cache_model": False,
             "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value"],
+            "feature_generators": ["domain", "vicinity", "value", "imputer"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -98,18 +98,11 @@ if __name__ == "__main__":
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V4",
         },
-        ranges={
-            "dataset": [137, 1481, 184, 41027, 4135, 42493, 6],
-            "feature_generators": [
-                ["domain", "vicinity", "value"],
-                ["domain", "vicinity", "value", "imputer"],
-            ],
-            "error_class": ["imputer_simple_mcar", "simple_mcar"]
-        },
+        ranges={},
         runs=3,
         save_path=save_path,
-        chat_id=os.environ['TELEGRAM_CHAT_ID'],
-        token=os.environ['TELEGRAM_BOT_TOKEN']
+        chat_id=None,
+        token=None
     )
 
     rsk_openml.run(experiment=run_baran, parallel=True)
