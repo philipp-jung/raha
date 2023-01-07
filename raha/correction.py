@@ -266,50 +266,7 @@ class Correction:
         if (ud["new_value"] and len(ud["new_value"]) <= self.MAX_VALUE_LENGTH and
            ud["old_value"] and len(ud["old_value"]) <= self.MAX_VALUE_LENGTH and
            ud["old_value"] != ud["new_value"] and ud["old_value"].lower() != "n/a"):
-            models.update_rules(ud['old_value'], ud['new_value'], cell)
-
-    def pretrain_value_based_models(self, revision_data_folder):
-        """
-        This method pretrains value-based error corrector models.
-        """
-        def _models_pruner():
-            for mi, model in enumerate(models):
-                for k in list(model.keys()):
-                    for v in list(model[k].keys()):
-                        if model[k][v] < self.MIN_CORRECTION_OCCURRENCE:
-                            models[mi][k].pop(v)
-                    if not models[mi][k]:
-                        models[mi].pop(k)
-
-        models = [{}, {}, {}, {}]
-        rd_folder_path = revision_data_folder
-        page_counter = 0
-        for folder in os.listdir(rd_folder_path):
-            if os.path.isdir(os.path.join(rd_folder_path, folder)):
-                for rf in os.listdir(os.path.join(rd_folder_path, folder)):
-                    if rf.endswith(".json"):
-                        page_counter += 1
-                        if page_counter % 100000 == 0:
-                            _models_pruner()
-                            if self.VERBOSE:
-                                print(page_counter, "pages are processed.")
-                        try:
-                            revision_list = json.load(io.open(os.path.join(rd_folder_path, folder, rf), encoding="utf-8"))
-                        except:
-                            continue
-                        for rd in revision_list:
-                            update_dictionary = {
-                                "old_value": raha.dataset.Dataset.value_normalizer("".join(rd["old_value"])),
-                                "new_value": raha.dataset.Dataset.value_normalizer("".join(rd["new_value"]))
-                            }
-                            self._value_based_models_updater(models, update_dictionary, (0, 0))
-        _models_pruner()
-        pretrained_models_path = os.path.join(revision_data_folder, "pretrained_value_based_models.dictionary")
-        if self.PRETRAINED_VALUE_BASED_MODELS_PATH:
-            pretrained_models_path = self.PRETRAINED_VALUE_BASED_MODELS_PATH
-        pickle.dump(models, bz2.BZ2File(pretrained_models_path, "wb"))
-        if self.VERBOSE:
-            print("The pretrained value-based models are stored in {}.".format(pretrained_models_path))
+            models.legacy_update_rules(ud['old_value'], ud['new_value'], cell)
 
     def _domain_based_model_updater(self, model, ud):
         """
@@ -321,9 +278,7 @@ class Correction:
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
-        features = models.cleaning_features(ed['old_value'])
-        if ed['column'] == 8 and self.sampled_tuples == 4:  # col 8 enthaelt die daten.
-            a = 1
+        features = models.legacy_cleaning_features(ed['old_value'])
         return features
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
@@ -388,10 +343,6 @@ class Correction:
         d.value_models = value_cleaning.ValueCleaning()
         d.pdeps = {c: {cc: {} for cc in range(d.dataframe.shape[1])}
                    for c in range(d.dataframe.shape[1])}
-        if os.path.exists(self.PRETRAINED_VALUE_BASED_MODELS_PATH):
-            d.value_models = pickle.load(bz2.BZ2File(self.PRETRAINED_VALUE_BASED_MODELS_PATH, "rb"))
-            if self.VERBOSE:
-                print("The pretrained value-based models are loaded.")
 
         d.domain_models = {}
 
@@ -634,7 +585,7 @@ class Correction:
         elif not self.RULE_BASED_VALUE_CLEANING and is_synth:
             raise ValueError('It is impossible to synthesize tuples and use the meta-learner to apply value-corrections'
                              ' at the same time. Either perform RULE_BASED_VALUE_CLEANING, or set n_synth_tuples=0.')
-        else:
+        else:  # do rule based value cleaning.
             models_corrections = domain_corrections \
             + [corrections for order in naive_vicinity_corrections for corrections in order] \
             + [corrections for order in pdep_vicinity_corrections for corrections in order] \
@@ -749,15 +700,10 @@ class Correction:
 
         for cell, value_corrections in d.value_corrections.items():
             rule_based_suggestion = None
-            if self.RULE_BASED_VALUE_CLEANING == 'V1':
-                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion_v1(d)
-            elif self.RULE_BASED_VALUE_CLEANING == 'V3':
-                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion_v3(d)
-            elif self.RULE_BASED_VALUE_CLEANING == 'V4':
-                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
+            if self.RULE_BASED_VALUE_CLEANING == 'V4':
+                value_suggestions = value_helpers.LegacyValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_v4()
+
             a = 1
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
@@ -889,7 +835,7 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "rayyan"
+    dataset_name = "beers"
     version = 2
     error_fraction = 10
     error_class = 'imputer_simple_mcar'
@@ -897,9 +843,9 @@ if __name__ == "__main__":
 
     feature_generators = ['value']
     imputer_cache_model = False
-    labeling_budget = 5
+    labeling_budget = 20
     n_best_pdeps = 3
-    n_rows = None
+    n_rows = 25
     rule_based_value_cleaning = 'V4'
     synth_tuples = 2
     training_time_limit = 30

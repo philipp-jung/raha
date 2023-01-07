@@ -87,7 +87,7 @@ def optimise_rule(rule: str, error: str):
             transformed = transform_insert(o, error)
             optimised_rule.extend(transformed)
         elif o[0] == 'replace':
-            #ValueError('not implemented yet') TODO was soll das?
+            # ValueError('not implemented yet') TODO implement transform_replace()
             optimised_rule.append(o)
         else:
             optimised_rule.append(o)
@@ -113,9 +113,121 @@ def features_from_rules(error: str, rules: List[Dict]) -> List[Dict]:
     return rule_features
 
 
+def legacy_to_value_model_adder(value_model, enc_error_value, transformation, error_cell):
+    """
+        This method updates the value_model. It is different from _to_model_adder, since value_model contains
+        coordinates of the error_cell from which the transformation originates.
+        """
+    if enc_error_value not in value_model:
+        value_model[enc_error_value] = {}
+    if transformation not in value_model[enc_error_value]:
+        value_model[enc_error_value][transformation] = []
+    value_model[enc_error_value][transformation].append(error_cell)
+
+
+def legacy_assemble_cleaning_suggestion(
+        transformation_string: str, model_name: str, old_value: str
+) -> Union[str, None]:
+    index_character_dictionary = {i: c for i, c in enumerate(old_value)}
+    transformation = json.loads(transformation_string)
+    for change_range_string in transformation:
+        change_range = json.loads(change_range_string)
+        if model_name in ["remover", "replacer"]:
+            for i in range(change_range[0], change_range[1]):
+                index_character_dictionary[i] = ""
+        if model_name in ["adder", "replacer"]:
+            ov = (
+                ""
+                if change_range[0] not in index_character_dictionary
+                else index_character_dictionary[change_range[0]]
+            )
+            index_character_dictionary[change_range[0]] = (
+                    transformation[change_range_string] + ov
+            )
+    new_value = ""
+    try:
+        for i in range(len(index_character_dictionary)):
+            new_value += index_character_dictionary[i]
+    except KeyError:  # not possible to transform old_value.
+        new_value = None
+    return new_value
+
+
 class ValueCleaning:
     def __init__(self):
         self.map_error_to_rules: Dict[EncodedError, CleaningRules] = {}
+        self.legacy_structure = ({}, {}, {}, {})
+
+    def legacy_update_rules(self, error: str, correction: str, error_cell: Tuple[int, int]):
+        """
+        Value Cleaning as implemented in Baran. I implement this as an exercise to validate
+        the new ValueCleaning class and all changes that I apply to it.
+        """
+        remover_transformation = {}
+        adder_transformation = {}
+        replacer_transformation = {}
+        s = difflib.SequenceMatcher(None, error, correction)
+        for tag, i1, i2, j1, j2 in s.get_opcodes():
+            index_range = json.dumps([i1, i2])
+            if tag == "delete":
+                remover_transformation[index_range] = ""
+            if tag == "insert":
+                adder_transformation[index_range] = correction[j1:j2]
+            if tag == "replace":
+                replacer_transformation[index_range] = correction[j1:j2]
+        for encoded_old_value in encode_error(error):
+            if remover_transformation:
+                legacy_to_value_model_adder(self.legacy_structure[0], encoded_old_value,
+                                            json.dumps(remover_transformation),
+                                            error_cell)
+            if adder_transformation:
+                legacy_to_value_model_adder(self.legacy_structure[1], encoded_old_value,
+                                            json.dumps(adder_transformation), error_cell)
+            if replacer_transformation:
+                legacy_to_value_model_adder(self.legacy_structure[2], encoded_old_value,
+                                            json.dumps(replacer_transformation),
+                                            error_cell)
+            legacy_to_value_model_adder(self.legacy_structure[3], encoded_old_value, correction, error_cell)
+
+    def legacy_cleaning_features(self, error):
+        results_list = []
+        for model, model_name in zip(self.legacy_structure, ["remover", "adder", "replacer", "swapper"]):
+            for encoded_value_string in encode_error(error):
+                results_dictionary = {}
+                if encoded_value_string in model:
+                    # Aus V1 urspruenglich.
+                    sum_scores = sum([len(x) for x in model[encoded_value_string].values()])
+                    if model_name in ["remover", "adder", "replacer"]:
+                        for transformation_string in model[encoded_value_string]:
+                            features = {}
+                            new_value = legacy_assemble_cleaning_suggestion(transformation_string,
+                                                                            model_name,
+                                                                            error)
+
+                            # Aus V1 und ursprünglich Baran.
+                            pr_baran = len(model[encoded_value_string][transformation_string]) / sum_scores
+                            features['encoded_string_frequency'] = pr_baran
+
+                            # Aus V2. Muss jemals optimiert werden, kann das weg.
+                            error_cells = model[encoded_value_string][transformation_string]
+                            features['error_cells'] = error_cells
+
+                            results_dictionary[new_value] = features
+
+                    if model_name == "swapper":
+                        for new_value in model[encoded_value_string]:
+                            features = {}
+
+                            # Aus V1.
+                            pr_baran = len(model[encoded_value_string][new_value]) / sum_scores
+                            features['encoded_string_frequency'] = pr_baran
+
+                            # Aus V2.
+                            error_cells = model[encoded_value_string][new_value]
+                            features['error_cells'] = error_cells
+
+                results_list.append(results_dictionary)
+        return results_list
 
     def update_rules(self, error: str, correction: str, error_cell: Tuple[int, int]):
         rule = rule_from_correction(error, correction)
@@ -138,8 +250,8 @@ class ValueCleaning:
         rules_dicts = []
         for rule, properties in identity_rules.items():
             rule_features = {'rule': rule,
-                            'encoding': 'identity',
-                            **properties}
+                             'encoding': 'identity',
+                             **properties}
             rules_dicts.append(rule_features)
 
         for rule, properties in unicode_rules.items():
