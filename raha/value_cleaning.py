@@ -156,12 +156,11 @@ def legacy_assemble_cleaning_suggestion(
 class ValueCleaning:
     def __init__(self):
         self.map_error_to_rules: Dict[EncodedError, CleaningRules] = {}
-        self.legacy_structure = ({}, {}, {}, {})
+        self.atomic_rules = ({}, {}, {}, {})
 
-    def legacy_update_rules(self, error: str, correction: str, error_cell: Tuple[int, int]):
+    def _atomic_update_rules(self, error: str, correction: str, error_cell: Tuple[int, int]):
         """
-        Value Cleaning as implemented in Baran. I implement this as an exercise to validate
-        the new ValueCleaning class and all changes that I apply to it.
+        Atomic Value Cleaning as implemented in Baran.
         """
         remover_transformation = {}
         adder_transformation = {}
@@ -177,59 +176,61 @@ class ValueCleaning:
                 replacer_transformation[index_range] = correction[j1:j2]
         for encoded_old_value in encode_error(error):
             if remover_transformation:
-                legacy_to_value_model_adder(self.legacy_structure[0], encoded_old_value,
+                legacy_to_value_model_adder(self.atomic_rules[0], encoded_old_value,
                                             json.dumps(remover_transformation),
                                             error_cell)
             if adder_transformation:
-                legacy_to_value_model_adder(self.legacy_structure[1], encoded_old_value,
+                legacy_to_value_model_adder(self.atomic_rules[1], encoded_old_value,
                                             json.dumps(adder_transformation), error_cell)
             if replacer_transformation:
-                legacy_to_value_model_adder(self.legacy_structure[2], encoded_old_value,
+                legacy_to_value_model_adder(self.atomic_rules[2], encoded_old_value,
                                             json.dumps(replacer_transformation),
                                             error_cell)
-            legacy_to_value_model_adder(self.legacy_structure[3], encoded_old_value, correction, error_cell)
+            legacy_to_value_model_adder(self.atomic_rules[3], encoded_old_value, correction, error_cell)
 
-    def legacy_cleaning_features(self, error):
+    def _atomic_cleaning_features(self, error):
         results_list = []
-        for model, model_name in zip(self.legacy_structure, ["remover", "adder", "replacer", "swapper"]):
-            for encoded_value_string in encode_error(error):
+        for model, model_name in zip(self.atomic_rules, ["remover", "adder", "replacer", "swapper"]):
+            for encoding, encoded_value_string in zip(('identity', 'unicode'), encode_error(error)):
                 results_dictionary = {}
                 if encoded_value_string in model:
                     # Aus V1 urspruenglich.
                     sum_scores = sum([len(x) for x in model[encoded_value_string].values()])
                     if model_name in ["remover", "adder", "replacer"]:
                         for transformation_string in model[encoded_value_string]:
-                            features = {}
                             new_value = legacy_assemble_cleaning_suggestion(transformation_string,
                                                                             model_name,
                                                                             error)
 
                             # Aus V1 und ursprünglich Baran.
                             pr_baran = len(model[encoded_value_string][transformation_string]) / sum_scores
-                            features['encoded_string_frequency'] = pr_baran
 
                             # Aus V2. Muss jemals optimiert werden, kann das weg.
                             error_cells = model[encoded_value_string][transformation_string]
-                            features['error_cells'] = error_cells
+                            rule = transformation_string
 
-                            results_dictionary[new_value] = features
-
-                    if model_name == "swapper":
+                    elif model_name == "swapper":
                         for new_value in model[encoded_value_string]:
-                            features = {}
-
                             # Aus V1.
                             pr_baran = len(model[encoded_value_string][new_value]) / sum_scores
-                            features['encoded_string_frequency'] = pr_baran
 
                             # Aus V2.
                             error_cells = model[encoded_value_string][new_value]
-                            features['error_cells'] = error_cells
+                            rule = "swap"
+                    else:
+                        raise ValueError('Undefined model name.')
 
+                    results_dictionary = {'correction': new_value,
+                                          'rule': rule,
+                                          'encoding': encoding,
+                                          'relative_string_frequency': pr_baran,
+                                          'error_cells': error_cells,
+                                          }
                 results_list.append(results_dictionary)
         return results_list
 
     def update_rules(self, error: str, correction: str, error_cell: Tuple[int, int]):
+        self._atomic_update_rules(error, correction, error_cell)
         rule = rule_from_correction(error, correction)
         optimised_rule = optimise_rule(rule, error)
 
@@ -242,7 +243,14 @@ class ValueCleaning:
             self.map_error_to_rules[encoded_error][optimised_rule]['times_created'] += 1
             self.map_error_to_rules[encoded_error][optimised_rule]['error_cells'].append(error_cell)
 
-    def cleaning_features(self, error: str) -> List[Dict]:
+    def cleaning_features(self, error: str, features: str = 'both') -> List[Dict]:
+        """
+        Generate cleaning features.
+        @param error: An error to be corrected.
+        @param features: Either 'atomic', 'complex' or 'both'. If 'atomic', generate atomic features from the optcodes.
+        If 'complex', generate only complex rules. And if 'both', generate both kind of features.
+        @return:
+        """
         identity_encoded, unicode_encoded = encode_error(error)
         identity_rules = self.map_error_to_rules.get(identity_encoded, {})
         unicode_rules = self.map_error_to_rules.get(unicode_encoded, {})
@@ -262,4 +270,12 @@ class ValueCleaning:
 
         if len(rules_dicts) == 0:
             return []
-        return features_from_rules(error, rules_dicts)
+        if features == 'atomic':
+            return self._atomic_cleaning_features(error)
+        elif features == 'complex':
+            return features_from_rules(error, rules_dicts)
+        elif features == 'both':
+            return self._atomic_cleaning_features(error) + features_from_rules(error, rules_dicts)
+        else:
+            raise ValueError(f'Invalid parameter features: {features}. Needs to be either "atomic", "complex", or '
+                             f'"both".')

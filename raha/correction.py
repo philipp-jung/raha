@@ -266,7 +266,7 @@ class Correction:
         if (ud["new_value"] and len(ud["new_value"]) <= self.MAX_VALUE_LENGTH and
            ud["old_value"] and len(ud["old_value"]) <= self.MAX_VALUE_LENGTH and
            ud["old_value"] != ud["new_value"] and ud["old_value"].lower() != "n/a"):
-            models.legacy_update_rules(ud['old_value'], ud['new_value'], cell)
+            models.update_rules(ud['old_value'], ud['new_value'], cell)
 
     def _domain_based_model_updater(self, model, ud):
         """
@@ -278,7 +278,7 @@ class Correction:
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
-        features = models.legacy_cleaning_features(ed['old_value'])
+        features = models.cleaning_features(ed['old_value'], features='atomic')
         return features
 
     def _imputer_based_corrector(self, model: Dict[int, pd.DataFrame], ed: dict) -> list:
@@ -302,7 +302,6 @@ class Correction:
             # make sure that suggested correction is likely and isn't the error.
             if probability > 0 and correction != ed['old_value']:
                 result[correction] = probability
-        # TODO normalize probabilities when old error gets deleted
         return [result]
 
     def _domain_based_corrector(self, model, ed):
@@ -701,10 +700,9 @@ class Correction:
         for cell, value_corrections in d.value_corrections.items():
             rule_based_suggestion = None
             if self.RULE_BASED_VALUE_CLEANING == 'V4':
-                value_suggestions = value_helpers.LegacyValueSuggestions(cell, value_corrections)
+                value_suggestions = value_helpers.ValueSuggestions(cell, value_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_v4()
 
-            a = 1
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
 
@@ -845,7 +843,7 @@ if __name__ == "__main__":
     imputer_cache_model = False
     labeling_budget = 20
     n_best_pdeps = 3
-    n_rows = 25
+    n_rows = None
     rule_based_value_cleaning = 'V4'
     synth_tuples = 2
     training_time_limit = 30
