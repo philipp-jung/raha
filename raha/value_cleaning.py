@@ -145,11 +145,11 @@ def legacy_assemble_cleaning_suggestion(
                     transformation[change_range_string] + ov
             )
     new_value = ""
-    try:
-        for i in range(len(index_character_dictionary)):
-            new_value += index_character_dictionary[i]
-    except KeyError:  # not possible to transform old_value.
-        new_value = None
+    # try:
+    for i in range(len(index_character_dictionary)):
+        new_value += index_character_dictionary[i]
+    # except KeyError:  # not possible to transform old_value.
+    #     new_value = None
     return new_value
 
 
@@ -188,11 +188,11 @@ class ValueCleaning:
                                             error_cell)
             legacy_to_value_model_adder(self.atomic_rules[3], encoded_old_value, correction, error_cell)
 
-    def _atomic_cleaning_features(self, error):
+    def _atomic_cleaning_features(self, error) -> List[List[Dict]]:
         results_list = []
         for model, model_name in zip(self.atomic_rules, ["remover", "adder", "replacer", "swapper"]):
             for encoding, encoded_value_string in zip(('identity', 'unicode'), encode_error(error)):
-                results_dictionary = {}
+                model_results = []  # one list per operation + encoding
                 if encoded_value_string in model:
                     # Aus V1 urspruenglich.
                     sum_scores = sum([len(x) for x in model[encoded_value_string].values()])
@@ -208,6 +208,12 @@ class ValueCleaning:
                             # Aus V2. Muss jemals optimiert werden, kann das weg.
                             error_cells = model[encoded_value_string][transformation_string]
                             rule = transformation_string
+                            model_results.append({'correction': new_value,
+                                                  'rule': rule,
+                                                  'encoding': encoding,
+                                                  'relative_string_frequency': pr_baran,
+                                                  'error_cells': error_cells,
+                                                  })
 
                     elif model_name == "swapper":
                         for new_value in model[encoded_value_string]:
@@ -217,16 +223,16 @@ class ValueCleaning:
                             # Aus V2.
                             error_cells = model[encoded_value_string][new_value]
                             rule = "swap"
+                            model_results.append({'correction': new_value,
+                                                  'rule': rule,
+                                                  'encoding': encoding,
+                                                  'relative_string_frequency': pr_baran,
+                                                  'error_cells': error_cells,
+                                                  })
                     else:
                         raise ValueError('Undefined model name.')
 
-                    results_dictionary = {'correction': new_value,
-                                          'rule': rule,
-                                          'encoding': encoding,
-                                          'relative_string_frequency': pr_baran,
-                                          'error_cells': error_cells,
-                                          }
-                results_list.append(results_dictionary)
+                results_list.append(model_results)
         return results_list
 
     def update_rules(self, error: str, correction: str, error_cell: Tuple[int, int]):
@@ -275,7 +281,7 @@ class ValueCleaning:
         elif features == 'complex':
             return features_from_rules(error, rules_dicts)
         elif features == 'both':
-            return self._atomic_cleaning_features(error) + features_from_rules(error, rules_dicts)
+            return self._atomic_cleaning_features(error) + [features_from_rules(error, rules_dicts)]
         else:
             raise ValueError(f'Invalid parameter features: {features}. Needs to be either "atomic", "complex", or '
                              f'"both".')
