@@ -58,8 +58,8 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-01-01-debug-imputer"
-    save_path = "/Users/philipp/code/raha/raha"
+    experiment_name = "2023-01-14-value-v5"
+    save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
     logging.getLogger("ruska").setLevel(logging.DEBUG)
@@ -82,37 +82,95 @@ if __name__ == "__main__":
     logging.root.addHandler(fh)
 
     rsk_openml = Ruska(
-        name=experiment_name,
-        description="Die Messung auf 2022-12-30-openml-imputer funzt nicht. Ich debugge einzelne Konfigurationen.",
+        name=f"{experiment_name}-openml",
+        description="Messung V5 auf openML",
         commit="",
         config={
             "dataset": "1481",
-            "error_class": "imputer_simple_mcar",
+            "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
             "synth_tuples": 20,
             "imputer_cache_model": False,
             "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value", "imputer"],
+            "feature_generators": ["domain", "vicinity", "value"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V4",
+            "rule_based_value_cleaning": "V5",
         },
         ranges={
             "dataset": [137, 1481, 184, 41027, 4135, 42493, 6],
-            "error_class": ["imputer_simple_mcar", "simple_mcar"],
-            "feature_generators": [
-                ["domain", "vicinity", "value"],
-                ["domain", "vicinity", "value", "imputer"],
-            ],
+            "error_fraction": [1, 5, 10, 30],
         },
         runs=3,
         save_path=save_path,
-        chat_id=os.environ['TELEGRAM_CHAT_ID'],
-        token=os.environ['TELEGRAM_BOT_TOKEN'],
+        chat_id=os.environ["TELEGRAM_CHAT_ID"],
+        token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    rsk_openml.run(experiment=run_baran, parallel=False)
+    rsk_baran = Ruska(
+        name=f"{experiment_name}-baran",
+        description="Messung V5 auf baran",
+        commit="",
+        config={
+            "dataset": "1481",
+            "error_class": "simple_mcar",
+            "error_fraction": 1,
+            "labeling_budget": 20,
+            "synth_tuples": 20,
+            "imputer_cache_model": False,
+            "training_time_limit": 30,
+            "feature_generators": ["domain", "vicinity", "value"],
+            "classification_model": "ABC",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": "V5",
+        },
+        ranges={
+            "dataset": ["beers", "flights", "hospital", "rayyan"],
+        },
+        runs=3,
+        save_path=save_path,
+        chat_id=os.environ["TELEGRAM_CHAT_ID"],
+        token=os.environ["TELEGRAM_BOT_TOKEN"],
+    )
+
+    rsk_renuver = Ruska(
+        name=f"{experiment_name}-renuver",
+        description="Messung V5 auf renuver",
+        commit="",
+        config={
+            "dataset": "1481",
+            "error_class": "simple_mcar",
+            "error_fraction": 1,
+            "labeling_budget": 20,
+            "synth_tuples": 20,
+            "imputer_cache_model": False,
+            "training_time_limit": 30,
+            "feature_generators": ["domain", "vicinity", "value"],
+            "classification_model": "ABC",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": "V5",
+        },
+        ranges={
+            "dataset": ["bridges", "cars", "glass", "restaurant"],
+            "error_fraction": [1, 2, 3, 4, 5]
+        },
+        runs=3,
+        save_path=save_path,
+        chat_id=os.environ["TELEGRAM_CHAT_ID"],
+        token=os.environ["TELEGRAM_BOT_TOKEN"],
+    )
+
+    rsk_openml.run(experiment=run_baran, parallel=True)
+    rsk_baran.run(experiment=run_baran, parallel=True)
+    rsk_renuver.run(experiment=run_baran, parallel=True)
+
