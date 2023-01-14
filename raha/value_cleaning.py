@@ -10,7 +10,7 @@ CleaningRules = NewType('CleaningRules', Dict[RuleDumpJSON, RuleStatistics])
 
 
 def encode_error(error: str) -> Tuple[EncodedError, EncodedError]:
-    return json.dumps(list(error)), json.dumps([unicodedata.category(c) for c in error])
+    return EncodedError(json.dumps(list(error))), EncodedError(json.dumps([unicodedata.category(c) for c in error]))
 
 
 def clean_with_rule(error: str, rule: str):
@@ -50,6 +50,32 @@ def rule_from_correction(error: str, correction: str):
     return json.dumps(rule)
 
 
+def transform_replace(o, error):
+    replace_str = o[3]
+    replace_pos_end = o[1] + len(replace_str)
+
+    s = difflib.SequenceMatcher(None, replace_str, error)
+    blocks = s.get_matching_blocks()  # non-overlapping matching subsequences of replace_str and error. Last block is a dummy.
+
+    i = 0  # position in the replace-string.
+    operations = []
+
+    while i < replace_pos_end:
+        if len(blocks) > 0:
+            b = blocks.pop(0)
+            if i == b.a:  # replace position is same as block's starting position
+                operation = ['equal', b.b, b.b + b.size]
+                i = b.a + b.size
+            elif i < b.a:
+                operation = ['replace', i, i, replace_str[i]]
+                i += 1
+        elif i < replace_pos_end:  # fill up the rest of the operation if there are no matching blocks.
+            operation = ['replace', i, i, replace_str[i:replace_pos_end]]
+            i = replace_pos_end
+        operations.append(operation)
+    return operations
+
+
 def transform_insert(o, error):
     insert_str = o[3]
     insert_pos_start = o[1]
@@ -87,8 +113,8 @@ def optimise_rule(rule: str, error: str):
             transformed = transform_insert(o, error)
             optimised_rule.extend(transformed)
         elif o[0] == 'replace':
-            # ValueError('not implemented yet') TODO implement transform_replace()
-            optimised_rule.append(o)
+            transformed = transform_replace(o, error)
+            optimised_rule.append(transformed)
         else:
             optimised_rule.append(o)
     return json.dumps(optimised_rule)
@@ -249,7 +275,7 @@ class ValueCleaning:
             self.map_error_to_rules[encoded_error][optimised_rule]['times_created'] += 1
             self.map_error_to_rules[encoded_error][optimised_rule]['error_cells'].append(error_cell)
 
-    def cleaning_features(self, error: str, features: str = 'both') -> List[Dict]:
+    def cleaning_features(self, error: str, features: str = 'both') -> List[List[Dict]]:
         """
         Generate cleaning features.
         @param error: An error to be corrected.
@@ -279,7 +305,7 @@ class ValueCleaning:
         if features == 'atomic':
             return self._atomic_cleaning_features(error)
         elif features == 'complex':
-            return features_from_rules(error, rules_dicts)
+            return [features_from_rules(error, rules_dicts)]
         elif features == 'both':
             return self._atomic_cleaning_features(error) + [features_from_rules(error, rules_dicts)]
         else:
