@@ -699,6 +699,11 @@ class Correction:
                 value_suggestions = value_helpers.BothValueSuggestions(cell, atomic_corrections, complex_corrections)
                 rule_based_suggestion = value_suggestions.rule_based_suggestion_v4()
 
+            if self.RULE_BASED_VALUE_CLEANING == 'V5' and len(value_corrections) > 0:
+                atomic_corrections, complex_corrections = value_corrections[:8], value_corrections[8]
+                value_suggestions = value_helpers.BothValueSuggestions(cell, atomic_corrections, complex_corrections)
+                rule_based_suggestion = value_suggestions.rule_based_suggestion_v4()
+
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
 
@@ -808,11 +813,9 @@ class Correction:
                 # corrections are super precise and thus should be used if possible.
 
                 for cell, correction in d.rule_based_value_corrections.items():
-                    row, col = cell
-                    if row not in d.labeled_tuples:  # don't overwrite user-given corrections
-                        d.corrected_cells[cell] = correction
+                    d.corrected_cells[cell] = correction
 
-            # just to be sure, overwrite corrections with user-input.
+            # overwrite corrections with user-input, which is always correct.
             for error_cell in d.detected_cells:
                 if error_cell in d.labeled_cells:
                     d.corrected_cells[error_cell] = d.labeled_cells[error_cell][1]
@@ -829,19 +832,19 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "hospital"
+    dataset_name = "42493"
     version = 2
     error_fraction = 10
-    error_class = 'imputer_simple_mcar'
+    error_class = 'simple_mcar'
     error_fraction = 1
 
-    feature_generators = ['value']
+    feature_generators = ['domain', 'vicinity', 'value']
     imputer_cache_model = False
     labeling_budget = 20
     n_best_pdeps = 3
     n_rows = None
-    rule_based_value_cleaning = 'V4'
-    synth_tuples = 0
+    rule_based_value_cleaning = 'V5'
+    synth_tuples = 20
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
     vicinity_orders = [1, 2]
