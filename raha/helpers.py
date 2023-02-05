@@ -1,5 +1,6 @@
 import json
-from typing import Union, Dict
+from typing import Union, Dict, Tuple, List
+from dataclasses import dataclass
 
 
 def get_data_dict(
@@ -132,3 +133,48 @@ def assemble_cleaning_suggestion(
     except KeyError:  # not possible to transform old_value.
         new_value = None
     return new_value
+
+
+@dataclass
+class ErrorPositions:
+    detected_cells: Dict[Tuple[int, int], Union[str, float, int]]
+    table_shape: Tuple[int, int]
+    corrected_cells: Dict[Tuple[int, int], Tuple[int, str]]
+
+    def count_column_errors(self, updated: bool) -> Dict[int, List[Tuple[int, int]]]:
+        column_errors = {j: [] for j in range(self.table_shape[1])}
+        if not updated:
+            for (row, col), error_value in self.detected_cells.items():
+                column_errors[col].append((row, col))
+        elif updated:
+            for (row, col), error_value in self.detected_cells.items():
+                if (row, col) not in self.corrected_cells:
+                    column_errors[col].append((row, col))
+        return column_errors
+
+    def count_row_errors(self, updated: bool) -> Dict[int, List[Tuple[int, int]]]:
+        row_errors = {i: [] for i in range(self.table_shape[0])}
+        if not updated:
+            for (row, col), error_value in self.detected_cells.items():
+                row_errors[row].append((row, col))
+        elif updated:
+            for (row, col), error_value in self.detected_cells.items():
+                if (row, col) not in self.corrected_cells:
+                    row_errors[row].append((row, col))
+        return row_errors
+
+    @property
+    def original_column_errors(self) -> Dict[int, List[Tuple[int, int]]]:
+        return self.count_column_errors(updated=False)
+
+    @property
+    def updated_column_errors(self) -> Dict[int, List[Tuple[int, int]]]:
+        return self.count_column_errors(updated=True)
+
+    @property
+    def original_row_errors(self) -> Dict[int, List[Tuple[int, int]]]:
+        return self.count_row_errors(updated=False)
+
+    @property
+    def updated_row_errors(self) -> Dict[int, List[Tuple[int, int]]]:
+        return self.count_row_errors(updated=True)

@@ -36,7 +36,10 @@ class Dataset:
         self.name = dataset_dictionary["name"]
         self.path = dataset_dictionary["path"]
         self.dataframe = self.read_csv_dataset(dataset_dictionary["path"])
-        self.typed_dataframe = self.read_parquet_dataset(dataset_dictionary.get('parquet_path'))
+        if dataset_dictionary.get('parquet_path') is not None:
+            self.typed_dataframe = self.read_parquet_dataset(dataset_dictionary.get('parquet_path'))
+        else:  # no .parquet with typed data available. fall back to .csv file.
+            self.typed_dataframe = self.dataframe
         if n_rows is not None:
             self.dataframe = self.dataframe.iloc[:n_rows, :]
         if "clean_path" in dataset_dictionary:
@@ -50,6 +53,11 @@ class Dataset:
                 self.typed_clean_dataframe = self.read_parquet_dataset(typed_clean_path)
                 if n_rows is not None:
                     self.typed_clean_dataframe = self.typed_clean_dataframe.iloc[:n_rows, :]
+            else:  # no .parquet with typed dataframe available. fall back to .csv file.
+                self.typed_clean_dataframe = self.clean_dataframe
+                if n_rows is not None:
+                    self.typed_clean_dataframe = self.typed_clean_dataframe.iloc[:n_rows, :]
+
         if "repaired_path" in dataset_dictionary:
             self.has_been_repaired = True
             self.repaired_path = dataset_dictionary["repaired_path"]
