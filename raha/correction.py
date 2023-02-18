@@ -42,6 +42,7 @@ from raha import ml_helpers
 from raha import value_cleaning
 from raha import value_helpers
 
+
 ########################################
 
 
@@ -115,6 +116,7 @@ class Correction:
         """
         This method takes a Wikipedia page revision text in wikitext and segments it recursively.
         """
+
         def recursive_segmenter(node):
             if isinstance(node, str):
                 segments_list.append(node)
@@ -225,7 +227,8 @@ class Correction:
             decompressed_dump_file.close()
             os.remove(decompressed_dump_file_path)
             if self.VERBOSE:
-                print("{} ({} / {}) is processed.".format(file_name, len(os.listdir(rd_folder_path)), len(compressed_dumps_list)))
+                print("{} ({} / {}) is processed.".format(file_name, len(os.listdir(rd_folder_path)),
+                                                          len(compressed_dumps_list)))
 
     @staticmethod
     def _value_encoder(value, encoding):
@@ -265,8 +268,8 @@ class Correction:
         This method updates the value-based error corrector models with a given update dictionary.
         """
         if (ud["new_value"] and len(ud["new_value"]) <= self.MAX_VALUE_LENGTH and
-           ud["old_value"] and len(ud["old_value"]) <= self.MAX_VALUE_LENGTH and
-           ud["old_value"] != ud["new_value"] and ud["old_value"].lower() != "n/a"):
+                ud["old_value"] and len(ud["old_value"]) <= self.MAX_VALUE_LENGTH and
+                ud["old_value"] != ud["new_value"] and ud["old_value"].lower() != "n/a"):
             models.update_rules(ud['old_value'], ud['new_value'], cell)
 
     def _domain_based_model_updater(self, model, ud):
@@ -366,10 +369,10 @@ class Correction:
         if 'vicinity' in self.FEATURE_GENERATORS:
             for o in self.VICINITY_ORDERS:
                 d.vicinity_models[o] = pdep.calculate_counts_dict(
-                                        df=d.dataframe,
-                                        detected_cells=d.detected_cells,
-                                        order=o,
-                                        ignore_sign=self.IGNORE_SIGN)
+                    df=d.dataframe,
+                    detected_cells=d.detected_cells,
+                    order=o,
+                    ignore_sign=self.IGNORE_SIGN)
         d.imputer_models = {}
 
         if self.VERBOSE:
@@ -400,7 +403,8 @@ class Correction:
             for error_cell in column_errors[j]:
                 if error_cell not in d.corrected_cells:  # no correction suggestion has been found yet.
                     self._to_model_adder(remaining_column_uncorrected_cells, j, error_cell)
-                    self._to_model_adder(remaining_column_uncorrected_cells_error_values, j, d.dataframe.iloc[error_cell])
+                    self._to_model_adder(remaining_column_uncorrected_cells_error_values, j,
+                                         d.dataframe.iloc[error_cell])
                 if error_cell not in d.labeled_cells:
                     # the cell has not been labeled by the user yet. this is stricter than the above condition.
                     self._to_model_adder(remaining_column_unlabeled_cells, j, error_cell)
@@ -421,7 +425,6 @@ class Correction:
                 column_score = math.exp(len(remaining_columns_to_choose_from[j]) / len(column_errors[j]))
                 cell_score = math.exp(remaining_cell_error_values[j][value] / len(remaining_columns_to_choose_from[j]))
                 tuple_score[cell[0]] *= column_score * cell_score
-
 
         # Nützlich, um tuple-sampling zu debuggen: Zeigt die Tupel, aus denen
         # zufällig gewählt wird.
@@ -533,14 +536,14 @@ class Correction:
             elif self.VICINITY_FEATURE_GENERATOR == 'pdep':
                 for o in self.VICINITY_ORDERS:
                     pdep_corrections = pdep.pdep_vicinity_based_corrector(
-                            inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
-                            counts_dict=d.vicinity_models[o],
-                            ed=error_dictionary,
-                            n_best_pdeps=self.N_BEST_PDEPS)
+                        inverse_sorted_gpdeps=d.inv_vicinity_gpdeps[o],
+                        counts_dict=d.vicinity_models[o],
+                        ed=error_dictionary,
+                        n_best_pdeps=self.N_BEST_PDEPS)
                     pdep_vicinity_corrections.append(pdep_corrections)
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
-                        f'{self.VICINITY_FEATURE_GENERATOR}')
+                                 f'{self.VICINITY_FEATURE_GENERATOR}')
 
         if "value" in self.FEATURE_GENERATORS and not is_synth:
             error = error_dictionary['old_value']
@@ -570,20 +573,21 @@ class Correction:
         if not self.RULE_BASED_VALUE_CLEANING and not is_synth:
             # construct value corrections as in original Baran
             # TODO I think this is broken rn. I changed the data structure value_corrections refers to.
-            value_corrections = [{correction: d[correction]['encoded_string_frequency']} for d in value_corrections for correction in d]
+            value_corrections = [{correction: d[correction]['encoded_string_frequency']} for d in value_corrections for
+                                 correction in d]
             models_corrections = value_corrections \
-            + domain_corrections \
-            + [corrections for order in naive_vicinity_corrections for corrections in order] \
-            + [corrections for order in pdep_vicinity_corrections for corrections in order] \
-            + imputer_corrections
+                                 + domain_corrections \
+                                 + [corrections for order in naive_vicinity_corrections for corrections in order] \
+                                 + [corrections for order in pdep_vicinity_corrections for corrections in order] \
+                                 + imputer_corrections
         elif not self.RULE_BASED_VALUE_CLEANING and is_synth:
             raise ValueError('It is impossible to synthesize tuples and use the meta-learner to apply value-corrections'
                              ' at the same time. Either perform RULE_BASED_VALUE_CLEANING, or set n_synth_tuples=0.')
         else:  # do rule based value cleaning.
             models_corrections = domain_corrections \
-            + [corrections for order in naive_vicinity_corrections for corrections in order] \
-            + [corrections for order in pdep_vicinity_corrections for corrections in order] \
-            + imputer_corrections
+                                 + [corrections for order in naive_vicinity_corrections for corrections in order] \
+                                 + [corrections for order in pdep_vicinity_corrections for corrections in order] \
+                                 + imputer_corrections
         # End Philipps Changes
 
         corrections_features = {}
@@ -656,7 +660,8 @@ class Correction:
 
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         row_errors = error_positions.updated_row_errors
-        synth_tuples_candidates = [(row, len(cells)) for row, cells in row_errors.items() if len(cells) <= self.SYNTH_TUPLES_ERROR_THRESHOLD]
+        synth_tuples_candidates = [(row, len(cells)) for row, cells in row_errors.items() if
+                                   len(cells) <= self.SYNTH_TUPLES_ERROR_THRESHOLD]
         synth_tuples_candidates_ranked = sorted(synth_tuples_candidates, key=lambda x: x[1])
         if self.SYNTH_TUPLES > 0 and len(synth_tuples_candidates_ranked) > 0:
             if len(synth_tuples_candidates_ranked) <= self.SYNTH_TUPLES:
@@ -754,7 +759,8 @@ class Correction:
                     correction_dict = d.pair_features[cell]
                     if len(correction_dict) > 0:
                         # select the correction with the highest sum of features.
-                        max_proba_feature = sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
+                        max_proba_feature = \
+                            sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
                         d.corrected_cells[cell] = max_proba_feature[0]
 
             elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
@@ -766,71 +772,78 @@ class Correction:
                 raise ValueError('Invalid state')
 
         if self.VERBOSE:
-            print("{:.0f}% ({} / {}) of data errors are corrected.".format(100 * len(d.corrected_cells) / len(d.detected_cells),
-                                                                           len(d.corrected_cells), len(d.detected_cells)))
+            print("{:.0f}% ({} / {}) of data errors are corrected.".format(
+                100 * len(d.corrected_cells) / len(d.detected_cells),
+                len(d.corrected_cells), len(d.detected_cells)))
 
     def binary_predict_corrections(self, d):
+        """
+        The ML problem as formulated in the Baran paper.
+        """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         column_errors = error_positions.original_column_errors
         for j in column_errors:
-            x_train, y_train, x_test, user_corrected_cells, all_error_correction_suggestions = ml_helpers.generate_train_test_data(column_errors,
-                                                                                                                                   d.labeled_cells,
-                                                                                                                                   d.pair_features,
-                                                                                                                                   d.dataframe,
-                                                                                                                                   d.synth_pair_features,
-                                                                                                                                   j)
-            for error_cell in user_corrected_cells:
-                d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
+            x_train, y_train, x_test, user_corrected_cells, all_error_correction_suggestions = ml_helpers.generate_train_test_data(
+                column_errors,
+                d.labeled_cells,
+                d.pair_features,
+                d.dataframe,
+                d.synth_pair_features,
+                j)
 
-            if len(x_train) > 0 and len(x_test) > 0:
-                if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
-                    predicted_labels = numpy.zeros(len(x_test))
-                elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
-                    predicted_labels = numpy.ones(len(x_test))
+            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
+            if is_valid_problem:
+                if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
+                    gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                    gs_clf.fit(x_train, y_train)
+                elif self.CLASSIFICATION_MODEL == "CV":
+                    gs_clf = hpo.cross_validated_estimator(x_train, y_train)
                 else:
-                    if self.n_true_classes.get(len(d.labeled_tuples)) is None:
-                        self.n_true_classes[len(d.labeled_tuples)] = []
-                    if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
-                        gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-                        gs_clf.fit(x_train, y_train)
-                        self.n_true_classes[len(d.labeled_tuples)].append({'clf': str(gs_clf),
-                                                                           'clf__n_estimators': 100,
-                                                                           'n_y_true': sum(y_train)})
-                    elif self.CLASSIFICATION_MODEL == "CV":
-                        gs_clf = hpo.cross_validated_estimator(x_train, y_train)
-                        self.n_true_classes[len(d.labeled_tuples)].append({'clf': gs_clf.best_estimator_,
-                                                                           'score': gs_clf.best_score_,
-                                                                           **gs_clf.best_params_,
-                                                                           'n_y_true': sum(y_train)})
-                    else:
-                        raise ValueError('Unknown model.')
-                    predicted_labels = gs_clf.predict(x_test)
+                    raise ValueError('Unknown model.')
+                predicted_labels = gs_clf.predict(x_test)
 
-                # set final cleaning suggestion from meta-learning result. User corrected cells are not overwritten!
-                for index, predicted_label in enumerate(predicted_labels):
-                    if predicted_label:
-                        cell, predicted_correction = all_error_correction_suggestions[index]
-                        d.corrected_cells[cell] = predicted_correction
-
-            elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
-                for cell in d.pair_features:
-                    correction_dict = d.pair_features[cell]
-                    if len(correction_dict) > 0:
-                        # select the correction with the highest sum of features.
-                        max_proba_feature = sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
-                        d.corrected_cells[cell] = max_proba_feature[0]
-
-            elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
-                pass  # nothing to do here -- just use the manually corrected cells to correct all errors.
-
-            elif len(x_train) == 0:
-                pass  # nothing to learn because x_train is empty.
-            else:
-                raise ValueError('Invalid state')
+            ml_helpers.set_binary_cleaning_suggestions(predicted_labels, all_error_correction_suggestions,
+                                                       user_corrected_cells, d)
 
         if self.VERBOSE:
-            print("{:.0f}% ({} / {}) of data errors are corrected.".format(100 * len(d.corrected_cells) / len(d.detected_cells),
-                                                                           len(d.corrected_cells), len(d.detected_cells)))
+            print("{:.0f}% ({} / {}) of data errors are corrected.".format(
+                100 * len(d.corrected_cells) / len(d.detected_cells),
+                len(d.corrected_cells), len(d.detected_cells)))
+
+    def voting_binary_predict_corrections(self, d):
+        """
+        Train two binary classifiers. One with synth_tuples, the other without. Combine them via a voting ensemble
+        that sums up the class probabilities of both models.
+        """
+        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+        column_errors = error_positions.original_column_errors
+        for j in column_errors:
+            classifiers = []
+            train_test_data = [
+                ml_helpers.generate_train_test_data(column_errors, d.labeled_cells, d.pair_features, d.dataframe, synth,
+                                                    j) for synth in ([], d.synth_pair_features)]
+
+            valid_problems = 0
+            for (x_train, y_train, x_test, user_corrected_cells, all_error_correction_suggestions) in train_test_data:
+                is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
+                if is_valid_problem:
+                    valid_problems += 1
+                    clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                    clf.fit(x_train, y_train)
+                    classifiers.append(clf)
+
+            if valid_problems == 2:  # both problems need to be valid
+                est = [('no synth', classifiers[0]), ['synth', classifiers[1]]]
+                ensemble = ml_helpers.VotingClassifier(est)
+                predicted_labels = ensemble.predict(numpy.stack(x_test, axis=0))
+
+            ml_helpers.set_binary_cleaning_suggestions(predicted_labels, all_error_correction_suggestions,
+                                                       user_corrected_cells, d)
+
+        if self.VERBOSE:
+            print("{:.0f}% ({} / {}) of data errors are corrected.".format(
+                100 * len(d.corrected_cells) / len(d.detected_cells),
+                len(d.corrected_cells), len(d.detected_cells)))
 
     def store_results(self, d):
         """
@@ -871,8 +884,9 @@ class Correction:
             self.generate_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
+            self.voting_binary_predict_corrections(d)
             # self.binary_predict_corrections(d)
-            self.multi_predict_corrections(d)
+            # self.multi_predict_corrections(d)
             if self.RULE_BASED_VALUE_CLEANING:
                 # write the rule-based value corrections into the corrections dictionary. This overwrites
                 # results for domain & vicinity features. The idea is that the rule-based value
@@ -887,7 +901,9 @@ class Correction:
                     d.corrected_cells[error_cell] = d.labeled_cells[error_cell][1]
             if self.VERBOSE:
                 p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
-                print("Cleaning performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r, f))
+                print(
+                    "Cleaning performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r,
+                                                                                                           f))
 
         if self.VERBOSE:
             print("Number of true classes: {}".format(self.n_true_classes))
@@ -898,9 +914,9 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "1481"
+    dataset_name = "beers"
     version = 1
-    error_fraction = 5
+    error_fraction = 4
     error_class = 'simple_mcar'
 
     feature_generators = ['domain', 'vicinity', 'value']
@@ -909,12 +925,11 @@ if __name__ == "__main__":
     n_best_pdeps = 3
     n_rows = None
     rule_based_value_cleaning = 'V5'
-    synth_tuples = 10
+    synth_tuples = 50
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
     vicinity_orders = [1, 2]
-
 
     # Load Dataset object
     data_dict = helpers.get_data_dict(dataset_name, error_fraction, version, error_class)
@@ -923,7 +938,7 @@ if __name__ == "__main__":
     data = raha.dataset.Dataset(data_dict, n_rows=n_rows)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
 
-    app = Correction(labeling_budget, classification_model,  feature_generators, vicinity_orders,
+    app = Correction(labeling_budget, classification_model, feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
                      rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold)
     app.VERBOSE = True

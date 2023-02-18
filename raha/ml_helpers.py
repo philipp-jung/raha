@@ -1,46 +1,78 @@
-import math
-import random
 import pandas as pd
 import numpy as np
+import sklearn
 from typing import List, Dict, Tuple
 
 
-def parity_train_test_data(x_train,
-                           y_train,
-                           possible_synthetic_cells):
+class VotingClassifier(object):
     """
-    Establish a 50/50 parity synth_data : user_input as suggested by Thorsten in 2022W45.
+    Implements a voting classifier for pre-trained classifiers. Uses soft-voting to get the right label.
+    Inspired by https://stackoverflow.com/a/50295289.
     """
-    MIN_POSITIVE_SAMPLES = 8  # willkürlich gesetzt zzT
 
-    n_synthetic_cells = min(MIN_POSITIVE_SAMPLES, math.ceil(len(possible_synthetic_cells) / 2))
-    synthetic_error_cells = random.sample(possible_synthetic_cells, n_synthetic_cells)
-    target_sum_y_train = n_synthetic_cells + sum(y_train)
+    def __init__(self, estimators: List[Tuple[str, sklearn.pipeline.Pipeline]]):
+        self.estimators = estimators
 
-    if sum(y_train) > 0:
-        # if user input exists, duplicate it to keep 50/50 parity with synthetic data.
-        i = 0
-        while sum(y_train) + y_train[i] <= target_sum_y_train:  # get all 0s before the next 1 in y_train
-            if i == len(y_train):
-                i = 0
-            x_train.append(x_train[i])
-            y_train.append(y_train[i])
-            i += 1
-    return x_train, y_train, synthetic_error_cells
+    def predict(self, X):
+        # get values
+        Y = np.zeros([X.shape[0], len(self.estimators)], dtype=int)
+        for i, (name, clf) in enumerate(self.estimators):
+            Y[:, i] = clf.predict(X)
+        # voting
+        y = np.zeros(X.shape[0])
+        for i in range(X.shape[0]):
+            y[i] = np.argmax(np.bincount(Y[i, :]))
+        return y
 
 
-def factor_train_test_data(synth_error_factor: float, n_labelled_tuples: int, possible_synthetic_cells):
+def set_binary_cleaning_suggestions(predicted_labels, all_error_correction_suggestions, user_corrected_cells, d):
     """
-    The first sampling algorithms as defined in 2022W44.
+    After the Classifier has done its work, take its outputs and set them as the correction in the global state d.
+    If there is user input available for a cell, it always takes precedence over the ML output.
     """
-    synthetic_error_cells = []
-    n_synthetic_cells = math.floor(n_labelled_tuples * (synth_error_factor - 1))
-    if n_synthetic_cells > 0:
-        try:
-            synthetic_error_cells = random.sample(possible_synthetic_cells, k=n_synthetic_cells)
-        except ValueError:  # I want to sample more synth. training data than is available.
-            synthetic_error_cells = possible_synthetic_cells
-    return synthetic_error_cells
+    for index, predicted_label in enumerate(predicted_labels):
+        if predicted_label:
+            error_cell, predicted_correction = all_error_correction_suggestions[index]
+            if error_cell in user_corrected_cells:  # use user input if available
+                d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
+            else:
+                d.corrected_cells[error_cell] = predicted_correction
+
+
+def handle_edge_cases(x_train, x_test, y_train, d) -> Tuple[bool, List]:
+    """
+    Depending on the dataset and how much data has been labeled by the user, the data used to formulate the ML problem
+    can be such that it leads to an invalid ML problem.
+    To prevent the application from stopping unexpectedly, these edge-cases are handled here.
+
+    @return: A tuple whose first position is a boolean, indicating if the ML problem should be started. The second
+    position is a list of predicted labels. Which is used when the ML problem should not be started.
+    """
+    if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
+        return False, []  # nothing to do, need more user-input to work.
+    elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
+        return False, np.ones(len(x_test))
+
+    elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
+        for cell in d.pair_features:
+            correction_dict = d.pair_features[cell]
+            if len(correction_dict) > 0:
+                # select the correction with the highest sum of features.
+                max_proba_feature = \
+                    sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
+                d.corrected_cells[cell] = max_proba_feature[0]
+        return False, []
+
+    elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
+        return False, []  # trivial case - use manually corrected cells to correct all errors.
+
+    elif len(x_train) == 0:
+        return False, []  # nothing to learn because x_train is empty.
+
+    elif len(x_train) > 0 and len(x_test) > 0:
+        return True, []
+    else:
+        raise ValueError("Invalid state.")
 
 
 def generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
@@ -110,7 +142,7 @@ def multi_generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]
     correction_order = []
     for error_cell in column_errors[column]:
         correction_suggestions = pair_features.get(error_cell, [])
-        if correction_suggestions != []:
+        if len(correction_suggestions) > 0:
             correction_order = list(correction_suggestions.keys())
         if list(correction_suggestions.keys()) != [] and correction_order != list(correction_suggestions.keys()):
             raise ValueError('Should not be possible.')
