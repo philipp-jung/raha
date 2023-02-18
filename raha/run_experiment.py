@@ -45,6 +45,7 @@ def run_baran(i: int, c: dict):
             c["training_time_limit"],
             c["rule_based_value_cleaning"],
             c["synth_tuples"],
+            c["synth_tuples_error_threshold"]
         )
         app.VERBOSE = False
         seed = None
@@ -58,7 +59,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-01-14-value-v5"
+    experiment_name = "2023-02-18-binary-voting"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -83,14 +84,15 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
-        description="Messung V5 auf openML",
+        description="Binary Voting on OpenML Datasets.",
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
-            "synth_tuples": 20,
+            "synth_tuples": 100,
+            "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
@@ -102,8 +104,8 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": "V5",
         },
         ranges={
-            "dataset": [137, 1481, 184, 41027, 4135, 42493, 6],
-            "error_fraction": [1, 5, 10, 30],
+            "dataset": [137, 1481, 184, 41027, 4135],
+            "error_fraction": [1, 5, 10],
         },
         runs=3,
         save_path=save_path,
@@ -113,14 +115,15 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
-        description="Messung V5 auf baran",
+        description="Binary Voting on Baran Datasets",
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
-            "synth_tuples": 20,
+            "synth_tuples": 100,
+            "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
@@ -142,14 +145,15 @@ if __name__ == "__main__":
 
     rsk_renuver = Ruska(
         name=f"{experiment_name}-renuver",
-        description="Messung V5 auf renuver",
+        description="Binary Voting on Renuver Datasets.",
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
-            "synth_tuples": 20,
+            "synth_tuples": 100,
+            "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
