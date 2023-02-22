@@ -21,10 +21,7 @@ import difflib
 import unicodedata
 import multiprocessing
 
-import bs4
-import numpy
-import py7zr
-import mwparserfromhell
+import numpy as np
 import sklearn.svm
 import sklearn.ensemble
 import sklearn.naive_bayes
@@ -270,7 +267,7 @@ class Correction:
         If correction suggestions have been made for all cells, we sample from error cells that have not been
         sampled before.
         """
-        rng = numpy.random.default_rng(seed=random_seed)
+        rng = np.random.default_rng(seed=random_seed)
         remaining_column_unlabeled_cells = {}
         remaining_column_unlabeled_cells_error_values = {}
         remaining_column_uncorrected_cells = {}
@@ -290,7 +287,7 @@ class Correction:
                     # the cell has not been labeled by the user yet. this is stricter than the above condition.
                     self._to_model_adder(remaining_column_unlabeled_cells, j, error_cell)
                     self._to_model_adder(remaining_column_unlabeled_cells_error_values, j, d.dataframe.iloc[error_cell])
-        tuple_score = numpy.ones(d.dataframe.shape[0])
+        tuple_score = np.ones(d.dataframe.shape[0])
         tuple_score[list(d.labeled_tuples.keys())] = 0.0
 
         if len(remaining_column_uncorrected_cells) > 0:
@@ -309,8 +306,8 @@ class Correction:
 
         # Nützlich, um tuple-sampling zu debuggen: Zeigt die Tupel, aus denen
         # zufällig gewählt wird.
-        # print(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
-        d.sampled_tuple = rng.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
+        # print(np.argwhere(tuple_score == np.amax(tuple_score)).flatten())
+        d.sampled_tuple = rng.choice(np.argwhere(tuple_score == np.amax(tuple_score)).flatten())
         if self.VERBOSE:
             print("Tuple {} is sampled.".format(d.sampled_tuple))
         self.sampled_tuples += 1
@@ -475,7 +472,7 @@ class Correction:
         for mi, model in enumerate(models_corrections):
             for correction in model:
                 if correction not in corrections_features:
-                    corrections_features[correction] = numpy.zeros(len(models_corrections))
+                    corrections_features[correction] = np.zeros(len(models_corrections))
                 corrections_features[correction][mi] = model[correction]
         return corrections_features
 
@@ -614,22 +611,31 @@ class Correction:
                 d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
 
             if len(x_train) > 0 and len(x_test) > 0:
-                if self.CLASSIFICATION_MODEL == "ABC":
-                    gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-                elif self.CLASSIFICATION_MODEL == "CV":
-                    gs_clf = hpo.cross_validated_estimator(x_train, y_train)
-                elif self.CLASSIFICATION_MODEL == "DTC":
-                    gs_clf = sklearn.tree.DecisionTreeClassifier()
-                elif self.CLASSIFICATION_MODEL == "LOGR":
-                    gs_clf = sklearn.linear_model.LogisticRegression(multi_class="multinomial")
+                # TODO refactor so that AG blends in better.
+                if self.CLASSIFICATION_MODEL == "AG":
+                    gs_clf = hpo.ag_predictor(np.ndarray(x_train), y_train)
+                    if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
+                        predicted_labels = [y_train[0] for _ in range(len(x_test))]
+                    elif len(set(y_train)) > 1:
+                        df_test = pd.DataFrame(x_test)
+                        predicted_labels = gs_clf.predict(df_test)
                 else:
-                    raise ValueError('Unknown model.')
+                    if self.CLASSIFICATION_MODEL == "ABC":
+                        gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                    elif self.CLASSIFICATION_MODEL == "CV":
+                        gs_clf = hpo.cross_validated_estimator(x_train, y_train)
+                    elif self.CLASSIFICATION_MODEL == "DTC":
+                        gs_clf = sklearn.tree.DecisionTreeClassifier()
+                    elif self.CLASSIFICATION_MODEL == "LOGR":
+                        gs_clf = sklearn.linear_model.LogisticRegression(multi_class="multinomial")
+                    else:
+                        raise ValueError('Unknown model.')
 
-                if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
-                    predicted_labels = [y_train[0] for _ in range(len(x_test))]
-                elif len(set(y_train)) > 1:
-                    gs_clf.fit(x_train, y_train)
-                    predicted_labels = gs_clf.predict(x_test)
+                    if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
+                        predicted_labels = [y_train[0] for _ in range(len(x_test))]
+                    elif len(set(y_train)) > 1:
+                        gs_clf.fit(x_train, y_train)
+                        predicted_labels = gs_clf.predict(x_test)
 
                 # set final cleaning suggestion from meta-learning result. User corrected cells are not overwritten!
                 for cell, label in zip(column_errors[col], predicted_labels):
@@ -674,14 +680,25 @@ class Correction:
 
             is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
             if is_valid_problem:
-                if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
-                    gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-                    gs_clf.fit(x_train, y_train)
-                elif self.CLASSIFICATION_MODEL == "CV":
-                    gs_clf = hpo.cross_validated_estimator(x_train, y_train)
+                # TODO refactor so that AG blends in better.
+                if self.CLASSIFICATION_MODEL == "AG":
+                    x_train = np.stack(x_train)
+                    x_test = np.stack(x_test)
+                    gs_clf = hpo.ag_predictor(x_train, y_train)
+                    if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
+                        predicted_labels = [y_train[0] for _ in range(len(x_test))]
+                    elif len(set(y_train)) > 1:
+                        df_test = pd.DataFrame(x_test)
+                        predicted_labels = gs_clf.predict(df_test)
                 else:
-                    raise ValueError('Unknown model.')
-                predicted_labels = gs_clf.predict(x_test)
+                    if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
+                        gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                        gs_clf.fit(x_train, y_train)
+                    elif self.CLASSIFICATION_MODEL == "CV":
+                        gs_clf = hpo.cross_validated_estimator(x_train, y_train)
+                    else:
+                        raise ValueError('Unknown model.')
+                    predicted_labels = gs_clf.predict(x_test)
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, all_error_correction_suggestions,
                                                        user_corrected_cells, d)
@@ -716,7 +733,7 @@ class Correction:
             if valid_problems == 2:  # both problems need to be valid
                 est = [('no synth', classifiers[0]), ['synth', classifiers[1]]]
                 ensemble = ml_helpers.VotingClassifier(est)
-                predicted_labels = ensemble.predict(numpy.stack(x_test, axis=0))
+                predicted_labels = ensemble.predict(np.stack(x_test, axis=0))
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, all_error_correction_suggestions,
                                                        user_corrected_cells, d)
@@ -765,8 +782,8 @@ class Correction:
             self.generate_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
-            self.voting_binary_predict_corrections(d)
-            # self.binary_predict_corrections(d)
+            # self.voting_binary_predict_corrections(d)
+            self.binary_predict_corrections(d)
             # self.multi_predict_corrections(d)
             if self.RULE_BASED_VALUE_CLEANING:
                 # write the rule-based value corrections into the corrections dictionary. This overwrites
@@ -793,7 +810,7 @@ class Correction:
 
 if __name__ == "__main__":
     # configure Cleaning object
-    classification_model = "ABC"
+    classification_model = "AG"
 
     dataset_name = "beers"
     version = 1
@@ -806,7 +823,7 @@ if __name__ == "__main__":
     n_best_pdeps = 3
     n_rows = None
     rule_based_value_cleaning = 'V5'
-    synth_tuples = 50
+    synth_tuples = 10
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
