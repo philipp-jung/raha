@@ -59,7 +59,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-02-18-binary-voting"
+    experiment_name = "2023-02-22-autogluon-meta-learner"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -96,7 +96,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "ABC",
+            "classification_model": "AG",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -104,7 +104,7 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": "V5",
         },
         ranges={
-            "dataset": [137, 1481, 184, 41027, 4135],
+            "dataset": [137, 1481, 184, 41027],
             "error_fraction": [1, 5, 10],
         },
         runs=3,
@@ -127,7 +127,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "ABC",
+            "classification_model": "AG",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -157,7 +157,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "ABC",
+            "classification_model": "AG",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -177,4 +177,3 @@ if __name__ == "__main__":
     rsk_openml.run(experiment=run_baran, parallel=True)
     rsk_baran.run(experiment=run_baran, parallel=True)
     rsk_renuver.run(experiment=run_baran, parallel=True)
-

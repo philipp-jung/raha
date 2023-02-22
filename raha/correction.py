@@ -613,7 +613,7 @@ class Correction:
             if len(x_train) > 0 and len(x_test) > 0:
                 # TODO refactor so that AG blends in better.
                 if self.CLASSIFICATION_MODEL == "AG":
-                    gs_clf = hpo.ag_predictor(np.ndarray(x_train), y_train)
+                    gs_clf = hpo.ag_predictor(np.ndarray(x_train), y_train, self.TRAINING_TIME_LIMIT)
                     if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
                         predicted_labels = [y_train[0] for _ in range(len(x_test))]
                     elif len(set(y_train)) > 1:
@@ -684,7 +684,7 @@ class Correction:
                 if self.CLASSIFICATION_MODEL == "AG":
                     x_train = np.stack(x_train)
                     x_test = np.stack(x_test)
-                    gs_clf = hpo.ag_predictor(x_train, y_train)
+                    gs_clf = hpo.ag_predictor(x_train, y_train, self.TRAINING_TIME_LIMIT)
                     if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
                         predicted_labels = [y_train[0] for _ in range(len(x_test))]
                     elif len(set(y_train)) > 1:

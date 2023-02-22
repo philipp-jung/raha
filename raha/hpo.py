@@ -34,12 +34,12 @@ def cross_validated_estimator(X_train, y_train):
     return gs_clf
 
 
-def ag_predictor(X_train, y_train):
+def ag_predictor(X_train, y_train, time_limit):
     """
     Use AutoGluon to train a predictor.
     """
     label = X_train.shape[1]
     df_train = pd.DataFrame(np.c_[X_train, y_train])
-    pred = TabularPredictor(label=label).fit(df_train)
+    pred = TabularPredictor(label=label).fit(df_train, time_limit=time_limit)
 
     return pred
