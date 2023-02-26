@@ -59,7 +59,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-02-22-autogluon-meta-learner"
+    experiment_name = "2023-02-26-leave-one-out-cv"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -91,12 +91,12 @@ if __name__ == "__main__":
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
-            "synth_tuples": 100,
+            "synth_tuples": 0,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "AG",
+            "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -122,12 +122,12 @@ if __name__ == "__main__":
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
-            "synth_tuples": 100,
+            "synth_tuples": 0,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "AG",
+            "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -152,12 +152,12 @@ if __name__ == "__main__":
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
-            "synth_tuples": 100,
+            "synth_tuples": 0,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "AG",
+            "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,

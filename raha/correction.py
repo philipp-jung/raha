@@ -810,10 +810,10 @@ class Correction:
 
 if __name__ == "__main__":
     # configure Cleaning object
-    classification_model = "AG"
+    classification_model = "CV"
 
-    dataset_name = "beers"
-    version = 1
+    dataset_name = "glass"
+    version = 2
     error_fraction = 4
     error_class = 'simple_mcar'
 
@@ -823,7 +823,7 @@ if __name__ == "__main__":
     n_best_pdeps = 3
     n_rows = None
     rule_based_value_cleaning = 'V5'
-    synth_tuples = 10
+    synth_tuples = 0
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"

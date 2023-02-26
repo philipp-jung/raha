@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, LeaveOneOut
 from sklearn.ensemble import AdaBoostClassifier
 import warnings
 from autogluon.tabular import TabularPredictor
@@ -20,13 +20,12 @@ def cross_validated_estimator(X_train, y_train):
     Darum lasse ich zuerst das baseline-Modell durchlaufen. Wenn das schon einen perfekten Score erzielt, wird es
     direkt genommen.
     """
-    cv = 2 if sum(y_train) < 4 else math.floor(math.log2(sum(y_train)))
-    params = {"n_estimators": [10, 100, 200], "learning_rate": [0.1, 1]}
+    params = {"n_estimators": [10, 100, 200], "learning_rate": [1]}
 
     grid_search = GridSearchCV(
         estimator=AdaBoostClassifier(),
         param_grid=params,
-        cv=cv,
+        cv=LeaveOneOut(),
         n_jobs=1,
         scoring="precision",
     )
