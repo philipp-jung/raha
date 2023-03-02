@@ -29,6 +29,7 @@ import sklearn.linear_model
 import sklearn.tree
 from typing import Dict, List, Union
 import pandas as pd
+from sentence_transformers import SentenceTransformer, util
 
 import raha
 from raha import imputer
@@ -236,6 +237,7 @@ class Correction:
 
         # BEGIN Philipp's changes
         d.value_corrections = {}
+        d.sbert_cos_sim = {i: {} for i in range(d.dataframe.shape[1])}
 
         # for debugging purposes only
         d.domain_corrections = {}
@@ -374,6 +376,8 @@ class Correction:
                                         d.vicinity_models[o],
                                         o,
                                         cleaned_sampled_tuple)
+
+        # Todo update sbert_models hiere instead of recalculating the whole thing every time a tuple is sampled.
         # END Philipp's changes
 
         if self.VERBOSE:
@@ -400,6 +404,7 @@ class Correction:
         value_corrections = []
         domain_corrections = []
         imputer_corrections = []
+        sbert_corrections = []
 
         # Begin Philipps Changes
         if "vicinity" in self.FEATURE_GENERATORS:
@@ -428,6 +433,10 @@ class Correction:
             value_corrections = d.value_models.cleaning_features(error, 'both')
             if not is_synth:
                 d.value_corrections[cell] = value_corrections
+
+        if "sbert" in self.FEATURE_GENERATORS:
+            row, column = error_dictionary['row'], error_dictionary['column']
+            sbert_corrections = d.sbert_cos_sim[(row, column)]
 
         if "domain" in self.FEATURE_GENERATORS:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
@@ -465,7 +474,8 @@ class Correction:
             models_corrections = domain_corrections \
                                  + [corrections for order in naive_vicinity_corrections for corrections in order] \
                                  + [corrections for order in pdep_vicinity_corrections for corrections in order] \
-                                 + imputer_corrections
+                                 + imputer_corrections \
+                                 + [sbert_corrections]
         # End Philipps Changes
 
         corrections_features = {}
@@ -504,6 +514,20 @@ class Correction:
                     d.imputer_models[i_col] = imp.predict_proba(d.typed_dataframe)
                 else:
                     d.imputer_models[i_col] = None
+
+        if 'sbert' in self.FEATURE_GENERATORS:
+            sbert_model = SentenceTransformer('all-MiniLM-L6-v2')  # keep model loaded
+            error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+            column_errors = error_positions.original_column_errors
+            values_in_cols = {k: [val for val, _ in v.items()] for k, v in d.domain_models.items()}
+            d.sbert_models = {}
+            for col in column_errors:
+                emb_values = sbert_model.encode(values_in_cols[col])
+                for error_cell in column_errors[col]:
+                    error_value = error_positions.detected_cells[error_cell]
+                    emb_error = sbert_model.encode(error_value)
+                    d.sbert_cos_sim[error_cell] = {values_in_cols[col][i]: float(util.cos_sim(emb_error, emb_values[i])) for i, _ in enumerate(values_in_cols[col])}
+
 
     def generate_features(self, d, synchronous):
         """
@@ -810,14 +834,14 @@ class Correction:
 
 if __name__ == "__main__":
     # configure Cleaning object
-    classification_model = "CV"
+    classification_model = "ABC"
 
-    dataset_name = "glass"
+    dataset_name = "rayyan"
     version = 2
-    error_fraction = 4
+    error_fraction = 1
     error_class = 'simple_mcar'
 
-    feature_generators = ['domain', 'vicinity', 'value']
+    feature_generators = ['domain', 'vicinity', 'sbert']
     imputer_cache_model = False
     labeling_budget = 20
     n_best_pdeps = 3

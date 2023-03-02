@@ -1,9 +1,12 @@
 from dataclasses import dataclass
-from typing import Tuple, List, Dict, Union, Set, NewType, Any
+from typing import Tuple, List, Dict, Union, NewType, Any
+from sentence_transformers import SentenceTransformer, util
 
 CorrectionSuggestion = NewType('CorrectionSuggestion', str)
 FeatureType = NewType('FeatureType', str)
 Suggestions = NewType('Suggestions', List[Dict[CorrectionSuggestion, Dict[FeatureType, Any]]])
+
+sbert_model = SentenceTransformer('all-MiniLM-L6-v2')  # keep model loaded
 
 
 @dataclass
@@ -135,3 +138,9 @@ class BothValueSuggestions:
             return self.certain_suggestions('relative_string_frequency', 'atomic', 'identity')[0]
 
         return None
+
+
+def sbert_corrections(error_value: str, all_values_in_domain: List[str]) -> Dict:
+    emb_error = sbert_model.encode(error_value)
+    outputs = {value: float(util.cos_sim(emb_error, sbert_model.encode(value))) for value in all_values_in_domain}
+    return outputs
