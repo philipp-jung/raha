@@ -14,7 +14,7 @@ import os
 import re
 import sys
 import html
-from typing import Union
+from typing import Union, Dict, Tuple
 
 import pandas
 ########################################
@@ -131,11 +131,18 @@ class Dataset:
         """
         return self.clean_dataframe.iloc[list(self.labeled_tuples.keys()), :]
 
-    def get_actual_errors_dictionary(self):
+    def _get_actual_errors_dictionary_ground_truth(self) -> Dict[Tuple[int, int], str]:
         """
-        This method compares the clean and dirty versions of a dataset.
+        Returns a dictionary that resolves every error cell to the ground truth.
         """
         return self.get_dataframes_difference(self.dataframe, self.clean_dataframe)
+
+    def get_errors_dictionary(self) -> Dict[Tuple[int, int], str]:
+        """
+        This method compares the clean and dirty versions of a dataset. The returned dictionary resolves to the error
+        values in the dirty dataframe.
+        """
+        return self.get_dataframes_difference(self.clean_dataframe, self.dataframe)
 
     def get_correction_dictionary(self):
         """
@@ -147,13 +154,13 @@ class Dataset:
         """
         This method calculates data quality of a dataset.
         """
-        return 1.0 - float(len(self.get_actual_errors_dictionary())) / (self.dataframe.shape[0] * self.dataframe.shape[1])
+        return 1.0 - float(len(self._get_actual_errors_dictionary_ground_truth())) / (self.dataframe.shape[0] * self.dataframe.shape[1])
 
     def get_data_cleaning_evaluation(self, correction_dictionary, sampled_rows_dictionary=False):
         """
         This method evaluates data cleaning process.
         """
-        actual_errors = self.get_actual_errors_dictionary()
+        actual_errors = self._get_actual_errors_dictionary_ground_truth()
         if sampled_rows_dictionary:
             actual_errors = {(i, j): actual_errors[(i, j)] for (i, j) in actual_errors if i in sampled_rows_dictionary}
         ed_tp = 0.0

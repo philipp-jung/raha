@@ -237,7 +237,7 @@ class Correction:
 
         # BEGIN Philipp's changes
         d.value_corrections = {}
-        d.sbert_cos_sim = {i: {} for i in range(d.dataframe.shape[1])}
+        d.sbert_cos_sim = {}
 
         # for debugging purposes only
         d.domain_corrections = {}
@@ -837,7 +837,7 @@ if __name__ == "__main__":
     classification_model = "ABC"
 
     dataset_name = "rayyan"
-    version = 2
+    version = 5
     error_fraction = 1
     error_class = 'simple_mcar'
 
@@ -858,7 +858,7 @@ if __name__ == "__main__":
 
     # Set this parameter to keep runtimes low when debugging
     data = raha.dataset.Dataset(data_dict, n_rows=n_rows)
-    data.detected_cells = dict(data.get_actual_errors_dictionary())
+    data.detected_cells = data.get_errors_dictionary()
 
     app = Correction(labeling_budget, classification_model, feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
