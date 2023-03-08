@@ -12,11 +12,10 @@
 ########################################
 import os
 import re
-import sys
 import html
 from typing import Union, Dict, Tuple
 
-import pandas
+import pandas as pd
 ########################################
 
 
@@ -85,14 +84,14 @@ class Dataset:
         """
         if dataset_path is None:
             return None
-        dataframe = pandas.read_parquet(dataset_path)
+        dataframe = pd.read_parquet(dataset_path)
         return dataframe
 
     def read_csv_dataset(self, dataset_path):
         """
         This method reads a dataset from a csv file path.
         """
-        dataframe = pandas.read_csv(dataset_path, sep=",", header="infer", encoding="utf-8", dtype=str,
+        dataframe = pd.read_csv(dataset_path, sep=",", header="infer", encoding="utf-8", dtype=str,
                                     keep_default_na=False, low_memory=False).applymap(self.value_normalizer)
         return dataframe
 
@@ -104,17 +103,19 @@ class Dataset:
         dataframe.to_csv(dataset_path, sep=",", header=True, index=False, encoding="utf-8")
 
     @staticmethod
-    def get_dataframes_difference(dataframe_1, dataframe_2):
+    def get_dataframes_difference(df_1: pd.DataFrame, df_2: pd.DataFrame) -> Dict:
         """
-        This method compares two dataframes and returns the different cells.
+        This method compares two dataframes df_1 and df_2. It returns a dictionary whose keys are the coordinates of
+        a cell. The corresponding value is the value in df_1 at the cell's position if the values of df_1 and df_2 are
+        not the same at the given position.
         """
-        if dataframe_1.shape != dataframe_2.shape:
-            sys.stderr.write("Two compared datasets do not have equal sizes!\n")
+        if df_1.shape != df_2.shape:
+            raise ValueError("Two compared datasets do not have equal sizes.")
         difference_dictionary = {}
-        difference_dataframe = dataframe_1.where(dataframe_1.values != dataframe_2.values).notna()
-        for j in range(dataframe_1.shape[1]):
-            for i in difference_dataframe.index[difference_dataframe.iloc[:, j]].tolist():
-                difference_dictionary[(i, j)] = dataframe_2.iloc[i, j]
+        for row in range(df_1.shape[0]):
+            for col in range(df_1.shape[1]):
+                if df_1.iloc[row, col] != df_2.iloc[row, col]:
+                    difference_dictionary[(row, col)] = df_1.iloc[row, col]
         return difference_dictionary
 
     def create_repaired_dataset(self, correction_dictionary):
@@ -135,20 +136,20 @@ class Dataset:
         """
         Returns a dictionary that resolves every error cell to the ground truth.
         """
-        return self.get_dataframes_difference(self.dataframe, self.clean_dataframe)
+        return self.get_dataframes_difference(self.clean_dataframe, self.dataframe)
 
     def get_errors_dictionary(self) -> Dict[Tuple[int, int], str]:
         """
         This method compares the clean and dirty versions of a dataset. The returned dictionary resolves to the error
         values in the dirty dataframe.
         """
-        return self.get_dataframes_difference(self.clean_dataframe, self.dataframe)
+        return self.get_dataframes_difference(self.dataframe, self.clean_dataframe)
 
     def get_correction_dictionary(self):
         """
         This method compares the repaired and dirty versions of a dataset.
         """
-        return self.get_dataframes_difference(self.dataframe, self.repaired_dataframe)
+        return self.get_dataframes_difference(self.repaired_dataframe, self.dataframe)
 
     def get_data_quality(self):
         """

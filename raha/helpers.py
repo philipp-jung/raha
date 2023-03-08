@@ -64,7 +64,8 @@ def get_data_dict(
         "tax",
         "rayyan",
         "toy",
-        "debug"
+        "debug",
+        "synth-debug"
     ]:  # Baran dataset
         data_dict = {
             "name": dataset_name,

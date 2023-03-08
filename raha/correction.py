@@ -51,7 +51,7 @@ class Correction:
     The main class.
     """
 
-    def __init__(self, labeling_budget: int, classification_model: str, feature_generators: List[str],
+    def __init__(self, labeling_budget: int, classification_model: str, clean_with_user_input: bool, feature_generators: List[str],
                  vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
                  n_best_pdeps: int, training_time_limit: int, rule_based_value_cleaning: Union[str, bool],
                  synth_tuples: int, synth_tuples_error_threshold: int):
@@ -60,6 +60,8 @@ class Correction:
         @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
         @param classification_model: "ABC" for sklearn's AdaBoostClassifier with n_estimators=100, "CV" for
         cross-validation. Baran default is "ABC".
+        @param clean_with_user_input: Take user input to clean data with. This will always improve cleaning performance,
+        and is recommended to set to True as the default value. Handy to disable when debugging models.
         @param feature_generators: Four feature generators are available: 'imputer', 'domain', 'vicinity' and 'value'.
         Pass them as strings in a list to make Baran use them, e.g. ['domain', 'vicinity', 'imputer']. The Baran
         default is ['domain', 'vicinity', 'value'].
@@ -82,6 +84,7 @@ class Correction:
         # Philipps changes
         self.SYNTH_TUPLES = synth_tuples
         self.SYNTH_TUPLES_ERROR_THRESHOLD = synth_tuples_error_threshold
+        self.CLEAN_WITH_USER_INPUT = clean_with_user_input
 
         self.FEATURE_GENERATORS = feature_generators
         self.VICINITY_ORDERS = vicinity_orders
@@ -245,6 +248,10 @@ class Correction:
         d.pdep_vicinity_corrections = {}
         d.imputer_corrections = {}
 
+        # synth tuples debuggin
+        d.unique_synth_features = []
+        d.unique_features = []
+
         d.vicinity_models = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
             for o in self.VICINITY_ORDERS:
@@ -261,8 +268,7 @@ class Correction:
     def sample_tuple(self, d, random_seed):
         """
         This method samples a tuple.
-        Philipp extended this with a random_seed in an effort to make runs
-        reproducible.
+        Philipp extended this with a random_seed in an effort to make runs reproducible.
 
         I also added two tiers of columns to choose samples from. Either, there are error cells
         for which no correction suggestion has been made yet. In that case, we sample from these error cells.
@@ -377,7 +383,7 @@ class Correction:
                                         o,
                                         cleaned_sampled_tuple)
 
-        # Todo update sbert_models hiere instead of recalculating the whole thing every time a tuple is sampled.
+        # Todo update sbert_models here instead of recalculating the whole thing every time a tuple is sampled.
         # END Philipp's changes
 
         if self.VERBOSE:
@@ -434,7 +440,8 @@ class Correction:
             if not is_synth:
                 d.value_corrections[cell] = value_corrections
 
-        if "sbert" in self.FEATURE_GENERATORS:
+        # TODO implement sbert for synth
+        if "sbert" in self.FEATURE_GENERATORS and not is_synth:
             row, column = error_dictionary['row'], error_dictionary['column']
             sbert_corrections = d.sbert_cos_sim[(row, column)]
 
@@ -469,7 +476,7 @@ class Correction:
                                  + imputer_corrections
         elif not self.RULE_BASED_VALUE_CLEANING and is_synth:
             raise ValueError('It is impossible to synthesize tuples and use the meta-learner to apply value-corrections'
-                             ' at the same time. Either perform RULE_BASED_VALUE_CLEANING, or set n_synth_tuples=0.')
+                             ' at the same time. Instead, perform RULE_BASED_VALUE_CLEANING, or set n_synth_tuples=0.')
         else:  # do rule based value cleaning.
             models_corrections = domain_corrections \
                                  + [corrections for order in naive_vicinity_corrections for corrections in order] \
@@ -546,8 +553,8 @@ class Correction:
             pool.close()
         else:
             feature_generation_results = []
-            for args_list in process_args_list:
-                result = self._feature_generator_process(args_list)
+            for args in process_args_list:
+                result = self._feature_generator_process(args)
                 feature_generation_results.append(result)
 
         for ci, corrections_features in enumerate(feature_generation_results):
@@ -562,14 +569,18 @@ class Correction:
 
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         row_errors = error_positions.updated_row_errors
-        synth_tuples_candidates = [(row, len(cells)) for row, cells in row_errors.items() if
+
+        # determine rows with least amount of erronous values to sample from.
+        candidate_rows = [(row, len(cells)) for row, cells in row_errors.items() if
                                    len(cells) <= self.SYNTH_TUPLES_ERROR_THRESHOLD]
-        synth_tuples_candidates_ranked = sorted(synth_tuples_candidates, key=lambda x: x[1])
-        if self.SYNTH_TUPLES > 0 and len(synth_tuples_candidates_ranked) > 0:
-            if len(synth_tuples_candidates_ranked) <= self.SYNTH_TUPLES:
-                synthetic_error_rows = [x[0] for x in synth_tuples_candidates_ranked]
+        ranked_candidate_rows = sorted(candidate_rows, key=lambda x: x[1])
+        if self.SYNTH_TUPLES > 0 and len(ranked_candidate_rows) > 0:
+            # sample randomly to prevent sorted data to mess with synth tuple sampling.
+            random.seed(0)
+            if len(ranked_candidate_rows) <= self.SYNTH_TUPLES:
+                synthetic_error_rows = random.sample([x[0] for x in ranked_candidate_rows], len(ranked_candidate_rows))
             else:
-                synthetic_error_rows = [x[0] for x in synth_tuples_candidates_ranked[:self.SYNTH_TUPLES]]
+                synthetic_error_rows = random.sample([x[0] for x in ranked_candidate_rows[:self.SYNTH_TUPLES]], self.SYNTH_TUPLES)
             synthetic_error_cells = [(i, j) for i in synthetic_error_rows for j in range(d.dataframe.shape[1])]
             synth_args_list = [[d, cell, True] for cell in synthetic_error_cells]
 
@@ -579,9 +590,19 @@ class Correction:
                 pool.close()
             else:
                 synth_feature_generation_results = []
-                for args_list in synth_args_list:
-                    result = self._feature_generator_process(args_list)
+                for args in synth_args_list:
+                    result = self._feature_generator_process(args)
                     synth_feature_generation_results.append(result)
+
+            from collections import Counter
+            import json
+            encoded_dicts = [json.dumps({k: str(v) for k, v in x.items()}) for x in feature_generation_results]
+            c = Counter(encoded_dicts)
+            d.unique_features.append(dict(c))
+
+            encoded_dicts_synth = [json.dumps({k: str(v) for k, v in x.items()}) for x in synth_feature_generation_results]
+            c_synth = Counter(encoded_dicts_synth)
+            d.unique_synth_features.append(dict(c_synth))
 
             synth_pairs_counter = 0
             for ci, corrections_features in enumerate(synth_feature_generation_results):
@@ -593,10 +614,6 @@ class Correction:
 
             if self.VERBOSE:
                 print(f"{synth_pairs_counter} pairs of synthetic (error, potential correction) are featurized.")
-
-        # for debugging synth tuples sampling
-        # elif len(synth_tuples_choice) == 0:
-        #     print('No error-free rows to sample data from.')
 
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
@@ -767,6 +784,17 @@ class Correction:
                 100 * len(d.corrected_cells) / len(d.detected_cells),
                 len(d.corrected_cells), len(d.detected_cells)))
 
+    def clean_with_user_input(self, d):
+        """
+        The user input ideally contains completely correct data. It should be leveraged for an ideal cleaning
+        performance.
+        """
+        if not self.CLEAN_WITH_USER_INPUT:
+            return None
+        for error_cell in d.detected_cells:
+            if error_cell in d.labeled_cells:
+                d.corrected_cells[error_cell] = d.labeled_cells[error_cell][1]
+
     def store_results(self, d):
         """
         This method stores the results.
@@ -794,10 +822,7 @@ class Correction:
                   "--------------------Initialize Error Corrector Models-------------------\n"
                   "------------------------------------------------------------------------")
         self.initialize_models(d)
-        if self.VERBOSE:
-            print("------------------------------------------------------------------------\n"
-                  "--------------Iterative Tuple Sampling, Labeling, and Learning----------\n"
-                  "------------------------------------------------------------------------")
+
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
             self.sample_tuple(d, random_seed=random_seed)
             self.label_with_ground_truth(d)
@@ -817,16 +842,12 @@ class Correction:
                 for cell, correction in d.rule_based_value_corrections.items():
                     d.corrected_cells[cell] = correction
 
-            # overwrite corrections with user-input, which is always correct.
-            for error_cell in d.detected_cells:
-                if error_cell in d.labeled_cells:
-                    d.corrected_cells[error_cell] = d.labeled_cells[error_cell][1]
+            self.clean_with_user_input(d)
             if self.VERBOSE:
                 p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
                 print(
                     "Cleaning performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r,
                                                                                                            f))
-
         if self.VERBOSE:
             print("Number of true classes: {}".format(self.n_true_classes))
         return d.corrected_cells
@@ -836,18 +857,19 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "rayyan"
-    version = 5
-    error_fraction = 1
+    dataset_name = "glass"
+    version = 1
+    error_fraction = 4
     error_class = 'simple_mcar'
 
-    feature_generators = ['domain', 'vicinity', 'sbert']
+    feature_generators = ['domain', 'vicinity', ]
     imputer_cache_model = False
-    labeling_budget = 20
+    clean_with_user_input = False
+    labeling_budget = 1
     n_best_pdeps = 3
     n_rows = None
     rule_based_value_cleaning = 'V5'
-    synth_tuples = 0
+    synth_tuples = 10
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
@@ -860,11 +882,13 @@ if __name__ == "__main__":
     data = raha.dataset.Dataset(data_dict, n_rows=n_rows)
     data.detected_cells = data.get_errors_dictionary()
 
-    app = Correction(labeling_budget, classification_model, feature_generators, vicinity_orders,
+    app = Correction(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
                      rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold)
     app.VERBOSE = True
     seed = 0
     correction_dictionary = app.run(data, seed)
     p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
+    print(f'Unique features: {len(data.unique_features[-1])}')
+    print(f'Unique synth features: {len(data.unique_synth_features[-1])}')
     print("Cleaning performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
