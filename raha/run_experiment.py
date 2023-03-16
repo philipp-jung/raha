@@ -32,7 +32,7 @@ def run_baran(i: int, c: dict):
         )
 
         data = raha.Dataset(data_dict, n_rows=c["n_rows"])
-        data.detected_cells = dict(data.get_actual_errors_dictionary())
+        data.detected_cells = data.get_errors_dictionary()
 
         app = raha.Correction(
             c["labeling_budget"],

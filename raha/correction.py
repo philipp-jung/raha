@@ -20,6 +20,8 @@ import random
 import difflib
 import unicodedata
 import multiprocessing
+from collections import Counter
+import json
 
 import numpy as np
 import sklearn.svm
@@ -249,7 +251,6 @@ class Correction:
         d.imputer_corrections = {}
 
         # synth tuples debuggin
-        d.unique_synth_features = []
         d.unique_features = []
 
         d.vicinity_models = {}
@@ -564,6 +565,10 @@ class Correction:
                 d.pair_features[cell][correction] = corrections_features[correction]
                 pairs_counter += 1
 
+        encoded_dicts = [json.dumps({k: str(v) for k, v in x.items()}) for x in feature_generation_results]
+        unique_synth_features = set()
+        unique_features = set(encoded_dicts)
+
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
@@ -594,15 +599,8 @@ class Correction:
                     result = self._feature_generator_process(args)
                     synth_feature_generation_results.append(result)
 
-            from collections import Counter
-            import json
-            encoded_dicts = [json.dumps({k: str(v) for k, v in x.items()}) for x in feature_generation_results]
-            c = Counter(encoded_dicts)
-            d.unique_features.append(dict(c))
-
             encoded_dicts_synth = [json.dumps({k: str(v) for k, v in x.items()}) for x in synth_feature_generation_results]
-            c_synth = Counter(encoded_dicts_synth)
-            d.unique_synth_features.append(dict(c_synth))
+            unique_synth_features = set(encoded_dicts_synth)
 
             synth_pairs_counter = 0
             for ci, corrections_features in enumerate(synth_feature_generation_results):
@@ -614,6 +612,9 @@ class Correction:
 
             if self.VERBOSE:
                 print(f"{synth_pairs_counter} pairs of synthetic (error, potential correction) are featurized.")
+        d.unique_features.append({'features': len(unique_features),
+                                  'synth_features': len(unique_synth_features),
+                                  'intersecting_features': len(unique_features.intersection(unique_synth_features))})
 
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
@@ -865,11 +866,11 @@ if __name__ == "__main__":
     feature_generators = ['domain', 'vicinity', ]
     imputer_cache_model = False
     clean_with_user_input = False
-    labeling_budget = 1
+    labeling_budget = 20
     n_best_pdeps = 3
     n_rows = None
     rule_based_value_cleaning = 'V5'
-    synth_tuples = 10
+    synth_tuples = 0
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
@@ -890,5 +891,4 @@ if __name__ == "__main__":
     correction_dictionary = app.run(data, seed)
     p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
     print(f'Unique features: {len(data.unique_features[-1])}')
-    print(f'Unique synth features: {len(data.unique_synth_features[-1])}')
     print("Cleaning performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
