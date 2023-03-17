@@ -250,9 +250,6 @@ class Correction:
         d.pdep_vicinity_corrections = {}
         d.imputer_corrections = {}
 
-        # synth tuples debuggin
-        d.unique_features = []
-
         d.vicinity_models = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
             for o in self.VICINITY_ORDERS:
@@ -565,10 +562,6 @@ class Correction:
                 d.pair_features[cell][correction] = corrections_features[correction]
                 pairs_counter += 1
 
-        encoded_dicts = [json.dumps({k: str(v) for k, v in x.items()}) for x in feature_generation_results]
-        unique_synth_features = set()
-        unique_features = set(encoded_dicts)
-
         if self.VERBOSE:
             print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
 
@@ -599,9 +592,6 @@ class Correction:
                     result = self._feature_generator_process(args)
                     synth_feature_generation_results.append(result)
 
-            encoded_dicts_synth = [json.dumps({k: str(v) for k, v in x.items()}) for x in synth_feature_generation_results]
-            unique_synth_features = set(encoded_dicts_synth)
-
             synth_pairs_counter = 0
             for ci, corrections_features in enumerate(synth_feature_generation_results):
                 cell = synth_args_list[ci][1]
@@ -612,9 +602,6 @@ class Correction:
 
             if self.VERBOSE:
                 print(f"{synth_pairs_counter} pairs of synthetic (error, potential correction) are featurized.")
-        d.unique_features.append({'features': len(unique_features),
-                                  'synth_features': len(unique_synth_features),
-                                  'intersecting_features': len(unique_features.intersection(unique_synth_features))})
 
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
@@ -827,7 +814,7 @@ class Correction:
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
             self.sample_tuple(d, random_seed=random_seed)
             self.label_with_ground_truth(d)
-            self.update_models(d)
+            # self.update_models(d)
             self.prepare_augmented_models(d)
             self.generate_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
@@ -858,7 +845,7 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "glass"
+    dataset_name = "hospital"
     version = 1
     error_fraction = 4
     error_class = 'simple_mcar'
@@ -890,5 +877,4 @@ if __name__ == "__main__":
     seed = 0
     correction_dictionary = app.run(data, seed)
     p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
-    print(f'Unique features: {len(data.unique_features[-1])}')
     print("Cleaning performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))
