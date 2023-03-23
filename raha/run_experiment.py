@@ -37,6 +37,7 @@ def run_baran(i: int, c: dict):
         app = raha.Correction(
             c["labeling_budget"],
             c["classification_model"],
+            c["clean_with_user_input"],
             c["feature_generators"],
             c["vicinity_orders"],
             c["vicinity_feature_generator"],
@@ -59,8 +60,8 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-02-26-leave-one-out-cv"
-    save_path = "/root/measurements"
+    experiment_name = "2023-03-23-synth-ensembling-no-user-data"
+    save_path = "/Users/philipp/code/experimente/2023W12-synth-ensembling/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
     logging.getLogger("ruska").setLevel(logging.DEBUG)
@@ -82,40 +83,9 @@ if __name__ == "__main__":
     fh.setFormatter(formatter)
     logging.root.addHandler(fh)
 
-    rsk_openml = Ruska(
-        name=f"{experiment_name}-openml",
-        description="Binary Voting on OpenML Datasets.",
-        commit="",
-        config={
-            "dataset": "1481",
-            "error_class": "simple_mcar",
-            "error_fraction": 1,
-            "labeling_budget": 20,
-            "synth_tuples": 0,
-            "synth_tuples_error_threshold": 0,
-            "imputer_cache_model": False,
-            "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "CV",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V5",
-        },
-        ranges={
-            "dataset": [137, 1481, 184, 41027],
-            "error_fraction": [1, 5, 10],
-        },
-        runs=3,
-        save_path=save_path,
-        chat_id=os.environ["TELEGRAM_CHAT_ID"],
-        token=os.environ["TELEGRAM_BOT_TOKEN"],
-    )
-
     rsk_baran = Ruska(
-        name=f"{experiment_name}-baran",
-        description="Binary Voting on Baran Datasets",
+        name=f"{experiment_name}",
+        description="In vergangenen Messungen konnte ich zeigen, dass die synth-tuples keinen Effekt haben auf Datensätzen, auf denen die Modelle wenig zur Reinigung beitragen. Das wurde klar auf den renuver datensätzen. dort konnte ich zeigen, das praktisch nur die user-inputs, die zur Reinigung benutzt werden, überhaupt irgendwas reinigen. Ich möchte das gleiche Experiment auf den baran-Datensätzen wiederholen. Hier vermute ich, dass auch ohne die user-inputs ordentlich gereinigt wird.",
         commit="",
         config={
             "dataset": "1481",
@@ -125,8 +95,9 @@ if __name__ == "__main__":
             "synth_tuples": 0,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
+            "clean_with_user_input": False,
             "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value"],
+            "feature_generators": ["domain", "vicinity"],
             "classification_model": "CV",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -135,45 +106,14 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": "V5",
         },
         ranges={
-            "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "dataset": ["beers", "flights", "hospital"],
+            "labeling_budget": [1, 5, 20],
+            "synth_tuples": [0, 10, 100]
         },
-        runs=3,
+        runs=1,
         save_path=save_path,
         chat_id=os.environ["TELEGRAM_CHAT_ID"],
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    rsk_renuver = Ruska(
-        name=f"{experiment_name}-renuver",
-        description="Binary Voting on Renuver Datasets.",
-        commit="",
-        config={
-            "dataset": "1481",
-            "error_class": "simple_mcar",
-            "error_fraction": 1,
-            "labeling_budget": 20,
-            "synth_tuples": 0,
-            "synth_tuples_error_threshold": 0,
-            "imputer_cache_model": False,
-            "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value"],
-            "classification_model": "CV",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V5",
-        },
-        ranges={
-            "dataset": ["bridges", "cars", "glass", "restaurant"],
-            "error_fraction": [1, 2, 3, 4, 5]
-        },
-        runs=3,
-        save_path=save_path,
-        chat_id=os.environ["TELEGRAM_CHAT_ID"],
-        token=os.environ["TELEGRAM_BOT_TOKEN"],
-    )
-
-    rsk_openml.run(experiment=run_baran, parallel=True)
     rsk_baran.run(experiment=run_baran, parallel=True)
-    rsk_renuver.run(experiment=run_baran, parallel=True)
