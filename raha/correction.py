@@ -11,16 +11,11 @@
 
 ########################################
 import os
-import io
-import sys
 import math
-import json
 import pickle
 import random
-import difflib
 import unicodedata
 import multiprocessing
-from collections import Counter
 import json
 
 import numpy as np
@@ -56,7 +51,7 @@ class Correction:
     def __init__(self, labeling_budget: int, classification_model: str, clean_with_user_input: bool, feature_generators: List[str],
                  vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
                  n_best_pdeps: int, training_time_limit: int, rule_based_value_cleaning: Union[str, bool],
-                 synth_tuples: int, synth_tuples_error_threshold: int):
+                 synth_tuples: int, synth_tuples_error_threshold: int, n_random_features: int):
         """
         Parameters of the cleaning experiment.
         @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
@@ -82,11 +77,14 @@ class Correction:
         cleaning be part of the meta learning, which is the Baran default. V1 uses rules from 2022W38, V3 from 2022W40.
         @param synth_tuples: maximum number of tuples to synthesize training data with.
         @param synth_tuples_error_threshold: maximum number of errors in a row that is used to synthesize tuples.
+        @param n_random_features: for debugging purposes. Controls the number of random features that are added to create
+        noise in the training data.
         """
         # Philipps changes
         self.SYNTH_TUPLES = synth_tuples
         self.SYNTH_TUPLES_ERROR_THRESHOLD = synth_tuples_error_threshold
         self.CLEAN_WITH_USER_INPUT = clean_with_user_input
+        self.N_RANDOM_FEATURES = n_random_features
 
         self.FEATURE_GENERATORS = feature_generators
         self.VICINITY_ORDERS = vicinity_orders
@@ -184,6 +182,19 @@ class Correction:
             if probability > 0 and correction != ed['old_value']:
                 result[correction] = probability
         return [result]
+
+    def _random_corrector(self, domain_models, ed, n_features=1):
+        """
+        To check that the ensembling is effective in filtering out useless features, random_corrector creates n_features
+        features completely at random.
+        """
+        values_in_column = list(domain_models[ed['column']].keys())
+
+        features = []
+        for _ in range(n_features):
+            random_features = {val: random.random() for val in values_in_column}
+            features.append(random_features)
+        return features
 
     def _domain_based_corrector(self, model, ed):
         """
@@ -443,6 +454,8 @@ class Correction:
             row, column = error_dictionary['row'], error_dictionary['column']
             sbert_corrections = d.sbert_cos_sim[(row, column)]
 
+        if "random" in self.FEATURE_GENERATORS:
+            random_corrections = self._random_corrector(d.domain_models, error_dictionary, self.N_RANDOM_FEATURES)
         if "domain" in self.FEATURE_GENERATORS:
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
         if "imputer" in self.FEATURE_GENERATORS:
@@ -469,6 +482,7 @@ class Correction:
                                  correction in d]
             models_corrections = value_corrections \
                                  + domain_corrections \
+                                 + random_corrections \
                                  + [corrections for order in naive_vicinity_corrections for corrections in order] \
                                  + [corrections for order in pdep_vicinity_corrections for corrections in order] \
                                  + imputer_corrections
@@ -477,6 +491,7 @@ class Correction:
                              ' at the same time. Instead, perform RULE_BASED_VALUE_CLEANING, or set n_synth_tuples=0.')
         else:  # do rule based value cleaning.
             models_corrections = domain_corrections \
+                                 + random_corrections \
                                  + [corrections for order in naive_vicinity_corrections for corrections in order] \
                                  + [corrections for order in pdep_vicinity_corrections for corrections in order] \
                                  + imputer_corrections \
@@ -489,6 +504,7 @@ class Correction:
                 if correction not in corrections_features:
                     corrections_features[correction] = np.zeros(len(models_corrections))
                 corrections_features[correction][mi] = model[correction]
+        a = 1
         return corrections_features
 
     def prepare_augmented_models(self, d):
@@ -845,14 +861,15 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "hospital"
+    dataset_name = "1481"
     version = 1
-    error_fraction = 4
+    error_fraction = 1
     error_class = 'simple_mcar'
 
-    feature_generators = ['domain', 'vicinity', ]
+    feature_generators = ['domain', 'random', 'vicinity']
     imputer_cache_model = False
     clean_with_user_input = False
+    n_random_features = 0
     labeling_budget = 20
     n_best_pdeps = 3
     n_rows = None
@@ -872,7 +889,7 @@ if __name__ == "__main__":
 
     app = Correction(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
-                     rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold)
+                     rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold, n_random_features)
     app.VERBOSE = True
     seed = 0
     correction_dictionary = app.run(data, seed)

@@ -46,7 +46,8 @@ def run_baran(i: int, c: dict):
             c["training_time_limit"],
             c["rule_based_value_cleaning"],
             c["synth_tuples"],
-            c["synth_tuples_error_threshold"]
+            c["synth_tuples_error_threshold"],
+            c["n_random_features"]
         )
         app.VERBOSE = False
         seed = None
@@ -60,8 +61,8 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-03-23-synth-ensembling-no-user-data-openml"
-    save_path = "/Users/philipp/code/experimente/2023W12-synth-ensembling/measurements"
+    experiment_name = "2023-03-24-noisy-features"
+    save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
     logging.getLogger("ruska").setLevel(logging.DEBUG)
@@ -117,9 +118,8 @@ if __name__ == "__main__":
     )
 
     rsk_openml = Ruska(
-        name=f"{experiment_name}",
-        description="Ich konnte auf den baran-Datensätzen zeigen, dass synth_tuples einen positiven Effekt auf die Reinigung haben, wenn das Machine-Learning grundsätzlich funktioniert. Das möchte ich auf diesem
-        Datensatz validieren.",
+        name=f"{experiment_name}-openml",
+        description="Wie stark abträglich ist der Effekt eines noise-Features im Ensembling?",
         commit="",
         config={
             "dataset": "1481",
@@ -129,8 +129,10 @@ if __name__ == "__main__":
             "synth_tuples": 0,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
+            "clean_with_user_input": False,
+            "n_random_features": 0,
             "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity",],
+            "feature_generators": ["vicinity", "random"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -140,8 +142,8 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": [137, 1481, 184, 41027],
-            "labeling_budget": [1, 5, 20],
-            "synth_tuples": [0, 10, 100]
+            "synth_tuples": [0, 10, 100],
+            "n_random_features": [0, 1, 2, 3, 4, 5]
         },
         runs=1,
         save_path=save_path,
