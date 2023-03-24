@@ -60,7 +60,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-03-23-synth-ensembling-no-user-data"
+    experiment_name = "2023-03-23-synth-ensembling-no-user-data-openml"
     save_path = "/Users/philipp/code/experimente/2023W12-synth-ensembling/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -116,4 +116,37 @@ if __name__ == "__main__":
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    rsk_baran.run(experiment=run_baran, parallel=True)
+    rsk_openml = Ruska(
+        name=f"{experiment_name}",
+        description="Ich konnte auf den baran-Datensätzen zeigen, dass synth_tuples einen positiven Effekt auf die Reinigung haben, wenn das Machine-Learning grundsätzlich funktioniert. Das möchte ich auf diesem
+        Datensatz validieren.",
+        commit="",
+        config={
+            "dataset": "1481",
+            "error_class": "simple_mcar",
+            "error_fraction": 5,
+            "labeling_budget": 20,
+            "synth_tuples": 0,
+            "synth_tuples_error_threshold": 0,
+            "imputer_cache_model": False,
+            "training_time_limit": 30,
+            "feature_generators": ["domain", "vicinity",],
+            "classification_model": "ABC",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": "V5",
+        },
+        ranges={
+            "dataset": [137, 1481, 184, 41027],
+            "labeling_budget": [1, 5, 20],
+            "synth_tuples": [0, 10, 100]
+        },
+        runs=1,
+        save_path=save_path,
+        chat_id=os.environ["TELEGRAM_CHAT_ID"],
+        token=os.environ["TELEGRAM_BOT_TOKEN"],
+    )
+
+    rsk_openml.run(experiment=run_baran, parallel=True)
