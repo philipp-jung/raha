@@ -47,21 +47,22 @@ def run_baran(i: int, c: dict):
             c["rule_based_value_cleaning"],
             c["synth_tuples"],
             c["synth_tuples_error_threshold"],
-            c["n_random_features"]
         )
         app.VERBOSE = False
         seed = None
         correction_dictionary = app.run(data, seed)
         p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
         logger.info(f"Finished experiment {i}.")
-        return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
+        return {"result": {"precision": p, "recall": r, "f1": f},
+                "config": c,
+                "synth_cleaning_accuracies": data.synth_cleaning_accuracies}
     except Exception as e:
         logger.error(f"Finished experiment {i} with an error: {e}.")
         return {"result": e, "config": c}
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-03-24-noisy-features"
+    experiment_name = "2023-03-29-synth-cleaning-accuracies"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -85,8 +86,13 @@ if __name__ == "__main__":
     logging.root.addHandler(fh)
 
     rsk_baran = Ruska(
-        name=f"{experiment_name}",
-        description="In vergangenen Messungen konnte ich zeigen, dass die synth-tuples keinen Effekt haben auf Datensätzen, auf denen die Modelle wenig zur Reinigung beitragen. Das wurde klar auf den renuver datensätzen. dort konnte ich zeigen, das praktisch nur die user-inputs, die zur Reinigung benutzt werden, überhaupt irgendwas reinigen. Ich möchte das gleiche Experiment auf den baran-Datensätzen wiederholen. Hier vermute ich, dass auch ohne die user-inputs ordentlich gereinigt wird.",
+        name=f"{experiment_name}-baran",
+        description="""Ich konnte zeigen, dass einerseits die synth
+        trainingdaten funktionieren, und andererseits das Auswählen der wichtigen
+        Features im Ensembling resistent gegen Rauschen ist. Nun gilt es zu entscheiden,
+        wann es Sinnvoll ist, mit synthetischen Trainingsdaten zu trainieren.
+        Hierzu untersuche ich die Accuracy, mit der ein Classifier, der nur auf
+        User-Inputs trainiert wurde, Fehler in den Synth-Daten reinigen kann.""",
         commit="",
         config={
             "dataset": "1481",
@@ -99,7 +105,7 @@ if __name__ == "__main__":
             "clean_with_user_input": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity"],
-            "classification_model": "CV",
+            "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -109,7 +115,6 @@ if __name__ == "__main__":
         ranges={
             "dataset": ["beers", "flights", "hospital"],
             "labeling_budget": [1, 5, 20],
-            "synth_tuples": [0, 10, 100]
         },
         runs=1,
         save_path=save_path,
@@ -119,18 +124,22 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
-        description="Wie stark abträglich ist der Effekt eines noise-Features im Ensembling?",
+        description="""Ich konnte zeigen, dass einerseits die synth
+        trainingdaten funktionieren, und andererseits das Auswählen der wichtigen
+        Features im Ensembling resistent gegen Rauschen ist. Nun gilt es zu entscheiden,
+        wann es Sinnvoll ist, mit synthetischen Trainingsdaten zu trainieren.
+        Hierzu untersuche ich die Accuracy, mit der ein Classifier, der nur auf
+        User-Inputs trainiert wurde, Fehler in den Synth-Daten reinigen kann.""",
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
             "error_fraction": 5,
             "labeling_budget": 20,
-            "synth_tuples": 0,
+            "synth_tuples": 10,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "clean_with_user_input": False,
-            "n_random_features": 0,
             "training_time_limit": 30,
             "feature_generators": ["vicinity", "random"],
             "classification_model": "ABC",
@@ -142,8 +151,6 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": [137, 1481, 184, 41027],
-            "synth_tuples": [0, 10, 100],
-            "n_random_features": [0, 1, 2, 3, 4, 5]
         },
         runs=1,
         save_path=save_path,
@@ -151,4 +158,5 @@ if __name__ == "__main__":
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
+    rsk_baran.run(experiment=run_baran, parallel=True)
     rsk_openml.run(experiment=run_baran, parallel=True)
