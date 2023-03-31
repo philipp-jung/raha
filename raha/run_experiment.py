@@ -47,22 +47,26 @@ def run_baran(i: int, c: dict):
             c["rule_based_value_cleaning"],
             c["synth_tuples"],
             c["synth_tuples_error_threshold"],
+            c["synth_cleaning_threshold"]
         )
         app.VERBOSE = False
         seed = None
         correction_dictionary = app.run(data, seed)
         p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
         logger.info(f"Finished experiment {i}.")
-        return {"result": {"precision": p, "recall": r, "f1": f},
+        return {
+                "result": {
+                    "precision": p, "recall": r, "f1": f
+                    },
                 "config": c,
-                "synth_cleaning_accuracies": data.synth_cleaning_accuracies}
+                }
     except Exception as e:
         logger.error(f"Finished experiment {i} with an error: {e}.")
         return {"result": e, "config": c}
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-03-29-synth-cleaning-accuracies"
+    experiment_name = "2023-03-31-synth-precision-threshold"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -87,19 +91,48 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
-        description="""Ich konnte zeigen, dass einerseits die synth
-        trainingdaten funktionieren, und andererseits das Auswählen der wichtigen
-        Features im Ensembling resistent gegen Rauschen ist. Nun gilt es zu entscheiden,
-        wann es Sinnvoll ist, mit synthetischen Trainingsdaten zu trainieren.
-        Hierzu untersuche ich die Accuracy, mit der ein Classifier, der nur auf
-        User-Inputs trainiert wurde, Fehler in den Synth-Daten reinigen kann.""",
+        description="Auswirkung des Prcision-Thresholds auf die Messung."
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
-            "synth_tuples": 0,
+            "synth_tuples": 100,
+            "synth_tuples_error_threshold": 0,
+            "imputer_cache_model": False,
+            "clean_with_user_input": False,
+            "training_time_limit": 30,
+            "feature_generators": ["domain", "vicinity",],
+            "classification_model": "ABC",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": "V5",
+            "synth_cleaning_threshold": 0.5,
+        },
+        ranges={
+            "dataset": ["beers", "flights", "hospital"],
+            "labeling_budget": [1, 5, 20],
+            "synth_cleaning_threshold": [0, 0.5, 0.9],
+        },
+        runs=1,
+        save_path=save_path,
+        chat_id=os.environ["TELEGRAM_CHAT_ID"],
+        token=os.environ["TELEGRAM_BOT_TOKEN"],
+    )
+
+    rsk_openml = Ruska(
+        name=f"{experiment_name}-openml",
+        description="Auswirkung des Prcision-Thresholds auf die Messung.",
+        commit="",
+        config={
+            "dataset": "1481",
+            "error_class": "simple_mcar",
+            "error_fraction": 5,
+            "labeling_budget": 20,
+            "synth_tuples": 100,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "clean_with_user_input": False,
@@ -111,46 +144,12 @@ if __name__ == "__main__":
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V5",
-        },
-        ranges={
-            "dataset": ["beers", "flights", "hospital"],
-            "labeling_budget": [1, 5, 20],
-        },
-        runs=1,
-        save_path=save_path,
-        chat_id=os.environ["TELEGRAM_CHAT_ID"],
-        token=os.environ["TELEGRAM_BOT_TOKEN"],
-    )
-
-    rsk_openml = Ruska(
-        name=f"{experiment_name}-openml",
-        description="""Ich konnte zeigen, dass einerseits die synth
-        trainingdaten funktionieren, und andererseits das Auswählen der wichtigen
-        Features im Ensembling resistent gegen Rauschen ist. Nun gilt es zu entscheiden,
-        wann es Sinnvoll ist, mit synthetischen Trainingsdaten zu trainieren.
-        Hierzu untersuche ich die Accuracy, mit der ein Classifier, der nur auf
-        User-Inputs trainiert wurde, Fehler in den Synth-Daten reinigen kann.""",
-        commit="",
-        config={
-            "dataset": "1481",
-            "error_class": "simple_mcar",
-            "error_fraction": 5,
-            "labeling_budget": 20,
-            "synth_tuples": 10,
-            "synth_tuples_error_threshold": 0,
-            "imputer_cache_model": False,
-            "clean_with_user_input": False,
-            "training_time_limit": 30,
-            "feature_generators": ["vicinity", "random"],
-            "classification_model": "ABC",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V5",
+            "synth_cleaning_threshold": 0.5,
         },
         ranges={
             "dataset": [137, 1481, 184, 41027],
+            "labeling_budget": [1, 5, 20],
+            "synth_cleaning_threshold": [0, 0.5, 0.9],
         },
         runs=1,
         save_path=save_path,

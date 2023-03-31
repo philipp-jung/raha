@@ -24,7 +24,7 @@ import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
 import sklearn.tree
-from sklearn.metrics import f1_score
+from sklearn.metrics import precision_score
 from typing import Dict, List, Union
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
@@ -52,7 +52,7 @@ class Correction:
     def __init__(self, labeling_budget: int, classification_model: str, clean_with_user_input: bool, feature_generators: List[str],
                  vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
                  n_best_pdeps: int, training_time_limit: int, rule_based_value_cleaning: Union[str, bool],
-                 synth_tuples: int, synth_tuples_error_threshold: int):
+                 synth_tuples: int, synth_tuples_error_threshold: int, synth_cleaning_threshold: float):
         """
         Parameters of the cleaning experiment.
         @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
@@ -79,6 +79,7 @@ class Correction:
         @param synth_tuples: maximum number of tuples to synthesize training data with.
         @param synth_tuples_error_threshold: maximum number of errors in a row that is used to synthesize tuples.
         noise in the training data.
+        @param synth_cleaning_threshold: Threshold for column-cleaning to pass in order to leverage synth-data.
         """
         # Philipps changes
         self.SYNTH_TUPLES = synth_tuples
@@ -93,6 +94,7 @@ class Correction:
         self.TRAINING_TIME_LIMIT = training_time_limit
         self.RULE_BASED_VALUE_CLEANING = rule_based_value_cleaning
         self.CLASSIFICATION_MODEL = classification_model
+        self.SYNTH_CLEANING_THRESHOLD = synth_cleaning_threshold
 
         # original Baran
         self.PRETRAINED_VALUE_BASED_MODELS_PATH = ""
@@ -246,7 +248,6 @@ class Correction:
         d.naive_vicinity_corrections = {}
         d.pdep_vicinity_corrections = {}
         d.imputer_corrections = {}
-        d.synth_cleaning_accuracies = []
 
         d.vicinity_models = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
@@ -701,7 +702,6 @@ class Correction:
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         column_errors = error_positions.original_column_errors
-        accuracies = {}
         for j in column_errors:
             synth_x_test, synth_y_test, synth_error_correction_suggestions = ml_helpers.generate_synth_test_data(d.synth_pair_features, d.dataframe, j)
 
@@ -727,14 +727,36 @@ class Correction:
 
                 predicted_labels = gs_clf.predict(x_test)
 
-                # performance cleaning synth data
-                d.synth_corrected_cells = {}
-                synth_predicted_labels = gs_clf.predict(synth_x_test)
-                score = f1_score(synth_y_test, synth_predicted_labels)
-                accuracies[j] = score
+                # calculate performance cleaning synth data
+                score = 0.0
+                if len(synth_y_test) > 0:
+                    d.synth_corrected_cells = {}
+                    synth_predicted_labels = gs_clf.predict(synth_x_test)
+                    score = precision_score(synth_y_test, synth_predicted_labels)
+
+                if score > self.SYNTH_CLEANING_THRESHOLD:
+                    # now that we are certain about the synth data's usefulness, use additional training data.
+                    x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
+                        column_errors,
+                        d.labeled_cells,
+                        d.pair_features,
+                        d.dataframe,
+                        d.synth_pair_features,
+                        j)
+
+                    is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
+                    if is_valid_problem:
+                        if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
+                            gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                            gs_clf.fit(x_train, y_train)
+                        elif self.CLASSIFICATION_MODEL == "CV":
+                            gs_clf = hpo.cross_validated_estimator(x_train, y_train)
+                        else:
+                            raise ValueError('Unknown model.')
+
+                        predicted_labels = gs_clf.predict(x_test)
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
-        d.synth_cleaning_accuracies.append(accuracies)
 
 
         if self.VERBOSE:
@@ -819,7 +841,7 @@ class Correction:
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
             self.sample_tuple(d, random_seed=random_seed)
             self.label_with_ground_truth(d)
-            # self.update_models(d)
+            self.update_models(d)
             self.prepare_augmented_models(d)
             self.generate_features(d, synchronous=True)
             self.generate_synth_features(d, synchronous=True)
@@ -850,19 +872,20 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "137"
+    dataset_name = "beers"
     version = 1
-    error_fraction = 1
+    error_fraction = 5
     error_class = 'simple_mcar'
 
-    feature_generators = ['domain', 'vicinity']
+    synth_cleaning_threshold = 0.5
+    feature_generators = ['domain', 'vicinity', 'value', 'imputer']
     imputer_cache_model = False
     clean_with_user_input = False
     labeling_budget = 20
     n_best_pdeps = 3
     n_rows = None
     rule_based_value_cleaning = 'V5'
-    synth_tuples = 10
+    synth_tuples = 100
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
@@ -877,7 +900,7 @@ if __name__ == "__main__":
 
     app = Correction(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
-                     rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold)
+                     rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold, synth_cleaning_threshold)
     app.VERBOSE = True
     seed = 0
     correction_dictionary = app.run(data, seed)
