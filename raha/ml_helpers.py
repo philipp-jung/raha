@@ -85,14 +85,19 @@ def generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
                              pair_features: Dict[Tuple[int, int], Dict[str, List]],
                              df_dirty: pd.DataFrame,
                              synth_pair_features: Dict[Tuple[int, int], Dict[str, List]],
-                             column: int):
+                             column: int,
+                             ground_truth: Dict[Tuple[int, int], str]):
     """
     If the product of synth_error_factor * (number of error correction suggestions) is larger than the number of
     error correction suggestions, the difference gets filled with synthesized errors.
+
+    I changed this to include the ground truth in 20230402 to make working on the ensembling problem easier.
+    Careful with y_test, it contains the ground truth and should not be used in the experiments, ever.
     """
     x_train = []  # train feature vectors
     y_train = []  # train labels
     x_test = []  # test features vectors
+    y_test = []  # test labels, TODO: remove as soon as possible
     all_error_correction_suggestions = []  # all cleaning suggestions for all errors flattened in a list
     corrected_cells = {}  # take user input as a cleaning result if available
 
@@ -110,6 +115,8 @@ def generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
             for suggestion in correction_suggestions:
                 x_test.append(pair_features[error_cell][suggestion])
                 all_error_correction_suggestions.append([error_cell, suggestion])
+                suggestion_is_correction = (suggestion == ground_truth.get(error_cell))
+                y_test.append(int(suggestion_is_correction))
 
     for synth_cell in synth_pair_features:
         if synth_cell[1] == column:
@@ -119,7 +126,7 @@ def generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
                 suggestion_is_correction = (suggestion == df_dirty.iloc[synth_cell])
                 y_train.append(int(suggestion_is_correction))
 
-    return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions
+    return x_train, y_train, x_test, y_test, corrected_cells, all_error_correction_suggestions
 
 
 def multi_generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],

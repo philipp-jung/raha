@@ -17,6 +17,7 @@ import random
 import unicodedata
 import multiprocessing
 import json
+from pathlib import Path
 
 import numpy as np
 import sklearn.svm
@@ -248,6 +249,7 @@ class Correction:
         d.naive_vicinity_corrections = {}
         d.pdep_vicinity_corrections = {}
         d.imputer_corrections = {}
+        d.dataset_definitions = [] # TODO remove asap
 
         d.vicinity_models = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
@@ -705,15 +707,38 @@ class Correction:
         for j in column_errors:
             synth_x_test, synth_y_test, synth_error_correction_suggestions = ml_helpers.generate_synth_test_data(d.synth_pair_features, d.dataframe, j)
 
-            x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
+            # für das Experiment, bei dem ich die performance beim Reinigen der synth_daten
+            # messe, will ich keine synth_daten in den Trainingsdaten haben.
+            x_train, y_train, x_test, y_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
                 column_errors,
                 d.labeled_cells,
                 d.pair_features,
                 d.dataframe,
                 [],
-                # d.synth_pair_features, # für das Experiment, bei dem ich die performance beim Reinigen der synth_daten
-                # messe, will ich keine synth_daten in den Trainingsdaten haben.
-                j)
+                j,
+                d._get_actual_errors_dictionary_ground_truth())
+
+            dataset = Path(d.clean_path).parent.name
+            labeled_tuples = len(d.labeled_tuples)
+            column = j
+            filename_base = f'{dataset}_{column}_{labeled_tuples}'
+            d.dataset_definitions.append({
+                'dataset': dataset,
+                'labeled_tuples': labeled_tuples,
+                'column': j,
+                'filename_base': filename_base
+            })
+
+            dfs = [('x_train', pd.DataFrame(x_train)),
+                  ('y_train', pd.DataFrame(y_train)),
+                  ('x_test', pd.DataFrame(x_test)),
+                  ('y_test', pd.DataFrame(y_test)),
+                  ('synth_x_train', pd.DataFrame(synth_x_test)),
+                  ('synth_y_train', pd.DataFrame(synth_y_test))]
+
+            for df in dfs:
+                df[1].columns = [str(x) for x in df[1].columns]
+                df[1].to_parquet(f'/Users/philipp/code/raha/raha/dataset_export/{filename_base}_{df[0]}.parquet')
 
             is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
             if is_valid_problem:
@@ -736,13 +761,14 @@ class Correction:
 
                 if score > self.SYNTH_CLEANING_THRESHOLD:
                     # now that we are certain about the synth data's usefulness, use additional training data.
-                    x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
+                    x_train, y_train, x_test, _,  user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
                         column_errors,
                         d.labeled_cells,
                         d.pair_features,
                         d.dataframe,
                         d.synth_pair_features,
-                        j)
+                        j,
+                        {})
 
                     is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
                     if is_valid_problem:
@@ -863,6 +889,8 @@ class Correction:
                 print(
                     "Cleaning performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(d.name, p, r,
                                                                                                            f))
+        with open(f'/Users/philipp/code/raha/raha/dataset_export/metadata.json', 'wt') as f:
+            f.write(json.dumps(d.dataset_definitions))
         if self.VERBOSE:
             print("Number of true classes: {}".format(self.n_true_classes))
         return d.corrected_cells
@@ -872,7 +900,7 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "beers"
+    dataset_name = "1481"
     version = 1
     error_fraction = 5
     error_class = 'simple_mcar'
