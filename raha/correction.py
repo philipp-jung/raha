@@ -814,7 +814,7 @@ class Correction:
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
             self.sample_tuple(d, random_seed=random_seed)
             self.label_with_ground_truth(d)
-            # self.update_models(d)
+            self.update_models(d)
             self.prepare_augmented_models(d)
             self.generate_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:

@@ -60,8 +60,8 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-03-23-synth-ensembling-no-user-data"
-    save_path = "/Users/philipp/code/experimente/2023W12-synth-ensembling/measurements"
+    experiment_name = "2023-04-09-synth-ensembling-no-user-data-more-runs"
+    save_path = "/root/measurements/"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
     logging.getLogger("ruska").setLevel(logging.DEBUG)
@@ -85,7 +85,10 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}",
-        description="In vergangenen Messungen konnte ich zeigen, dass die synth-tuples keinen Effekt haben auf Datensätzen, auf denen die Modelle wenig zur Reinigung beitragen. Das wurde klar auf den renuver datensätzen. dort konnte ich zeigen, das praktisch nur die user-inputs, die zur Reinigung benutzt werden, überhaupt irgendwas reinigen. Ich möchte das gleiche Experiment auf den baran-Datensätzen wiederholen. Hier vermute ich, dass auch ohne die user-inputs ordentlich gereinigt wird.",
+        description="Ich habe in 2023W12 festgestellt, dass zusätzliche Trainingsdaten je nach Datensatz der Reinigung
+        zuträglich sind. Hier möchte ihc herausfinden, bei welchen Datensätzen das der Fall ist, und ob sich eine Regel
+        finden lässt, wann mehr Trainingsdaten zuträglich sind. In dieser Messung schalte ich deshalb update_modes()
+        ein, was der Messung aus 2023W13 entspricht.",
         commit="",
         config={
             "dataset": "1481",
@@ -98,7 +101,7 @@ if __name__ == "__main__":
             "clean_with_user_input": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity"],
-            "classification_model": "CV",
+            "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
@@ -106,11 +109,11 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": "V5",
         },
         ranges={
-            "dataset": ["beers", "flights", "hospital"],
+            "dataset": ["flights", "hospital", "beers"],
             "labeling_budget": [1, 5, 20],
             "synth_tuples": [0, 10, 100]
         },
-        runs=1,
+        runs=3,
         save_path=save_path,
         chat_id=os.environ["TELEGRAM_CHAT_ID"],
         token=os.environ["TELEGRAM_BOT_TOKEN"],
