@@ -66,7 +66,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-03-31-synth-precision-threshold"
+    experiment_name = "2023-04-11-synth-f1-threshold-no-update-models"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
-        description="Auswirkung des Prcision-Thresholds auf die Messung."
+        description="Auswirkung des F1-Thresholds auf die Messung.",
         commit="",
         config={
             "dataset": "1481",
@@ -110,14 +110,14 @@ if __name__ == "__main__":
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V5",
-            "synth_cleaning_threshold": 0.5,
+            "synth_cleaning_threshold": 0,
         },
         ranges={
             "dataset": ["beers", "flights", "hospital"],
             "labeling_budget": [1, 5, 20],
-            "synth_cleaning_threshold": [0, 0.5, 0.9],
+            "synth_cleaning_threshold": [0, 0.3, 0.6, 0.9, 1],
         },
-        runs=1,
+        runs=3,
         save_path=save_path,
         chat_id=os.environ["TELEGRAM_CHAT_ID"],
         token=os.environ["TELEGRAM_BOT_TOKEN"],
@@ -130,28 +130,28 @@ if __name__ == "__main__":
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
-            "error_fraction": 5,
+            "error_fraction": 1,
             "labeling_budget": 20,
             "synth_tuples": 100,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "clean_with_user_input": False,
             "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity"],
+            "feature_generators": ["domain", "vicinity",],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V5",
-            "synth_cleaning_threshold": 0.5,
+            "synth_cleaning_threshold": 0,
         },
         ranges={
             "dataset": [137, 1481, 184, 41027],
             "labeling_budget": [1, 5, 20],
-            "synth_cleaning_threshold": [0, 0.5, 0.9],
+            "synth_cleaning_threshold": [0, 0.3, 0.6, 0.9, 1],
         },
-        runs=1,
+        runs=3,
         save_path=save_path,
         chat_id=os.environ["TELEGRAM_CHAT_ID"],
         token=os.environ["TELEGRAM_BOT_TOKEN"],

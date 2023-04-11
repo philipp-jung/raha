@@ -24,7 +24,7 @@ import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
 import sklearn.tree
-from sklearn.metrics import precision_score
+from sklearn.metrics import f1_score
 from typing import Dict, List, Union
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
@@ -732,7 +732,7 @@ class Correction:
                 if len(synth_y_test) > 0:
                     d.synth_corrected_cells = {}
                     synth_predicted_labels = gs_clf.predict(synth_x_test)
-                    score = precision_score(synth_y_test, synth_predicted_labels)
+                    score = f1_score(synth_y_test, synth_predicted_labels)
 
                 if score > self.SYNTH_CLEANING_THRESHOLD:
                     # now that we are certain about the synth data's usefulness, use additional training data.
@@ -841,7 +841,7 @@ class Correction:
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
             self.sample_tuple(d, random_seed=random_seed)
             self.label_with_ground_truth(d)
-            self.update_models(d)
+            # self.update_models(d)
             self.prepare_augmented_models(d)
             self.generate_features(d, synchronous=True)
             self.generate_synth_features(d, synchronous=True)
