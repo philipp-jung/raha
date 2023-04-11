@@ -60,7 +60,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-04-09-synth-ensembling-no-user-data-more-runs"
+    experiment_name = "2023-04-11-synth-ensembling-no-user-input"
     save_path = "/root/measurements/"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
