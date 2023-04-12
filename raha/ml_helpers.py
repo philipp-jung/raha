@@ -25,18 +25,23 @@ class VotingClassifier(object):
         return y
 
 
-def set_binary_cleaning_suggestions(predicted_labels, all_error_correction_suggestions, user_corrected_cells, d):
+def set_binary_cleaning_suggestions(predicted_labels: List[int],
+                                    all_error_correction_suggestions: List[Tuple],
+                                    corrected_cells: Dict):
     """
     After the Classifier has done its work, take its outputs and set them as the correction in the global state d.
     If there is user input available for a cell, it always takes precedence over the ML output.
+
+    @param predicted_labels: list of binary classes whether or not a cleaning suggestion has been selected by ensembling.
+    @param all_error_correction_suggestions: list of tuples containing all error corrections, same length as
+    predicted_labels.
+    @param corrected_cells: dictionary {error_cell: predicted_correction} that stores the cleaning results.
+    @return:
     """
     for index, predicted_label in enumerate(predicted_labels):
         if predicted_label:
             error_cell, predicted_correction = all_error_correction_suggestions[index]
-            if error_cell in user_corrected_cells:  # use user input if available
-                d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
-            else:
-                d.corrected_cells[error_cell] = predicted_correction
+            corrected_cells[error_cell] = predicted_correction
 
 
 def handle_edge_cases(x_train, x_test, y_train, d) -> Tuple[bool, List]:
@@ -106,11 +111,6 @@ def generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
                 x_test.append(pair_features[error_cell][suggestion])
                 all_error_correction_suggestions.append([error_cell, suggestion])
 
-    if len(synth_pair_features) == 0:
-        # for debugging
-        # print('No features exist to synthesize training data with.')
-        return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions
-
     for synth_cell in synth_pair_features:
         if synth_cell[1] == column:
             correction_suggestions = synth_pair_features.get(synth_cell, [])
@@ -173,3 +173,25 @@ def multi_generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]
             y_train.append(y)
 
     return x_train, y_train, x_test, corrected_cells
+
+def generate_synth_test_data(synth_pair_features: Dict[Tuple[int, int], Dict[str, List]],
+                             df_dirty: pd.DataFrame,
+                             column: int):
+    """
+    If the product of synth_error_factor * (number of error correction suggestions) is larger than the number of
+    error correction suggestions, the difference gets filled with synthesized errors.
+    """
+    x_test = []
+    y_test = []
+    all_error_correction_suggestions = []  # all cleaning suggestions for all errors flattened in a list
+
+    for synth_cell in synth_pair_features:
+        if synth_cell[1] == column:
+            correction_suggestions = synth_pair_features.get(synth_cell, [])
+            for suggestion in correction_suggestions:
+                x_test.append(synth_pair_features[synth_cell][suggestion])
+                suggestion_is_correction = (suggestion == df_dirty.iloc[synth_cell])
+                y_test.append(int(suggestion_is_correction))
+                all_error_correction_suggestions.append([synth_cell, suggestion])
+
+    return x_test, y_test, all_error_correction_suggestions

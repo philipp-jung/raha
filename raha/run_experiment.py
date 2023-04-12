@@ -46,22 +46,28 @@ def run_baran(i: int, c: dict):
             c["training_time_limit"],
             c["rule_based_value_cleaning"],
             c["synth_tuples"],
-            c["synth_tuples_error_threshold"]
+            c["synth_tuples_error_threshold"],
+            c["synth_cleaning_threshold"]
         )
         app.VERBOSE = False
         seed = None
         correction_dictionary = app.run(data, seed)
         p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
         logger.info(f"Finished experiment {i}.")
-        return {"result": {"precision": p, "recall": r, "f1": f}, "config": c}
+        return {
+                "result": {
+                    "precision": p, "recall": r, "f1": f
+                    },
+                "config": c,
+                }
     except Exception as e:
         logger.error(f"Finished experiment {i} with an error: {e}.")
         return {"result": e, "config": c}
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-03-23-synth-ensembling-no-user-data-openml"
-    save_path = "/Users/philipp/code/experimente/2023W12-synth-ensembling/measurements"
+    experiment_name = "2023-04-11-synth-f1-threshold-no-update-models"
+    save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
     logging.getLogger("ruska").setLevel(logging.DEBUG)
@@ -84,51 +90,18 @@ if __name__ == "__main__":
     logging.root.addHandler(fh)
 
     rsk_baran = Ruska(
-        name=f"{experiment_name}",
-        description="In vergangenen Messungen konnte ich zeigen, dass die synth-tuples keinen Effekt haben auf Datensätzen, auf denen die Modelle wenig zur Reinigung beitragen. Das wurde klar auf den renuver datensätzen. dort konnte ich zeigen, das praktisch nur die user-inputs, die zur Reinigung benutzt werden, überhaupt irgendwas reinigen. Ich möchte das gleiche Experiment auf den baran-Datensätzen wiederholen. Hier vermute ich, dass auch ohne die user-inputs ordentlich gereinigt wird.",
+        name=f"{experiment_name}-baran",
+        description="Auswirkung des F1-Thresholds auf die Messung.",
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "labeling_budget": 20,
-            "synth_tuples": 0,
+            "synth_tuples": 100,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "clean_with_user_input": False,
-            "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity"],
-            "classification_model": "CV",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V5",
-        },
-        ranges={
-            "dataset": ["beers", "flights", "hospital"],
-            "labeling_budget": [1, 5, 20],
-            "synth_tuples": [0, 10, 100]
-        },
-        runs=1,
-        save_path=save_path,
-        chat_id=os.environ["TELEGRAM_CHAT_ID"],
-        token=os.environ["TELEGRAM_BOT_TOKEN"],
-    )
-
-    rsk_openml = Ruska(
-        name=f"{experiment_name}",
-        description="Ich konnte auf den baran-Datensätzen zeigen, dass synth_tuples einen positiven Effekt auf die Reinigung haben, wenn das Machine-Learning grundsätzlich funktioniert. Das möchte ich auf diesem
-        Datensatz validieren.",
-        commit="",
-        config={
-            "dataset": "1481",
-            "error_class": "simple_mcar",
-            "error_fraction": 5,
-            "labeling_budget": 20,
-            "synth_tuples": 0,
-            "synth_tuples_error_threshold": 0,
-            "imputer_cache_model": False,
             "training_time_limit": 30,
             "feature_generators": ["domain", "vicinity",],
             "classification_model": "ABC",
@@ -137,16 +110,52 @@ if __name__ == "__main__":
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V5",
+            "synth_cleaning_threshold": 0,
         },
         ranges={
-            "dataset": [137, 1481, 184, 41027],
+            "dataset": ["beers", "flights", "hospital"],
             "labeling_budget": [1, 5, 20],
-            "synth_tuples": [0, 10, 100]
+            "synth_cleaning_threshold": [0, 0.3, 0.6, 0.9, 1],
         },
-        runs=1,
+        runs=3,
         save_path=save_path,
         chat_id=os.environ["TELEGRAM_CHAT_ID"],
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
+    rsk_openml = Ruska(
+        name=f"{experiment_name}-openml",
+        description="Auswirkung des Prcision-Thresholds auf die Messung.",
+        commit="",
+        config={
+            "dataset": "1481",
+            "error_class": "simple_mcar",
+            "error_fraction": 1,
+            "labeling_budget": 20,
+            "synth_tuples": 100,
+            "synth_tuples_error_threshold": 0,
+            "imputer_cache_model": False,
+            "clean_with_user_input": False,
+            "training_time_limit": 30,
+            "feature_generators": ["domain", "vicinity",],
+            "classification_model": "ABC",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": "V5",
+            "synth_cleaning_threshold": 0,
+        },
+        ranges={
+            "dataset": [137, 1481, 184, 41027],
+            "labeling_budget": [1, 5, 20],
+            "synth_cleaning_threshold": [0, 0.3, 0.6, 0.9, 1],
+        },
+        runs=3,
+        save_path=save_path,
+        chat_id=os.environ["TELEGRAM_CHAT_ID"],
+        token=os.environ["TELEGRAM_BOT_TOKEN"],
+    )
+
+    rsk_baran.run(experiment=run_baran, parallel=True)
     rsk_openml.run(experiment=run_baran, parallel=True)
