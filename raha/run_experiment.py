@@ -47,7 +47,8 @@ def run_baran(i: int, c: dict):
             c["rule_based_value_cleaning"],
             c["synth_tuples"],
             c["synth_tuples_error_threshold"],
-            c["synth_cleaning_threshold"]
+            c["synth_cleaning_threshold"],
+            c["test_synth_data_direction"]
         )
         app.VERBOSE = False
         seed = None
@@ -66,7 +67,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-04-11-synth-f1-threshold-no-update-models"
+    experiment_name = "2023-04-15-synth-test-on-user-input"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -91,7 +92,7 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
-        description="Auswirkung des F1-Thresholds auf die Messung.",
+        description="Benchmark der neuen Synthdatenvalidierung.",
         commit="",
         config={
             "dataset": "1481",
@@ -103,7 +104,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": False,
             "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity",],
+            "feature_generators": ["domain", "vicinity", "value"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -111,11 +112,12 @@ if __name__ == "__main__":
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V5",
             "synth_cleaning_threshold": 0,
+            "test_synth_data_direction": "user_data",
         },
         ranges={
             "dataset": ["beers", "flights", "hospital"],
-            "labeling_budget": [1, 5, 20],
-            "synth_cleaning_threshold": [0, 0.3, 0.6, 0.9, 1],
+            "synth_cleaning_threshold": [0, 0.33, 0.66, 0.99, 1.33],
+            "test_synth_data_direction": ["user_data", "synth_data"],
         },
         runs=3,
         save_path=save_path,
@@ -125,7 +127,7 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
-        description="Auswirkung des Prcision-Thresholds auf die Messung.",
+        description="Benchmark der neuen Synthdatenvalidierung.",
         commit="",
         config={
             "dataset": "1481",
@@ -137,7 +139,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": False,
             "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity",],
+            "feature_generators": ["domain", "vicinity", "value"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -145,11 +147,12 @@ if __name__ == "__main__":
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V5",
             "synth_cleaning_threshold": 0,
+            "test_synth_data_direction": "user_data",
         },
         ranges={
             "dataset": [137, 1481, 184, 41027],
-            "labeling_budget": [1, 5, 20],
-            "synth_cleaning_threshold": [0, 0.3, 0.6, 0.9, 1],
+            "synth_cleaning_threshold": [0, 0.33, 0.66, 0.99, 1.33],
+            "test_synth_data_direction": ["user_data", "synth_data"],
         },
         runs=3,
         save_path=save_path,
