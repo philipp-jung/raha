@@ -708,7 +708,8 @@ class Correction:
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         column_errors = error_positions.original_column_errors
         for j in column_errors:
-            score = ml_helpers.test_synth_data(d, classification_model,
+            score = ml_helpers.test_synth_data(d,
+                                               self.CLASSIFICATION_MODEL,
                                                j,
                                                column_errors,
                                                clean_on=self.TEST_SYNTH_DATA_DIRECTION)

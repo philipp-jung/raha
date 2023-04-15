@@ -93,7 +93,7 @@ if __name__ == "__main__":
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
         description="Benchmark der neuen Synthdatenvalidierung.",
-        commit="",
+        commit="b871dfcca91a4a9f5e3eca7ea106981c56a6df4a",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
         description="Benchmark der neuen Synthdatenvalidierung.",
-        commit="",
+        commit="b871dfcca91a4a9f5e3eca7ea106981c56a6df4a",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
@@ -160,5 +160,5 @@ if __name__ == "__main__":
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    rsk_baran.run(experiment=run_baran, parallel=True)
-    rsk_openml.run(experiment=run_baran, parallel=True)
+    rsk_baran.run(experiment=run_baran, parallel=False)
+    # rsk_openml.run(experiment=run_baran, parallel=True)
