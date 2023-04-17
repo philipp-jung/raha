@@ -48,7 +48,8 @@ def run_baran(i: int, c: dict):
             c["synth_tuples"],
             c["synth_tuples_error_threshold"],
             c["synth_cleaning_threshold"],
-            c["test_synth_data_direction"]
+            c["test_synth_data_direction"],
+            c["pdep_features"]
         )
         app.VERBOSE = False
         seed = None
@@ -67,7 +68,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-04-15-synth-test-on-user-input"
+    experiment_name = "2023-04-17-pdep-features"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -92,7 +93,7 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
-        description="Benchmark der neuen Synthdatenvalidierung.",
+        description="Benchmark all available pdep features.",
         commit="b871dfcca91a4a9f5e3eca7ea106981c56a6df4a",
         config={
             "dataset": "1481",
@@ -104,20 +105,34 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": False,
             "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value"],
+            "feature_generators": ["vicinity"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V5",
-            "synth_cleaning_threshold": 0,
+            "synth_cleaning_threshold": 0.9,
             "test_synth_data_direction": "user_data",
+            "pdep_features": ['pr', 'vote'],
         },
         ranges={
             "dataset": ["beers", "flights", "hospital"],
-            "synth_cleaning_threshold": [0, 0.33, 0.66, 0.99, 1.33],
-            "test_synth_data_direction": ["user_data", "synth_data"],
+            "pdep_features": [
+                    ['pr'],
+                    ['vote'],
+                    ['pdep'],
+                    ['gpdep'],
+                    ['pr', 'vote'],
+                    ['pr', 'pdep'],
+                    ['pr', 'gpdep'],
+                    ['vote', 'pdep'],
+                    ['vote', 'gpdep'],
+                    ['pdep', 'gpdep'],
+                    ['pr', 'vote', 'pdep'],
+                    ['pr', 'vote', 'gpdep'],
+                    ['vote', 'pdep', 'gpdep']
+                ]
         },
         runs=3,
         save_path=save_path,
@@ -127,7 +142,7 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
-        description="Benchmark der neuen Synthdatenvalidierung.",
+        description="Benchmark all available pdep features.",
         commit="b871dfcca91a4a9f5e3eca7ea106981c56a6df4a",
         config={
             "dataset": "1481",
@@ -139,20 +154,83 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": False,
             "training_time_limit": 30,
-            "feature_generators": ["domain", "vicinity", "value"],
+            "feature_generators": ["vicinity"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
             "n_rows": None,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V5",
-            "synth_cleaning_threshold": 0,
+            "synth_cleaning_threshold": 0.9,
             "test_synth_data_direction": "user_data",
+            "pdep_features": ['pr', 'vote'],
         },
         ranges={
             "dataset": [137, 1481, 184, 41027],
-            "synth_cleaning_threshold": [0, 0.33, 0.66, 0.99, 1.33],
-            "test_synth_data_direction": ["user_data", "synth_data"],
+            "pdep_features": [
+                    ['pr'],
+                    ['vote'],
+                    ['pdep'],
+                    ['gpdep'],
+                    ['pr', 'vote'],
+                    ['pr', 'pdep'],
+                    ['pr', 'gpdep'],
+                    ['vote', 'pdep'],
+                    ['vote', 'gpdep'],
+                    ['pdep', 'gpdep'],
+                    ['pr', 'vote', 'pdep'],
+                    ['pr', 'vote', 'gpdep'],
+                    ['vote', 'pdep', 'gpdep']
+                ]
+        },
+        runs=3,
+        save_path=save_path,
+        chat_id=os.environ["TELEGRAM_CHAT_ID"],
+        token=os.environ["TELEGRAM_BOT_TOKEN"],
+    )
+
+    rsk_renuver = Ruska(
+        name=f"{experiment_name}-renuver",
+        description="Benchmark all available pdep features.",
+        commit="b871dfcca91a4a9f5e3eca7ea106981c56a6df4a",
+        config={
+            "dataset": "1481",
+            "error_class": "simple_mcar",
+            "error_fraction": 1,
+            "labeling_budget": 20,
+            "synth_tuples": 100,
+            "synth_tuples_error_threshold": 0,
+            "imputer_cache_model": False,
+            "clean_with_user_input": False,
+            "training_time_limit": 30,
+            "feature_generators": ["vicinity"],
+            "classification_model": "ABC",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": "V5",
+            "synth_cleaning_threshold": 0.9,
+            "test_synth_data_direction": "user_data",
+            "pdep_features": ['pr', 'vote'],
+        },
+        ranges={
+            "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
+            "pdep_features": [
+                    ['pr'],
+                    ['vote'],
+                    ['pdep'],
+                    ['gpdep'],
+                    ['pr', 'vote'],
+                    ['pr', 'pdep'],
+                    ['pr', 'gpdep'],
+                    ['vote', 'pdep'],
+                    ['vote', 'gpdep'],
+                    ['pdep', 'gpdep'],
+                    ['pr', 'vote', 'pdep'],
+                    ['pr', 'vote', 'gpdep'],
+                    ['vote', 'pdep', 'gpdep']
+                ]
         },
         runs=3,
         save_path=save_path,
@@ -161,4 +239,5 @@ if __name__ == "__main__":
     )
 
     rsk_baran.run(experiment=run_baran, parallel=False)
-    # rsk_openml.run(experiment=run_baran, parallel=True)
+    rsk_openml.run(experiment=run_baran, parallel=True)
+    rsk_renuver.run(experiment=run_baran, parallel=True)

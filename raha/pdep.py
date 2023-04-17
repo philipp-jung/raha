@@ -298,18 +298,20 @@ def pdep_vicinity_based_corrector(
     counts_dict: dict,
     ed: dict,
     n_best_pdeps: int = 3,
+    features_selection: tuple = ('pr', 'vote')
 ) -> List[Dict]:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
     grow in number at (n-1)^2 / 2 pace. Only take the `n_best_pdeps`
     highest-scoring dependencies to draw corrections from.
     """
+    if len(features_selection) == 0:  # no features to generate
+        return []
+
     rhs_col = ed["column"]
     gpdeps = inverse_sorted_gpdeps[rhs_col]
 
-    gpdeps_subset = {
-        rhs: gpdeps[rhs] for i, rhs in enumerate(gpdeps) if i < n_best_pdeps
-    }
+    gpdeps_subset = {rhs: gpdeps[rhs] for i, rhs in enumerate(gpdeps) if i < n_best_pdeps}
     results_list = []
 
     for lhs_cols, pdep_tuple in gpdeps_subset.items():
@@ -321,12 +323,17 @@ def pdep_vicinity_based_corrector(
                 pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
 
                 results_list.append(
-                    {"correction": rhs_val, "pr": pr, "pdep": pdep_tuple.pdep if pdep_tuple is not None else 0}
+                    {"correction": rhs_val,
+                     "pr": pr,
+                     "pdep": pdep_tuple.pdep if pdep_tuple is not None else 0,
+                     "gpdep": pdep_tuple.gpdep if pdep_tuple is not None else 0}
                 )
 
     sorted_results = sorted(results_list, key=lambda x: x["pr"], reverse=True)
 
     highest_conditional_probabilities = {}
+    highest_pdeps = {}
+    highest_gpdeps = {}
     votes = {}
 
     # Having a sorted dict allows us to only return the highest conditional
@@ -335,14 +342,28 @@ def pdep_vicinity_based_corrector(
     for d in sorted_results:
         if highest_conditional_probabilities.get(d["correction"]) is None:
             highest_conditional_probabilities[d["correction"]] = d["pr"]
+        if highest_pdeps.get(d["correction"]) is None:
+            highest_pdeps[d["correction"]] = d['pdep']
+        if highest_gpdeps.get(d["correction"]) is None:
+            highest_gpdeps[d["correction"]] = d['gpdep']
 
-    # The three elements of our decision are majority vote, highest conditional
-    # probability, and highest gpdep score.
-    # Here, I calculate the majority vote.
+    # Below, I calculate the majority vote.
     counts = Counter([x["correction"] for x in sorted_results])
     n_corrections = sum(counts.values())
 
     for correction in counts:
         votes[correction] = counts[correction] / n_corrections
 
-    return [highest_conditional_probabilities, votes]
+    # Now, select relevant features. As of 2023-04-15, the two features are majority vote and
+    # highest conditional probability.
+    features = []
+    if 'pr' in features_selection:
+        features.append(highest_conditional_probabilities)
+    if 'pdep' in features_selection:
+        features.append(highest_pdeps)
+    if 'gpdep' in features_selection:
+        features.append(highest_gpdeps)
+    if 'vote' in features_selection:
+        features.append(votes)
+
+    return features
