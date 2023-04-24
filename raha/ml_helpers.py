@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 import sklearn
+from sklearn.metrics import f1_score
 from typing import List, Dict, Tuple
+import hpo
 
 
 class VotingClassifier(object):
@@ -47,8 +49,8 @@ def set_binary_cleaning_suggestions(predicted_labels: List[int],
 def handle_edge_cases(x_train, x_test, y_train, d) -> Tuple[bool, List]:
     """
     Depending on the dataset and how much data has been labeled by the user, the data used to formulate the ML problem
-    can be such that it leads to an invalid ML problem.
-    To prevent the application from stopping unexpectedly, these edge-cases are handled here.
+    can lead to an invalid ML problem.
+    To prevent the application from stopping unexpectedly, edge-cases are handled here.
 
     @return: A tuple whose first position is a boolean, indicating if the ML problem should be started. The second
     position is a list of predicted labels. Which is used when the ML problem should not be started.
@@ -87,8 +89,6 @@ def generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
                              synth_pair_features: Dict[Tuple[int, int], Dict[str, List]],
                              column: int):
     """
-    If the product of synth_error_factor * (number of error correction suggestions) is larger than the number of
-    error correction suggestions, the difference gets filled with synthesized errors.
     """
     x_train = []  # train feature vectors
     y_train = []  # train labels
@@ -131,8 +131,6 @@ def multi_generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]
     """
     Generate data for the machine-learning problem modeling the issue as a multiclass classification.
     We also leverage rows that do not contain errors to get more training data, called "synthetic" data.
-    If the product of synth_error_factor * (number of error correction suggestions) is larger than the number of
-    error correction suggestions, the difference gets filled with synthesized errors.
     """
     x_train = []  # train feature vectors
     y_train = []  # train labels
@@ -174,12 +172,12 @@ def multi_generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]
 
     return x_train, y_train, x_test, corrected_cells
 
+
 def generate_synth_test_data(synth_pair_features: Dict[Tuple[int, int], Dict[str, List]],
                              df_dirty: pd.DataFrame,
-                             column: int):
+                             column: int) -> Tuple[List, List, List]:
     """
-    If the product of synth_error_factor * (number of error correction suggestions) is larger than the number of
-    error correction suggestions, the difference gets filled with synthesized errors.
+    For one column, extract features x_test, labels y_test, and the corresponding list of error_correction_suggestions.
     """
     x_test = []
     y_test = []
@@ -195,3 +193,68 @@ def generate_synth_test_data(synth_pair_features: Dict[Tuple[int, int], Dict[str
                 all_error_correction_suggestions.append([synth_cell, suggestion])
 
     return x_test, y_test, all_error_correction_suggestions
+
+
+def test_synth_data(d, classification_model: str, column: int, column_errors: dict, clean_on: str) -> float:
+    """
+    Test the difference in distribution between user_data and synth_data to determine if using synth_data in the
+    cleaning problem is worthwhile.
+    @param d: baran dataset object
+    @param classification_model: which sklearn model to use for ensembling
+    @param column: column that is being cleaned
+    @param column_errors: errors per column
+    @param clean_on: The data that is cleaned. Valid values are either "user_data" or "synth_data". If "user_data",
+    clean errors in the user data using a model ensembling trained with synth_data. If "synth_data", clean errors
+    in the synth_data using a model ensembling trained with user_data.
+    @return: f1-score of the ensembling model cleaning erronous values.
+    """
+    synth_x_test, synth_y_test, synth_error_correction_suggestions = generate_synth_test_data(
+        d.synth_pair_features, d.dataframe, column)
+
+    x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = generate_train_test_data(
+        column_errors,
+        d.labeled_cells,
+        d.pair_features,
+        d.dataframe,
+        {},
+        # d.synth_pair_features, # für das Experiment, bei dem ich die performance beim Reinigen der synth_daten
+        # messe, will ich keine synth_daten in den Trainingsdaten haben.
+        column)
+
+    score = 0.0
+    is_valid_problem, _ = handle_edge_cases(x_train, synth_x_test, y_train, d)
+    if not is_valid_problem:
+        return score
+
+    if clean_on == 'synth_data':
+        if classification_model == "ABC" or sum(y_train) <= 2:
+            gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+        elif classification_model == "CV":
+            gs_clf = hpo.cross_validated_estimator(x_train, y_train)
+        else:
+            raise ValueError('Unknown model.')
+
+        gs_clf.fit(x_train, y_train)
+
+        if len(synth_y_test) > 0:
+            synth_predicted_labels = gs_clf.predict(synth_x_test)
+            score = f1_score(synth_y_test, synth_predicted_labels)
+        return score
+
+    elif clean_on == 'user_data':
+        if classification_model == "ABC" or sum(y_train) <= 2:
+            gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+        elif classification_model == "CV":
+            gs_clf = hpo.cross_validated_estimator(synth_x_test, synth_y_test)
+        else:
+            raise ValueError('Unknown model.')
+
+        gs_clf.fit(synth_x_test, synth_y_test)
+
+        if len(y_train) > 0:
+            user_predicted_labels = gs_clf.predict(x_train)
+            score = f1_score(y_train, user_predicted_labels)
+        return score
+
+    else:
+        raise ValueError('Can either clean_on "user_data" or "synth_data".')
