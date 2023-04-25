@@ -859,7 +859,7 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "beers"
+    dataset_name = "hospital"
     version = 1
     error_fraction = 1
     error_class = 'simple_mcar'
@@ -871,14 +871,14 @@ if __name__ == "__main__":
     imputer_cache_model = False
     clean_with_user_input = False
     labeling_budget = 20
-    n_best_pdeps = 3
+    n_best_pdeps = 30
     n_rows = None
     rule_based_value_cleaning = 'V5'
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
     # pdep_features = ['pr', 'vote', 'pdep', 'gpdep']
-    pdep_features = []
+    pdep_features = ['pr']
     vicinity_orders = [1, 2]
 
     # Load Dataset object
