@@ -468,6 +468,7 @@ class Correction:
         if not self.RULE_BASED_VALUE_CLEANING and not is_synth:
             # construct value corrections as in original Baran
             # TODO I think this is broken rn. I changed the data structure value_corrections refers to.
+            raise ValueError('TODO I think this is broken rn. I changed the data structure value_corrections refers to.')
             value_corrections = [{correction: d[correction]['encoded_string_frequency']} for d in value_corrections for
                                  correction in d]
             models_corrections = value_corrections \
@@ -481,10 +482,13 @@ class Correction:
         else:  # do rule based value cleaning.
             models_corrections = domain_corrections \
                                  + [corrections for order in naive_vicinity_corrections for corrections in order] \
-                                 + [corrections for order in pdep_vicinity_corrections for corrections in order] \
                                  + imputer_corrections \
                                  + [sbert_corrections]
-        # End Philipps Changes
+            for order in pdep_vicinity_corrections:
+                for dependency_suggestion in order:
+                    models_corrections.extend(dependency_suggestion)
+                # + [corrections for order in pdep_vicinity_corrections for corrections in order] \
+            # End Philipps Changes
 
         corrections_features = {}
         for mi, model in enumerate(models_corrections):
@@ -859,7 +863,7 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "hospital"
+    dataset_name = "bridges"
     version = 1
     error_fraction = 1
     error_class = 'simple_mcar'
