@@ -68,7 +68,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-04-17-pdep-features"
+    experiment_name = "2023-04-25-pdep-ensembling"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -93,8 +93,8 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
-        description="Benchmark all available pdep features.",
-        commit="b871dfcca91a4a9f5e3eca7ea106981c56a6df4a",
+        description="Benchmark pdep ensembling.",
+        commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
@@ -117,21 +117,16 @@ if __name__ == "__main__":
             "pdep_features": ['pr', 'vote'],
         },
         ranges={
-            "dataset": ["beers", "flights", "hospital"],
+            "dataset": ["beers", "flights", "hospital", "rayyan"],
             "pdep_features": [
                     ['pr'],
-                    ['vote'],
                     ['pdep'],
                     ['gpdep'],
                     ['pr', 'vote'],
                     ['pr', 'pdep'],
                     ['pr', 'gpdep'],
-                    ['vote', 'pdep'],
-                    ['vote', 'gpdep'],
                     ['pdep', 'gpdep'],
-                    ['pr', 'vote', 'pdep'],
-                    ['pr', 'vote', 'gpdep'],
-                    ['vote', 'pdep', 'gpdep']
+                    ['pr', 'pdep', 'gpdep'],
                 ]
         },
         runs=3,
@@ -142,8 +137,8 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
-        description="Benchmark all available pdep features.",
-        commit="b871dfcca91a4a9f5e3eca7ea106981c56a6df4a",
+        description="Benchmark pdep ensembling.",
+        commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
@@ -169,18 +164,13 @@ if __name__ == "__main__":
             "dataset": [137, 1481, 184, 41027],
             "pdep_features": [
                     ['pr'],
-                    ['vote'],
                     ['pdep'],
                     ['gpdep'],
                     ['pr', 'vote'],
                     ['pr', 'pdep'],
                     ['pr', 'gpdep'],
-                    ['vote', 'pdep'],
-                    ['vote', 'gpdep'],
                     ['pdep', 'gpdep'],
-                    ['pr', 'vote', 'pdep'],
-                    ['pr', 'vote', 'gpdep'],
-                    ['vote', 'pdep', 'gpdep']
+                    ['pr', 'pdep', 'gpdep'],
                 ]
         },
         runs=3,
@@ -191,8 +181,8 @@ if __name__ == "__main__":
 
     rsk_renuver = Ruska(
         name=f"{experiment_name}-renuver",
-        description="Benchmark all available pdep features.",
-        commit="b871dfcca91a4a9f5e3eca7ea106981c56a6df4a",
+        description="Benchmark vicinity ensembling",
+        commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
@@ -218,18 +208,13 @@ if __name__ == "__main__":
             "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
             "pdep_features": [
                     ['pr'],
-                    ['vote'],
                     ['pdep'],
                     ['gpdep'],
                     ['pr', 'vote'],
                     ['pr', 'pdep'],
                     ['pr', 'gpdep'],
-                    ['vote', 'pdep'],
-                    ['vote', 'gpdep'],
                     ['pdep', 'gpdep'],
-                    ['pr', 'vote', 'pdep'],
-                    ['pr', 'vote', 'gpdep'],
-                    ['vote', 'pdep', 'gpdep']
+                    ['pr', 'pdep', 'gpdep'],
                 ]
         },
         runs=3,
