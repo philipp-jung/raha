@@ -45,7 +45,7 @@ class Correction:
                  vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
                  n_best_pdeps: int, training_time_limit: int, rule_based_value_cleaning: Union[str, bool],
                  synth_tuples: int, synth_tuples_error_threshold: int, synth_cleaning_threshold: float,
-                 test_synth_data_direction: str, pdep_features: List[str]):
+                 test_synth_data_direction: str, pdep_features: List[str], pdep_corrections_compression: bool):
         """
         Parameters of the cleaning experiment.
         @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
@@ -98,6 +98,7 @@ class Correction:
         self.SYNTH_CLEANING_THRESHOLD = synth_cleaning_threshold
         self.TEST_SYNTH_DATA_DIRECTION = test_synth_data_direction
         self.PDEP_FEATURES = pdep_features
+        self.PDEP_CORRECTIONS_COMPRESSION = pdep_corrections_compression
 
         # original Baran
         self.PRETRAINED_VALUE_BASED_MODELS_PATH = ""
@@ -393,7 +394,7 @@ class Correction:
         """
         This method generates cleaning suggestions for one error in one cell. The suggestion
         gets turned into features for the classifier in predict_corrections(). It gets called
-        once for each each error cell.
+        once for each error cell.
 
         Depending on the value of `synchronous` in `generate_features()`, the method will
         be executed in parallel or not.
@@ -539,7 +540,6 @@ class Correction:
                     error_value = error_positions.detected_cells[error_cell]
                     emb_error = sbert_model.encode(error_value)
                     d.sbert_cos_sim[error_cell] = {values_in_cols[col][i]: float(util.cos_sim(emb_error, emb_values[i])) for i, _ in enumerate(values_in_cols[col])}
-
 
     def generate_features(self, d, synchronous):
         """
@@ -883,6 +883,7 @@ if __name__ == "__main__":
     vicinity_feature_generator = "pdep"
     # pdep_features = ['pr', 'vote', 'pdep', 'gpdep']
     pdep_features = ['pr']
+    pdep_corrections_compression = True
     vicinity_orders = [1, 2]
 
     # Load Dataset object
@@ -895,7 +896,7 @@ if __name__ == "__main__":
     app = Correction(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
                      rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold, synth_cleaning_threshold,
-                     test_synth_data_direction, pdep_features)
+                     test_synth_data_direction, pdep_features, pdep_corrections_compression)
     app.VERBOSE = True
     seed = 0
     correction_dictionary = app.run(data, seed)

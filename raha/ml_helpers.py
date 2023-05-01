@@ -6,27 +6,6 @@ from typing import List, Dict, Tuple
 import hpo
 
 
-class VotingClassifier(object):
-    """
-    Implements a voting classifier for pre-trained classifiers. Uses soft-voting to get the right label.
-    Inspired by https://stackoverflow.com/a/50295289.
-    """
-
-    def __init__(self, estimators: List[Tuple[str, sklearn.pipeline.Pipeline]]):
-        self.estimators = estimators
-
-    def predict(self, X):
-        # get values
-        Y = np.zeros([X.shape[0], len(self.estimators)], dtype=int)
-        for i, (name, clf) in enumerate(self.estimators):
-            Y[:, i] = clf.predict(X)
-        # voting
-        y = np.zeros(X.shape[0])
-        for i in range(X.shape[0]):
-            y[i] = np.argmax(np.bincount(Y[i, :]))
-        return y
-
-
 def set_binary_cleaning_suggestions(predicted_labels: List[int],
                                     all_error_correction_suggestions: List[Tuple],
                                     corrected_cells: Dict):

@@ -2,6 +2,8 @@ import pandas as pd
 from typing import Tuple, List, Dict, Union, Any
 from itertools import combinations
 from collections import Counter, namedtuple
+from ml_helpers import generate_train_test_data, handle_edge_cases
+import sklearn
 
 PdepTuple = namedtuple("PdepTuple", ["pdep", "gpdep"])
 
@@ -344,3 +346,26 @@ def pdep_vicinity_based_corrector(
         features.append(result)
 
     return features
+
+
+def compress_n_best_pdeps(ground_truth, pdep_correction_suggestions):
+    """
+    Compress 30 * len(features_selection) features, each in [0, 1], into 1 features in [0, 1] per correction
+    suggestion.
+    """
+    x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions = generate_train_test_data(column_errors,
+                                                                                                           labeled_cells,
+                                                                                                           pair_features,
+                                                                                                           df_dirty,
+                                                                                                           synth_pair_features={},
+                                                                                                           column=col)
+
+
+    is_valid_problem, predicted_labels = handle_edge_cases(x_train, x_test, y_train, d)
+    if is_valid_problem:
+        gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+        gs_clf.fit(x_train, y_train)
+
+        predicted_proba = gs_clf.predict_proba(x_test)
+
+    ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
