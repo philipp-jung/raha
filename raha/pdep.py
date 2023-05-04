@@ -301,7 +301,7 @@ def pdep_vicinity_based_corrector(
     ed: dict,
     n_best_pdeps: int = 30,
     features_selection: tuple = ('pr')
-) -> List[List[Dict]]:
+) -> Dict[str, List[Dict[str, float]]]:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
     grow in number at a (n-1)^2 / 2 pace. Only take the `n_best_pdeps`
@@ -318,13 +318,15 @@ def pdep_vicinity_based_corrector(
     gpdeps = inverse_sorted_gpdeps[rhs_col]
 
     gpdeps_subset = {rhs: gpdeps[rhs] for i, rhs in enumerate(gpdeps) if i < n_best_pdeps}
-    features = []
+    features = {'pr': [],
+                'pdep': [],
+                'gpdep': []
+                }
 
     for lhs_cols, pdep_tuple in gpdeps_subset.items():
-        result = []
         prs = {}
-        pdeps = {}
-        gpdeps = {}
+        pdeps: Dict[str, float] = {}
+        gpdeps: Dict[str, float] = {}
         lhs_vals = tuple([ed["vicinity"][x] for x in lhs_cols])
 
         if rhs_col not in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
@@ -337,13 +339,9 @@ def pdep_vicinity_based_corrector(
                 pdeps[correction_suggestion] = pdep_tuple.pdep if pdep_tuple is not None else 0
                 gpdeps[correction_suggestion] = pdep_tuple.gpdep if pdep_tuple is not None else 0
 
-        if 'pr' in features_selection:
-            result.append(prs)
-        if 'pdep' in features_selection:
-            result.append(pdeps)
-        if 'gpdep' in features_selection:
-            result.append(gpdeps)
-        features.append(result)
+        features['pr'].append(prs)
+        features['pdep'].append(pdeps)
+        features['gpdep'].append(gpdeps)
 
     return features
 

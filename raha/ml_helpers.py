@@ -34,14 +34,15 @@ def handle_edge_cases(x_train, x_test, y_train, d) -> Tuple[bool, List]:
     @return: A tuple whose first position is a boolean, indicating if the ML problem should be started. The second
     position is a list of predicted labels. Which is used when the ML problem should not be started.
     """
+    pair_features = d.pair_features
     if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
         return False, []  # nothing to do, need more user-input to work.
     elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
         return False, np.ones(len(x_test))
 
     elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
-        for cell in d.pair_features:
-            correction_dict = d.pair_features[cell]
+        for cell in pair_features:
+            correction_dict = pair_features[cell]
             if len(correction_dict) > 0:
                 # select the correction with the highest sum of features.
                 max_proba_feature = \
@@ -187,13 +188,15 @@ def test_synth_data(d, classification_model: str, column: int, column_errors: di
     in the synth_data using a model ensembling trained with user_data.
     @return: f1-score of the ensembling model cleaning erronous values.
     """
+    pair_features = d.pair_features
+    synth_pair_features = d.synth_pair_features
     synth_x_test, synth_y_test, synth_error_correction_suggestions = generate_synth_test_data(
-        d.synth_pair_features, d.dataframe, column)
+        synth_pair_features, d.dataframe, column)
 
     x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = generate_train_test_data(
         column_errors,
         d.labeled_cells,
-        d.pair_features,
+        pair_features,
         d.dataframe,
         {},
         # d.synth_pair_features, # für das Experiment, bei dem ich die performance beim Reinigen der synth_daten

@@ -1,6 +1,8 @@
 import json
+import numpy as np
 from typing import Union, Dict, Tuple, List
 from dataclasses import dataclass
+from collections import defaultdict
 
 
 def get_data_dict(
@@ -179,3 +181,55 @@ class ErrorPositions:
     @property
     def updated_row_errors(self) -> Dict[int, List[Tuple[int, int]]]:
         return self.count_row_errors(updated=True)
+
+
+class Corrections:
+    """
+    Store correction suggestions provided by the correction models in correction_store. In _feature_generator_process
+    it is guaranteed that all models return something for each error cell -- if there are no corrections made, that
+    will be an empty list. If a correction or multiple corrections has/have been made, there will be a list of
+    correction suggestions and feature vectors.
+    """
+    def __init__(self, model_names: List[str]):
+        self.correction_store = {name: dict() for name in model_names}
+
+    def flat_correction_store(self):
+        flat_store = {}
+        for model in self.correction_store:
+            if not model.startswith('vicinity'):
+                flat_store[model] = self.correction_store[model]
+            else:
+                for cell in self.correction_store[model]:
+                    for n_fd, corrections_pr in enumerate(self.correction_store[model][cell]):
+                        vicinity_model_name = f'{model}_{n_fd}'
+                        if flat_store.get(vicinity_model_name) is None:
+                            flat_store[vicinity_model_name] = {}
+                        if flat_store[vicinity_model_name].get(cell) is None:
+                            flat_store[vicinity_model_name][cell] = corrections_pr
+        return flat_store
+
+    @property
+    def available_corrections(self) -> List[str]:
+        return list(self.correction_store.keys())
+
+    def features(self) -> List[str]:
+        """Return a list describing the features the Corrections come from."""
+        return list(self.flat_correction_store().keys())
+
+    def get(self, model_name: str) -> Dict:
+        """
+        For each error-cell, there will be a list of {corrections_suggestion: probability} returned here. If there is no
+        correction made for that cell, the list will be empty.
+        """
+        return self.correction_store[model_name]
+
+    def assemble_pair_features(self) -> Dict[Tuple[int, int], Dict[str, List[float]]]:
+        """Return an object as d.pair_features has been in Baran."""
+        pair_features = defaultdict(dict)
+        for mi, model in enumerate(self.flat_correction_store()):
+            for cell in self.flat_correction_store()[model]:
+                for correction, pr in self.flat_correction_store()[model][cell].items():
+                    if correction not in pair_features[cell]:
+                        pair_features[cell][correction] = np.zeros(len(self.features()))
+                    pair_features[cell][correction][mi] = pr
+        return pair_features

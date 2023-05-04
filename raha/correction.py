@@ -199,7 +199,7 @@ class Correction:
             for new_value in model[ed["column"]]:
                 pr = model[ed["column"]][new_value] / sum_scores
                 results_dictionary[new_value] = pr
-        return [results_dictionary]
+        return results_dictionary
 
     def initialize_dataset(self, d):
         """
@@ -247,11 +247,18 @@ class Correction:
         d.value_corrections = {}
         d.sbert_cos_sim = {}
 
-        # for debugging purposes only
-        d.domain_corrections = {}
-        d.naive_vicinity_corrections = {}
-        d.pdep_vicinity_corrections = {}
-        d.imputer_corrections = {}
+        # Correction store for feature creation
+        corrections_features = []
+        for feature in self.FEATURE_GENERATORS:
+            if feature == 'vicinity':
+                for o in self.VICINITY_ORDERS:
+                    for feature_type in self.PDEP_FEATURES:
+                        corrections_features.append(f'vicinity_{feature_type}_{o}')
+            elif feature != 'value':
+                corrections_features.append(feature)
+
+        d.corrections = helpers.Corrections(corrections_features)
+        d.synth_corrections = helpers.Corrections(corrections_features)
 
         d.vicinity_models = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
@@ -406,12 +413,6 @@ class Correction:
                             "old_value": d.dataframe.iloc[cell],
                             "vicinity": list(d.dataframe.iloc[cell[0], :]),
                             "row": cell[0]}
-        naive_vicinity_corrections = []
-        pdep_vicinity_corrections = []
-        value_corrections = []
-        domain_corrections = []
-        imputer_corrections = []
-        sbert_corrections = []
 
         # Begin Philipps Changes
         if "vicinity" in self.FEATURE_GENERATORS:
@@ -421,7 +422,7 @@ class Correction:
                         counts_dict=d.vicinity_models[o],
                         ed=error_dictionary,
                         probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
-                    naive_vicinity_corrections.append(naive_corrections)
+                    d.corrections.get(f'vicinity_{o}')[cell] = naive_corrections
 
             elif self.VICINITY_FEATURE_GENERATOR == 'pdep':
                 for o in self.VICINITY_ORDERS:
@@ -431,7 +432,8 @@ class Correction:
                         ed=error_dictionary,
                         n_best_pdeps=self.N_BEST_PDEPS,
                         features_selection=self.PDEP_FEATURES)
-                    pdep_vicinity_corrections.append(pdep_corrections)
+                    for feature_type in self.PDEP_FEATURES:  # can be pr, pdep, gpdep
+                        d.corrections.get(f'vicinity_{feature_type}_{o}')[cell] = pdep_corrections[feature_type]
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
                                  f'{self.VICINITY_FEATURE_GENERATOR}')
@@ -445,10 +447,15 @@ class Correction:
         # TODO implement sbert for synth
         if "sbert" in self.FEATURE_GENERATORS and not is_synth:
             row, column = error_dictionary['row'], error_dictionary['column']
-            sbert_corrections = d.sbert_cos_sim[(row, column)]
+            if not is_synth:
+                d.corrections.get('sbert')[cell] = d.sbert_cos_sim[(row, column)]
 
         if "domain" in self.FEATURE_GENERATORS:
-            domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
+            if not is_synth:
+                d.corrections.get('domain')[cell] = self._domain_based_corrector(d.domain_models, error_dictionary)
+            elif is_synth:
+                d.synth_corrections.get('domain')[cell] = self._domain_based_corrector(d.domain_models, error_dictionary)
+
         if "imputer" in self.FEATURE_GENERATORS:
             imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
 
@@ -459,45 +466,10 @@ class Correction:
             # a feature with value 0.
             if len(d.labeled_tuples) == self.LABELING_BUDGET and len(imputer_corrections) == 0:
                 imputer_corrections = [{}]
-
-        # below block is for debugging purposes only.
-        d.domain_corrections[cell] = domain_corrections
-        d.naive_vicinity_corrections[cell] = naive_vicinity_corrections
-        d.pdep_vicinity_corrections[cell] = pdep_vicinity_corrections
-        d.imputer_corrections[cell] = imputer_corrections
-
-        if not self.RULE_BASED_VALUE_CLEANING and not is_synth:
-            # construct value corrections as in original Baran
-            # TODO I think this is broken rn. I changed the data structure value_corrections refers to.
-            raise ValueError('TODO I think this is broken rn. I changed the data structure value_corrections refers to.')
-            value_corrections = [{correction: d[correction]['encoded_string_frequency']} for d in value_corrections for
-                                 correction in d]
-            models_corrections = value_corrections \
-                                 + domain_corrections \
-                                 + [corrections for order in naive_vicinity_corrections for corrections in order] \
-                                 + [corrections for order in pdep_vicinity_corrections for corrections in order] \
-                                 + imputer_corrections
-        elif not self.RULE_BASED_VALUE_CLEANING and is_synth:
-            raise ValueError('It is impossible to synthesize tuples and use the meta-learner to apply value-corrections'
-                             ' at the same time. Instead, perform RULE_BASED_VALUE_CLEANING, or set n_synth_tuples=0.')
-        else:  # do rule based value cleaning.
-            models_corrections = domain_corrections \
-                                 + [corrections for order in naive_vicinity_corrections for corrections in order] \
-                                 + imputer_corrections \
-                                 + [sbert_corrections]
-            for order in pdep_vicinity_corrections:
-                for dependency_suggestion in order:
-                    models_corrections.extend(dependency_suggestion)
-                # + [corrections for order in pdep_vicinity_corrections for corrections in order] \
-            # End Philipps Changes
-
-        corrections_features = {}
-        for mi, model in enumerate(models_corrections):
-            for correction in model:
-                if correction not in corrections_features:
-                    corrections_features[correction] = np.zeros(len(models_corrections))
-                corrections_features[correction][mi] = model[correction]
-        return corrections_features
+            if not is_synth:
+                d.corrections.get('imputer')[cell] = imputer_corrections
+            elif is_synth:
+                d.synth_corrections.get('imputer')[cell] = imputer_corrections
 
     def prepare_augmented_models(self, d):
         """
@@ -548,29 +520,17 @@ class Correction:
         Philipp added a `synchronous` parameter to make debugging easier.
         """
 
-        d.pair_features = {}
-        d.synth_pair_features = {}
-        pairs_counter = 0
         process_args_list = [[d, cell, False] for cell in d.detected_cells]
         if not synchronous:
             pool = multiprocessing.Pool()
-            feature_generation_results = pool.map(self._feature_generator_process, process_args_list)
+            pool.map(self._feature_generator_process, process_args_list)
             pool.close()
         else:
-            feature_generation_results = []
             for args in process_args_list:
-                result = self._feature_generator_process(args)
-                feature_generation_results.append(result)
-
-        for ci, corrections_features in enumerate(feature_generation_results):
-            cell = process_args_list[ci][1]
-            d.pair_features[cell] = {}
-            for correction in corrections_features:
-                d.pair_features[cell][correction] = corrections_features[correction]
-                pairs_counter += 1
+                self._feature_generator_process(args)
 
         if self.VERBOSE:
-            print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
+            print("Features generated.")
 
     def generate_synth_features(self, d, synchronous):
         """
@@ -596,24 +556,14 @@ class Correction:
 
             if not synchronous:
                 pool = multiprocessing.Pool()
-                synth_feature_generation_results = pool.map(self._feature_generator_process, synth_args_list)
+                pool.map(self._feature_generator_process, synth_args_list)
                 pool.close()
             else:
-                synth_feature_generation_results = []
                 for args in synth_args_list:
-                    result = self._feature_generator_process(args)
-                    synth_feature_generation_results.append(result)
-
-            synth_pairs_counter = 0
-            for ci, corrections_features in enumerate(synth_feature_generation_results):
-                cell = synth_args_list[ci][1]
-                d.synth_pair_features[cell] = {}
-                for correction in corrections_features:
-                    d.synth_pair_features[cell][correction] = corrections_features[correction]
-                    synth_pairs_counter += 1
+                    self._feature_generator_process(args)
 
             if self.VERBOSE:
-                print(f"{synth_pairs_counter} pairs of synthetic (error, potential correction) are featurized.")
+                print(f"Generated synth features.")
 
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
@@ -642,10 +592,12 @@ class Correction:
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         column_errors = error_positions.original_column_errors
         for col in column_errors:
+            pair_features = d.corrections.assemble_pair_features(self.RULE_BASED_VALUE_CLEANING)
+            synth_pair_features = d.synth_corrections.assemble_pair_feautres(self.RULE_BASED_VALUE_CLEANING)
             x_train, y_train, x_test, user_corrected_cells = ml_helpers.multi_generate_train_test_data(column_errors,
                                                                                                        d.labeled_cells,
-                                                                                                       d.pair_features,
-                                                                                                       d.synth_pair_features,
+                                                                                                       pair_features,
+                                                                                                       synth_pair_features,
                                                                                                        d.dataframe,
                                                                                                        col)
             for error_cell in user_corrected_cells:
@@ -683,8 +635,9 @@ class Correction:
                     d.corrected_cells[cell] = label
 
             elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
-                for cell in d.pair_features:
-                    correction_dict = d.pair_features[cell]
+                pair_features = d.pair_features
+                for cell in pair_features:
+                    correction_dict = pair_features[cell]
                     if len(correction_dict) > 0:
                         # select the correction with the highest sum of features.
                         max_proba_feature = \
@@ -710,6 +663,8 @@ class Correction:
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         column_errors = error_positions.original_column_errors
+        pair_features = d.pair_features
+        synth_pair_features = d.synth_pair_features
         for j in column_errors:
             score = ml_helpers.test_synth_data(d,
                                                self.CLASSIFICATION_MODEL,
@@ -722,15 +677,15 @@ class Correction:
                 x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
                     column_errors,
                     d.labeled_cells,
-                    d.pair_features,
+                    pair_features,
                     d.dataframe,
-                    d.synth_pair_features,
+                    synth_pair_features,
                     j)
             else:  # score is below threshold, don't use additional training data
                 x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
                     column_errors,
                     d.labeled_cells,
-                    d.pair_features,
+                    pair_features,
                     d.dataframe,
                     {},
                     j)
@@ -762,11 +717,13 @@ class Correction:
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         column_errors = error_positions.original_column_errors
+        pair_features = d.pair_features
+        synth_pair_features = d.synth_pair_features
         for j in column_errors:
             classifiers = []
             train_test_data = [
-                ml_helpers.generate_train_test_data(column_errors, d.labeled_cells, d.pair_features, d.dataframe, synth,
-                                                    j) for synth in ([], d.synth_pair_features)]
+                ml_helpers.generate_train_test_data(column_errors, d.labeled_cells, pair_features, d.dataframe, synth,
+                                                    j) for synth in ([], synth_pair_features)]
 
             valid_problems = 0
             for (x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions) in train_test_data:
@@ -835,10 +792,12 @@ class Correction:
             self.update_models(d)
             self.prepare_augmented_models(d)
             self.generate_features(d, synchronous=True)
-            self.generate_synth_features(d, synchronous=True)
+            # self.generate_synth_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
             # self.voting_binary_predict_corrections(d)
+            d.pair_features = d.corrections.assemble_pair_features()
+            d.synth_pair_features = d.synth_corrections.assemble_pair_features()
             self.binary_predict_corrections(d)
             # self.multi_predict_corrections(d)
             if self.RULE_BASED_VALUE_CLEANING:
