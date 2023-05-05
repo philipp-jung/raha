@@ -422,7 +422,10 @@ class Correction:
                         counts_dict=d.vicinity_models[o],
                         ed=error_dictionary,
                         probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
-                    d.corrections.get(f'vicinity_{o}')[cell] = naive_corrections
+                    if is_synth:
+                        d.synth_corrections.get(f'vicinity_{o}')[cell] = naive_corrections
+                    else:
+                        d.corrections.get(f'vicinity_{o}')[cell] = naive_corrections
 
             elif self.VICINITY_FEATURE_GENERATOR == 'pdep':
                 for o in self.VICINITY_ORDERS:
@@ -433,7 +436,10 @@ class Correction:
                         n_best_pdeps=self.N_BEST_PDEPS,
                         features_selection=self.PDEP_FEATURES)
                     for feature_type in self.PDEP_FEATURES:  # can be pr, pdep, gpdep
-                        d.corrections.get(f'vicinity_{feature_type}_{o}')[cell] = pdep_corrections[feature_type]
+                        if is_synth:
+                            d.synth_corrections.get(f'vicinity_{feature_type}_{o}')[cell] = pdep_corrections[feature_type]
+                        else:
+                            d.corrections.get(f'vicinity_{feature_type}_{o}')[cell] = pdep_corrections[feature_type]
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
                                  f'{self.VICINITY_FEATURE_GENERATOR}')
@@ -444,6 +450,7 @@ class Correction:
             if not is_synth:
                 d.value_corrections[cell] = value_corrections
 
+
         # TODO implement sbert for synth
         if "sbert" in self.FEATURE_GENERATORS and not is_synth:
             row, column = error_dictionary['row'], error_dictionary['column']
@@ -451,10 +458,10 @@ class Correction:
                 d.corrections.get('sbert')[cell] = d.sbert_cos_sim[(row, column)]
 
         if "domain" in self.FEATURE_GENERATORS:
-            if not is_synth:
-                d.corrections.get('domain')[cell] = self._domain_based_corrector(d.domain_models, error_dictionary)
-            elif is_synth:
+            if is_synth:
                 d.synth_corrections.get('domain')[cell] = self._domain_based_corrector(d.domain_models, error_dictionary)
+            else:
+                d.corrections.get('domain')[cell] = self._domain_based_corrector(d.domain_models, error_dictionary)
 
         if "imputer" in self.FEATURE_GENERATORS:
             imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
@@ -466,10 +473,10 @@ class Correction:
             # a feature with value 0.
             if len(d.labeled_tuples) == self.LABELING_BUDGET and len(imputer_corrections) == 0:
                 imputer_corrections = [{}]
-            if not is_synth:
-                d.corrections.get('imputer')[cell] = imputer_corrections
-            elif is_synth:
+            if is_synth:
                 d.synth_corrections.get('imputer')[cell] = imputer_corrections
+            else:
+                d.corrections.get('imputer')[cell] = imputer_corrections
 
     def prepare_augmented_models(self, d):
         """
@@ -545,7 +552,7 @@ class Correction:
                                    len(cells) <= self.SYNTH_TUPLES_ERROR_THRESHOLD]
         ranked_candidate_rows = sorted(candidate_rows, key=lambda x: x[1])
         if self.SYNTH_TUPLES > 0 and len(ranked_candidate_rows) > 0:
-            # sample randomly to prevent sorted data to mess with synth tuple sampling.
+            # sample randomly to prevent sorted data messing up the sampling process.
             random.seed(0)
             if len(ranked_candidate_rows) <= self.SYNTH_TUPLES:
                 synthetic_error_rows = random.sample([x[0] for x in ranked_candidate_rows], len(ranked_candidate_rows))
@@ -563,7 +570,7 @@ class Correction:
                     self._feature_generator_process(args)
 
             if self.VERBOSE:
-                print(f"Generated synth features.")
+                print(f"Synth features generated.")
 
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
@@ -583,6 +590,8 @@ class Correction:
 
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
+        if self.VERBOSE:
+            print('Rule-based cleaning finished.')
 
     def multi_predict_corrections(self, d):
         """
@@ -592,7 +601,7 @@ class Correction:
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         column_errors = error_positions.original_column_errors
         for col in column_errors:
-            pair_features = d.corrections.assemble_pair_features(self.RULE_BASED_VALUE_CLEANING)
+            pair_features = d.pair_features
             synth_pair_features = d.synth_corrections.assemble_pair_feautres(self.RULE_BASED_VALUE_CLEANING)
             x_train, y_train, x_test, user_corrected_cells = ml_helpers.multi_generate_train_test_data(column_errors,
                                                                                                        d.labeled_cells,
@@ -792,7 +801,7 @@ class Correction:
             self.update_models(d)
             self.prepare_augmented_models(d)
             self.generate_features(d, synchronous=True)
-            # self.generate_synth_features(d, synchronous=True)
+            self.generate_synth_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
             # self.voting_binary_predict_corrections(d)
@@ -822,12 +831,12 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "bridges"
+    dataset_name = "flights"
     version = 1
     error_fraction = 1
     error_class = 'simple_mcar'
 
-    synth_tuples = 0
+    synth_tuples = 10
     synth_cleaning_threshold = 1.33
     test_synth_data_direction = 'user_data'
     feature_generators = ['domain', 'vicinity', 'value',]

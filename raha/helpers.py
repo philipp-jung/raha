@@ -204,8 +204,7 @@ class Corrections:
                         vicinity_model_name = f'{model}_{n_fd}'
                         if flat_store.get(vicinity_model_name) is None:
                             flat_store[vicinity_model_name] = {}
-                        if flat_store[vicinity_model_name].get(cell) is None:
-                            flat_store[vicinity_model_name][cell] = corrections_pr
+                        flat_store[vicinity_model_name][cell] = corrections_pr
         return flat_store
 
     @property
@@ -226,10 +225,12 @@ class Corrections:
     def assemble_pair_features(self) -> Dict[Tuple[int, int], Dict[str, List[float]]]:
         """Return an object as d.pair_features has been in Baran."""
         pair_features = defaultdict(dict)
-        for mi, model in enumerate(self.flat_correction_store()):
-            for cell in self.flat_correction_store()[model]:
-                for correction, pr in self.flat_correction_store()[model][cell].items():
+        flat_corrections = self.flat_correction_store()
+        for mi, model in enumerate(flat_corrections):
+            for cell in flat_corrections[model]:
+                for correction, pr in flat_corrections[model][cell].items():
                     if correction not in pair_features[cell]:
-                        pair_features[cell][correction] = np.zeros(len(self.features()))
+                        features = list(flat_corrections.keys())
+                        pair_features[cell][correction] = np.zeros(len(features))
                     pair_features[cell][correction][mi] = pr
         return pair_features

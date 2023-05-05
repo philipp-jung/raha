@@ -217,7 +217,7 @@ def gpdep(
     return None
 
 
-def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
+def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold) -> List[Dict[str, int]]:
     """
     Use Baran's original strategy to suggest corrections based on higher-order
     vicinity.
