@@ -4,6 +4,10 @@ from typing import Union, Dict, Tuple, List
 from dataclasses import dataclass
 from collections import defaultdict
 
+import openai
+from openai_key import key
+
+openai.api_key = key
 
 def get_data_dict(
     dataset_name: Union[str, int],
@@ -190,6 +194,7 @@ class Corrections:
     will be an empty list. If a correction or multiple corrections has/have been made, there will be a list of
     correction suggestions and feature vectors.
     """
+
     def __init__(self, model_names: List[str]):
         self.correction_store = {name: dict() for name in model_names}
 
@@ -234,3 +239,32 @@ class Corrections:
                         pair_features[cell][correction] = np.zeros(len(features))
                     pair_features[cell][correction][mi] = pr
         return pair_features
+
+
+def fetch_llm_value_cleaning(prompt: str) -> Dict[str, float]:
+    """
+    Send request to openai to get get value cleaning resolved.
+    @return: A dictionary {correction_suggestion, pr}.
+    """
+    if prompt is None:
+        return {}
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=prompt,
+        temperature=0.7,
+        max_tokens=256,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0,
+    )
+    try:
+        text = response['choices'][0]['text'].strip()
+        correction_suggestion = json.loads(text)
+    except json.decoder.JSONDecodeError:
+        print(f'Was not able to decode GPT correction {text}.')
+        return {}
+    # if response['choices'][0]['logprobs'] is None:
+    # Is always None: logprobs are not a thing anymore annoyingly.
+    if correction_suggestion is None:
+        return {}
+    return {correction_suggestion: 1.0}
