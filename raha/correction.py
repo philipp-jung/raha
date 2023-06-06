@@ -46,7 +46,7 @@ class Correction:
                  vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
                  n_best_pdeps: int, training_time_limit: int, rule_based_value_cleaning: Union[str, bool],
                  synth_tuples: int, synth_tuples_error_threshold: int, synth_cleaning_threshold: float,
-                 test_synth_data_direction: str, pdep_features: List[str], pdep_corrections_compression: bool):
+                 test_synth_data_direction: str, pdep_features: Tuple[str], pdep_corrections_compression: bool):
         """
         Parameters of the cleaning experiment.
         @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
@@ -292,7 +292,7 @@ class Correction:
 
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
 
-        column_errors = error_positions.original_column_errors
+        column_errors = error_positions.original_column_errors()
 
         for j in column_errors:
             for error_cell in column_errors[j]:
@@ -398,7 +398,7 @@ class Correction:
         if self.VERBOSE:
             print("The error corrector models are updated with new labeled tuple {}.".format(d.sampled_tuple))
 
-    def _feature_generator_process(self, args) -> Tuple[Tuple[int, int], str, Union[str, None]]:
+    def _feature_generator_process(self, args) -> List[Tuple[Tuple[int, int], str, Union[str, None]]]:
         """
         This method generates cleaning suggestions for one error in one cell. The suggestion
         gets turned into features for the classifier in predict_corrections(). It gets called
@@ -407,9 +407,10 @@ class Correction:
         Depending on the value of `synchronous` in `generate_features()`, the method will
         be executed in parallel or not.
 
-        Returns a Tuple with the structure (error_cell, cleaning_model_name, prompt), where prompt is to be sent to
-        openai to clean cell error_cell using the approach called cleaning_model_name.
+        Returns a List of Tuples with the structure (error_cell, cleaning_model_name, prompt), where prompt is to be
+        sent to openai to clean cell error_cell using the approach called cleaning_model_name.
         """
+        ai_prompts: List[Tuple[Tuple[int, int], str, Union[str, None]]] = []
         d, error_cell, is_synth = args
 
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
@@ -454,14 +455,14 @@ class Correction:
             if not is_synth:
                 d.value_corrections[error_cell] = value_corrections
 
-        prompt = None
         if 'llm_value' in self.FEATURE_GENERATORS and not is_synth and len(d.labeled_tuples) == self.LABELING_BUDGET:
             """
             Use large language model to correct an error based on the error value.
             """
-            if error_dictionary['old_value'] != '':  # There is no value to be transformed, so skip.
+            prompt = None
+            if error_dictionary['old_value'] != '':  # If there is no value to be transformed, skip.
                 error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-                column_errors_positions = error_positions.original_column_errors.get(error_dictionary['column'])
+                column_errors_positions = error_positions.original_column_errors().get(error_dictionary['column'])
                 column_errors_rows = [row for (row, col) in column_errors_positions]
 
                 error_correction_pairs : List[Tuple[str, str]] = []
@@ -474,17 +475,28 @@ class Correction:
                             error_correction_pairs.append((error, correction))
 
                 if len(error_correction_pairs) >= 3:
-                    prompt = "Return only the correction, a string, or null if there is no correction and nothing else\n"
+                    prompt = "You are a data cleaning machine that detects patterns to return a correction. If you do not find a correction, you return the token <NULL>. You always follow the example.\n---\n"
                     for (error, correction) in random.sample(error_correction_pairs, 3):
-                        prompt = prompt + f'error: "{error}" correction: "{correction}" '
-                    prompt = prompt + f'error: "{error_dictionary["old_value"]}" correction:'
+                        prompt = prompt + f"error: {error}" + '\n' + f"correction: {correction}" + '\n'
+                    prompt = prompt + f"error: {error_dictionary['old_value']}" + '\n' + "correction: "
+                    ai_prompts.append((error_cell, 'llm_value', prompt))
 
         if 'llm_vicinity' in self.FEATURE_GENERATORS and not is_synth and len(d.labeled_tuples) == self.LABELING_BUDGET:
-            #  use large language model to correct an error based on the error's vicinity. Taken from Narayan et al.
+            # use large language model to correct an error based on the error's vicinity. Inspired by Narayan et al.
             # 2022.
+            error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+            row_errors = error_positions.updated_row_errors()
+            rows_without_errors = [i for i in range(d.dataframe.shape[0]) if len(row_errors[i]) == 0]
+            if len(rows_without_errors) >= 2:
+                rows = random.sample(rows_without_errors, 2)
+                prompt = "You are a data cleaning machine that detects patterns to return a correction. If you do not find a correction, you return the token <NULL>. You always follow the example.\n---\n"
+                for row in rows:
+                    row_as_string, correction = helpers.error_free_row_to_prompt(d.dataframe, row, error_dictionary['column'])
+                    prompt = prompt + row_as_string + '\n' + f'correction: {correction}' + '\n'
+                final_row_as_string, _ = helpers.error_free_row_to_prompt(d.dataframe, error_dictionary['row'], error_dictionary['column'])
+                prompt = prompt + final_row_as_string + '\n' + 'correction: '
+                ai_prompts.append((error_cell, 'llm_vicinity', prompt))
 
-
-        # TODO implement sbert for synth
         if "sbert" in self.FEATURE_GENERATORS and not is_synth:
             row, column = error_dictionary['row'], error_dictionary['column']
             if not is_synth:
@@ -511,7 +523,7 @@ class Correction:
             else:
                 d.corrections.get('imputer')[error_cell] = imputer_corrections
 
-        return error_cell, 'llm_value', prompt
+        return ai_prompts
 
     def prepare_augmented_models(self, d):
         """
@@ -545,7 +557,7 @@ class Correction:
         if 'sbert' in self.FEATURE_GENERATORS:
             sbert_model = SentenceTransformer('all-MiniLM-L6-v2')  # keep model loaded
             error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-            column_errors = error_positions.original_column_errors
+            column_errors = error_positions.original_column_errors()
             values_in_cols = {k: [val for val, _ in v.items()] for k, v in d.domain_models.items()}
             d.sbert_models = {}
             for col in column_errors:
@@ -561,32 +573,36 @@ class Correction:
         and a potential correction.
         Philipp added a `synchronous` parameter to make debugging easier.
         """
-        ai_prompts : List[Tuple[Tuple[int, int], str, Union[str, None]]] = []
+        ai_prompts: List[Tuple[Tuple[int, int], str, Union[str, None]]] = []
         process_args_list = [[d, cell, False] for cell in d.detected_cells]
         if not synchronous:
             pool = multiprocessing.Pool()
-            ai_prompts = pool.map(self._feature_generator_process, process_args_list)
+            prompt_lists = pool.map(self._feature_generator_process, process_args_list)
             pool.close()
+            for l in prompt_lists:
+                ai_prompts.extend(l)
         else:
             for args in process_args_list:
-                ai_prompts.append(self._feature_generator_process(args))
+                ai_prompts.extend(self._feature_generator_process(args))
+
+        if len(d.labeled_tuples) == self.LABELING_BUDGET:
+            a = 1
 
         prompts = [prompt for _, _, prompt in ai_prompts]
+        all_correction_dicts = []
 
-        # block for debugging llm_value cleaning
+        # block for debugging llm-based cleaning
         # if len(d.labeled_tuples) == self.LABELING_BUDGET:
-        #     for p in prompts:
-        #         r = helpers.fetch_llm_value_cleaning(p)
-        #         a = 1
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            correction_dicts = executor.map(helpers.fetch_llm_value_cleaning, prompts)
+        #     for prompt in prompts:
+        #         correction = helpers.fetch_llm(prompt)
+        #         all_correction_dicts.append(correction)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            correction_dicts = executor.map(helpers.fetch_llm, prompts)
         all_correction_dicts = list(correction_dicts)
 
         for (error_cell, model_name, prompt), correction_dict in zip(ai_prompts, all_correction_dicts):
             d.corrections.get(model_name)[error_cell] = correction_dict
-
-        if len(d.labeled_tuples) == self.LABELING_BUDGET:
-            a = 1
 
         if self.VERBOSE:
             print("Features generated.")
@@ -597,7 +613,7 @@ class Correction:
         error positions, carefully avoiding additional training data that contains known errors.
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        row_errors = error_positions.updated_row_errors
+        row_errors = error_positions.updated_row_errors()
 
         # determine rows with least amount of erronous values to sample from.
         candidate_rows = [(row, len(cells)) for row, cells in row_errors.items() if
@@ -651,7 +667,7 @@ class Correction:
         of cleaning suggestions as a multi-category classification task.
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors
+        column_errors = error_positions.original_column_errors()
         for col in column_errors:
             pair_features = d.pair_features
             synth_pair_features = d.synth_corrections.assemble_pair_feautres(self.RULE_BASED_VALUE_CLEANING)
@@ -723,7 +739,7 @@ class Correction:
         The ML problem as formulated in the Baran paper.
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors
+        column_errors = error_positions.original_column_errors()
         pair_features = d.pair_features
         synth_pair_features = d.synth_pair_features
         for j in column_errors:
@@ -752,6 +768,9 @@ class Correction:
                     j)
 
             is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
+
+            if len(d.labeled_tuples) == self.LABELING_BUDGET:
+                a = 1
             if is_valid_problem:
                 if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
                     gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
@@ -777,7 +796,7 @@ class Correction:
         that sums up the class probabilities of both models.
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors
+        column_errors = error_positions.original_column_errors()
         pair_features = d.pair_features
         synth_pair_features = d.synth_pair_features
         for j in column_errors:
@@ -883,7 +902,7 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "beers"
+    dataset_name = "rayyan"
     version = 1
     error_fraction = 1
     error_class = 'simple_mcar'
@@ -892,9 +911,10 @@ if __name__ == "__main__":
     synth_cleaning_threshold = 1.33
     test_synth_data_direction = 'user_data'
     #feature_generators = ['domain', 'vicinity', 'value', ]
+    # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
     feature_generators = ['llm_value']
     imputer_cache_model = False
-    clean_with_user_input = False
+    clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
     labeling_budget = 20
     n_best_pdeps = 30
     n_rows = 100
@@ -902,7 +922,7 @@ if __name__ == "__main__":
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
-    # pdep_features = ['pr', 'vote', 'pdep', 'gpdep']
+    # pdep_features = ('pr', 'vote', 'pdep', 'gpdep')
     pdep_features = ['pr']
     pdep_corrections_compression = True
     vicinity_orders = [1, 2]

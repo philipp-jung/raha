@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from collections import defaultdict
 
 import openai
+import pandas as pd
 from openai_key import key
 
 openai.api_key = key
+
 
 def get_data_dict(
     dataset_name: Union[str, int],
@@ -148,43 +150,32 @@ class ErrorPositions:
     table_shape: Tuple[int, int]
     corrected_cells: Dict[Tuple[int, int], Tuple[int, str]]
 
-    def count_column_errors(self, updated: bool) -> Dict[int, List[Tuple[int, int]]]:
-        column_errors = {j: [] for j in range(self.table_shape[1])}
-        if not updated:
-            for (row, col), error_value in self.detected_cells.items():
-                column_errors[col].append((row, col))
-        elif updated:
-            for (row, col), error_value in self.detected_cells.items():
-                if (row, col) not in self.corrected_cells:
-                    column_errors[col].append((row, col))
-        return column_errors
-
-    def count_row_errors(self, updated: bool) -> Dict[int, List[Tuple[int, int]]]:
-        row_errors = {i: [] for i in range(self.table_shape[0])}
-        if not updated:
-            for (row, col), error_value in self.detected_cells.items():
-                row_errors[row].append((row, col))
-        elif updated:
-            for (row, col), error_value in self.detected_cells.items():
-                if (row, col) not in self.corrected_cells:
-                    row_errors[row].append((row, col))
-        return row_errors
-
-    @property
     def original_column_errors(self) -> Dict[int, List[Tuple[int, int]]]:
-        return self.count_column_errors(updated=False)
+        column_errors = {j: [] for j in range(self.table_shape[1])}
+        for (row, col), error_value in self.detected_cells.items():
+            column_errors[col].append((row, col))
+        return column_errors
 
     @property
     def updated_column_errors(self) -> Dict[int, List[Tuple[int, int]]]:
-        return self.count_column_errors(updated=True)
+        column_errors = {j: [] for j in range(self.table_shape[1])}
+        for (row, col), error_value in self.detected_cells.items():
+            if (row, col) not in self.corrected_cells:
+                column_errors[col].append((row, col))
+        return column_errors
 
-    @property
     def original_row_errors(self) -> Dict[int, List[Tuple[int, int]]]:
-        return self.count_row_errors(updated=False)
+        row_errors = {i: [] for i in range(self.table_shape[0])}
+        for (row, col), error_value in self.detected_cells.items():
+            row_errors[row].append((row, col))
+        return row_errors
 
-    @property
     def updated_row_errors(self) -> Dict[int, List[Tuple[int, int]]]:
-        return self.count_row_errors(updated=True)
+        row_errors = {i: [] for i in range(self.table_shape[0])}
+        for (row, col), error_value in self.detected_cells.items():
+            if (row, col) not in self.corrected_cells:
+                row_errors[row].append((row, col))
+        return row_errors
 
 
 class Corrections:
@@ -241,30 +232,39 @@ class Corrections:
         return pair_features
 
 
-def fetch_llm_value_cleaning(prompt: str) -> Dict[str, float]:
+def fetch_llm(prompt: str) -> Dict[str, float]:
     """
-    Send request to openai to get get value cleaning resolved.
+    Send request to openai to get a prompt resolved.
     @return: A dictionary {correction_suggestion, pr}.
     """
+    correction_suggestion = None
     if prompt is None:
         return {}
-    response = openai.Completion.create(
-        model="text-davinci-003",
-        prompt=prompt,
-        temperature=0.7,
-        max_tokens=256,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0,
-    )
     try:
-        text = response['choices'][0]['text'].strip()
-        correction_suggestion = json.loads(text)
-    except json.decoder.JSONDecodeError:
-        print(f'Was not able to decode GPT correction {text}.')
-        return {}
-    # if response['choices'][0]['logprobs'] is None:
-    # Is always None: logprobs are not a thing anymore annoyingly.
-    if correction_suggestion is None:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "user", "content": prompt},
+            ]
+        )
+        correction_suggestion = response['choices'][0]['message']['content'].strip()
+        a = 1
+    except openai.error.RateLimitError as e:
+        print(e)
+        print("OpenAI API overloaded, skipping corrections.")
+    if correction_suggestion == '<NULL>' or correction_suggestion is None:
         return {}
     return {correction_suggestion: 1.0}
+
+
+def error_free_row_to_prompt(df: pd.DataFrame, row: int, column: int) -> Tuple[str, str]:
+    """
+    Turn an error-free dataframe-row into a string, and replace the error-column with an <Error> token.
+    Return a tuple of (stringified_row, correction). Be mindful that correction is only the correct value if
+    the row does not contain an error to begin with.
+    """
+    values = df.iloc[row, :].values
+    row_values = [f"{x}," if i != column else "<Error>," for i, x in enumerate(values)]
+    row = ''.join(row_values)[:-1]
+    correction = df.iloc[row, column]
+    return row, correction
