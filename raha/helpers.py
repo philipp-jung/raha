@@ -192,9 +192,13 @@ class Corrections:
     def __init__(self, model_names: List[str]):
         self.correction_store = {name: dict() for name in model_names}
 
-    def flat_correction_store(self):
+    def flat_correction_store(self, models: Union[List, None]):
+        """
+        Reshape the way corrections are stored to a format convenient for formulating the ensembling problem.
+        """
         flat_store = {}
-        for model in self.correction_store:
+        model_selection = list(self.correction_store.keys()) if models is None else models
+        for model in model_selection:
             if not model.startswith('vicinity'):
                 flat_store[model] = self.correction_store[model]
             else:
@@ -212,7 +216,7 @@ class Corrections:
 
     def features(self) -> List[str]:
         """Return a list describing the features the Corrections come from."""
-        return list(self.flat_correction_store().keys())
+        return list(self.flat_correction_store(None).keys())
 
     def get(self, model_name: str) -> Dict:
         """
@@ -221,10 +225,10 @@ class Corrections:
         """
         return self.correction_store[model_name]
 
-    def assemble_pair_features(self) -> Dict[Tuple[int, int], Dict[str, List[float]]]:
+    def assemble_pair_features(self, models: Union[List, None] = None) -> Dict[Tuple[int, int], Dict[str, List[float]]]:
         """Return an object as d.pair_features has been in Baran."""
         pair_features = defaultdict(dict)
-        flat_corrections = self.flat_correction_store()
+        flat_corrections = self.flat_correction_store(models)
         for mi, model in enumerate(flat_corrections):
             for cell in flat_corrections[model]:
                 for correction, pr in flat_corrections[model][cell].items():

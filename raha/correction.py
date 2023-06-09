@@ -673,89 +673,23 @@ class Correction:
         if self.VERBOSE:
             print('Rule-based cleaning finished.')
 
-    def multi_predict_corrections(self, d):
+    def ensemble_vicinity_models(self, d):
         """
-        In an effort to improve cleaning performance and adapt to non-categorical problems, we model the selection
-        of cleaning suggestions as a multi-category classification task.
-        """
-        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors()
-        for col in column_errors:
-            pair_features = d.pair_features
-            synth_pair_features = d.synth_corrections.assemble_pair_feautres(self.RULE_BASED_VALUE_CLEANING)
-            x_train, y_train, x_test, user_corrected_cells = ml_helpers.multi_generate_train_test_data(column_errors,
-                                                                                                       d.labeled_cells,
-                                                                                                       pair_features,
-                                                                                                       synth_pair_features,
-                                                                                                       d.dataframe,
-                                                                                                       col)
-            for error_cell in user_corrected_cells:
-                d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
-
-            if len(x_train) > 0 and len(x_test) > 0:
-                # TODO refactor so that AG blends in better.
-                if self.CLASSIFICATION_MODEL == "AG":
-                    gs_clf = hpo.ag_predictor(np.ndarray(x_train), y_train, self.TRAINING_TIME_LIMIT)
-                    if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
-                        predicted_labels = [y_train[0] for _ in range(len(x_test))]
-                    elif len(set(y_train)) > 1:
-                        df_test = pd.DataFrame(x_test)
-                        predicted_labels = gs_clf.predict(df_test)
-                else:
-                    if self.CLASSIFICATION_MODEL == "ABC":
-                        gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-                    elif self.CLASSIFICATION_MODEL == "CV":
-                        gs_clf = hpo.cross_validated_estimator(x_train, y_train)
-                    elif self.CLASSIFICATION_MODEL == "DTC":
-                        gs_clf = sklearn.tree.DecisionTreeClassifier()
-                    elif self.CLASSIFICATION_MODEL == "LOGR":
-                        gs_clf = sklearn.linear_model.LogisticRegression(multi_class="multinomial")
-                    else:
-                        raise ValueError('Unknown model.')
-
-                    if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
-                        predicted_labels = [y_train[0] for _ in range(len(x_test))]
-                    elif len(set(y_train)) > 1:
-                        gs_clf.fit(x_train, y_train)
-                        predicted_labels = gs_clf.predict(x_test)
-
-                # set final cleaning suggestion from meta-learning result. User corrected cells are not overwritten!
-                for cell, label in zip(column_errors[col], predicted_labels):
-                    d.corrected_cells[cell] = label
-
-            elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
-                pair_features = d.pair_features
-                for cell in pair_features:
-                    correction_dict = pair_features[cell]
-                    if len(correction_dict) > 0:
-                        # select the correction with the highest sum of features.
-                        max_proba_feature = \
-                            sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
-                        d.corrected_cells[cell] = max_proba_feature[0]
-
-            elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
-                pass  # nothing to do here -- just use the manually corrected cells to correct all errors.
-
-            elif len(x_train) == 0:
-                pass  # nothing to learn because x_train is empty.
-            else:
-                raise ValueError('Invalid state')
-
-        if self.VERBOSE:
-            print("{:.0f}% ({} / {}) of data errors are corrected.".format(
-                100 * len(d.corrected_cells) / len(d.detected_cells),
-                len(d.corrected_cells), len(d.detected_cells)))
-
-    def binary_predict_corrections(self, d):
-        """
-        The ML problem as formulated in the Baran paper.
+        Since there are many relationships between columns, we take into account cleaning suggestions from all of them
+        and ensemble them into a single feature. That single feature is used in binary_predict_corrections() to derive
+        the final cleaning suggestion.
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         column_errors = error_positions.original_column_errors()
-        pair_features = d.pair_features
-        synth_pair_features = d.synth_pair_features
+        vicinity_correction_models = [m for m in d.corrections.correction_store if m.startswith('vicinity')]
+
+        pair_features = d.corrections.assemble_pair_features(models=vicinity_correction_models)
+        synth_pair_features = d.synth_corrections.assemble_pair_features(vicinity_correction_models)
+
         for j in column_errors:
             score = ml_helpers.test_synth_data(d,
+                                               pair_features,
+                                               synth_pair_features,
                                                self.CLASSIFICATION_MODEL,
                                                j,
                                                column_errors,
@@ -779,7 +713,58 @@ class Correction:
                     {},
                     j)
 
-            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
+            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(pair_features, x_train, x_test, y_train, d)
+
+            if is_valid_problem:
+                if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
+                    gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                    gs_clf.fit(x_train, y_train)
+                elif self.CLASSIFICATION_MODEL == "CV":
+                    gs_clf = hpo.cross_validated_estimator(x_train, y_train)
+                else:
+                    raise ValueError('Unknown model.')
+
+                predicted_probas = gs_clf.predict_proba(x_test)
+                a = 1
+                # TODO continue here. Goal is to replace the vicinity cleaning suggestions in d.corrections with the
+                # probability that is ensembled above.
+
+    def binary_predict_corrections(self, d):
+        """
+        The ML problem as formulated in the Baran paper.
+        """
+        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+        column_errors = error_positions.original_column_errors()
+        pair_features = d.corrections.assemble_pair_features()
+        synth_pair_features = d.synth_corrections.assemble_pair_features()
+        for j in column_errors:
+            score = ml_helpers.test_synth_data(d,
+                                               pair_features,
+                                               synth_pair_features,
+                                               self.CLASSIFICATION_MODEL,
+                                               j,
+                                               column_errors,
+                                               clean_on=self.TEST_SYNTH_DATA_DIRECTION)
+
+            if score >= self.SYNTH_CLEANING_THRESHOLD:
+                # now that we are certain about the synth data's usefulness, use additional training data.
+                x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
+                    column_errors,
+                    d.labeled_cells,
+                    pair_features,
+                    d.dataframe,
+                    synth_pair_features,
+                    j)
+            else:  # score is below threshold, don't use additional training data
+                x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
+                    column_errors,
+                    d.labeled_cells,
+                    pair_features,
+                    d.dataframe,
+                    {},
+                    j)
+
+            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(pair_features, x_train, x_test, y_train, d)
 
             if is_valid_problem:
                 if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
@@ -796,43 +781,6 @@ class Correction:
 
             if len(d.labeled_tuples) == self.LABELING_BUDGET:
                 a = 1
-
-        if self.VERBOSE:
-            print("{:.0f}% ({} / {}) of data errors are corrected.".format(
-                100 * len(d.corrected_cells) / len(d.detected_cells),
-                len(d.corrected_cells), len(d.detected_cells)))
-
-    def voting_binary_predict_corrections(self, d):
-        """
-        Train two binary classifiers. One with synth_tuples, the other without. Combine them via a voting ensemble
-        that sums up the class probabilities of both models.
-        """
-        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors()
-        pair_features = d.pair_features
-        synth_pair_features = d.synth_pair_features
-        for j in column_errors:
-            classifiers = []
-            train_test_data = [
-                ml_helpers.generate_train_test_data(column_errors, d.labeled_cells, pair_features, d.dataframe, synth,
-                                                    j) for synth in ([], synth_pair_features)]
-
-            valid_problems = 0
-            for (x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions) in train_test_data:
-                is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
-                if is_valid_problem:
-                    valid_problems += 1
-                    clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-                    clf.fit(x_train, y_train)
-                    classifiers.append(clf)
-
-            if valid_problems == 2:  # both problems need to be valid
-                est = [('no synth', classifiers[0]), ['synth', classifiers[1]]]
-                ensemble = ml_helpers.VotingClassifier(est)
-                predicted_labels = ensemble.predict(np.stack(x_test, axis=0))
-
-            ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions,
-                                                       user_corrected_cells, d)
 
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(
@@ -887,11 +835,9 @@ class Correction:
             self.generate_synth_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
-            # self.voting_binary_predict_corrections(d)
-            d.pair_features = d.corrections.assemble_pair_features()
-            d.synth_pair_features = d.synth_corrections.assemble_pair_features()
+            if 'vicinity' in self.FEATURE_GENERATORS:
+                self.ensemble_vicinity_models(d)
             self.binary_predict_corrections(d)
-            # self.multi_predict_corrections(d)
             if self.RULE_BASED_VALUE_CLEANING:
                 # write the rule-based value corrections into the corrections dictionary. This overwrites
                 # results for domain & vicinity features. The idea is that the rule-based value

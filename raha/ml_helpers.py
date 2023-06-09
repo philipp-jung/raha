@@ -25,7 +25,7 @@ def set_binary_cleaning_suggestions(predicted_labels: List[int],
             corrected_cells[error_cell] = predicted_correction
 
 
-def handle_edge_cases(x_train, x_test, y_train, d) -> Tuple[bool, List]:
+def handle_edge_cases(pair_features, x_train, x_test, y_train, d) -> Tuple[bool, List]:
     """
     Depending on the dataset and how much data has been labeled by the user, the data used to formulate the ML problem
     can lead to an invalid ML problem.
@@ -34,7 +34,6 @@ def handle_edge_cases(x_train, x_test, y_train, d) -> Tuple[bool, List]:
     @return: A tuple whose first position is a boolean, indicating if the ML problem should be started. The second
     position is a list of predicted labels. Which is used when the ML problem should not be started.
     """
-    pair_features = d.pair_features
     if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
         return False, []  # nothing to do, need more user-input to work.
     elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
@@ -102,57 +101,6 @@ def generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
     return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions
 
 
-def multi_generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
-                                   labeled_cells: Dict[Tuple[int, int], List],
-                                   pair_features: Dict[Tuple[int, int], Dict[str, List]],
-                                   synth_pair_features: Dict[Tuple[int, int], Dict[str, List]],
-                                   df_dirty: pd.DataFrame,
-                                   column: int):
-    """
-    Generate data for the machine-learning problem modeling the issue as a multiclass classification.
-    We also leverage rows that do not contain errors to get more training data, called "synthetic" data.
-    """
-    x_train = []  # train feature vectors
-    y_train = []  # train labels
-    x_test = []  # test features vectors
-    corrected_cells = {}  # take user input as a cleaning result if available
-
-    correction_order = []
-    for error_cell in column_errors[column]:
-        correction_suggestions = pair_features.get(error_cell, [])
-        if len(correction_suggestions) > 0:
-            correction_order = list(correction_suggestions.keys())
-        if list(correction_suggestions.keys()) != [] and correction_order != list(correction_suggestions.keys()):
-            raise ValueError('Should not be possible.')
-        x = np.concatenate([pair_features[error_cell][suggestion] for suggestion in correction_suggestions])
-
-        if error_cell in labeled_cells and labeled_cells[error_cell][0] == 1:
-            # If an error-cell has been labeled by the user, use it to create the training dataset.
-            y = labeled_cells[error_cell][1]  # user input as label
-            corrected_cells[error_cell] = y
-            x_train.append(x)
-            y_train.append(y)
-
-        else:  # put all cells that contain an error without user-correction in the "test" set.
-            x_test.append(x)
-
-    if len(synth_pair_features) == 0 or len(y_train) == 0:
-        # abort if no synth features were created or no non-synth features were created.
-        return x_train, y_train, x_test, corrected_cells
-
-    for synth_cell in synth_pair_features:
-        if synth_cell[1] == column:
-            correction_suggestions = synth_pair_features.get(synth_cell, [])
-            if list(correction_suggestions.keys()) != [] and list(correction_suggestions.keys()) != correction_order:
-                raise ValueError('Should not be possible.')
-            x = np.concatenate([pair_features[error_cell][suggestion] for suggestion in correction_suggestions])
-            y = df_dirty.iloc[synth_cell]  # synth cell generation garantiert, dass die Zeile fehlerfrei ist.
-            x_train.append(x)
-            y_train.append(y)
-
-    return x_train, y_train, x_test, corrected_cells
-
-
 def generate_synth_test_data(synth_pair_features: Dict[Tuple[int, int], Dict[str, List]],
                              df_dirty: pd.DataFrame,
                              column: int) -> Tuple[List, List, List]:
@@ -175,7 +123,7 @@ def generate_synth_test_data(synth_pair_features: Dict[Tuple[int, int], Dict[str
     return x_test, y_test, all_error_correction_suggestions
 
 
-def test_synth_data(d, classification_model: str, column: int, column_errors: dict, clean_on: str) -> float:
+def test_synth_data(d, pair_features, synth_pair_features, classification_model: str, column: int, column_errors: dict, clean_on: str) -> float:
     """
     Test the difference in distribution between user_data and synth_data to determine if using synth_data in the
     cleaning problem is worthwhile.
@@ -188,8 +136,6 @@ def test_synth_data(d, classification_model: str, column: int, column_errors: di
     in the synth_data using a model ensembling trained with user_data.
     @return: f1-score of the ensembling model cleaning erronous values.
     """
-    pair_features = d.pair_features
-    synth_pair_features = d.synth_pair_features
     synth_x_test, synth_y_test, synth_error_correction_suggestions = generate_synth_test_data(
         synth_pair_features, d.dataframe, column)
 
@@ -204,7 +150,7 @@ def test_synth_data(d, classification_model: str, column: int, column_errors: di
         column)
 
     score = 0.0
-    is_valid_problem, _ = handle_edge_cases(x_train, synth_x_test, y_train, d)
+    is_valid_problem, _ = handle_edge_cases(pair_features, x_train, synth_x_test, y_train, d)
     if not is_valid_problem:
         return score
 
