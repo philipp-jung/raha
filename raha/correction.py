@@ -256,9 +256,9 @@ class Correction:
                           row INT,
                           column INT,
                           correction_model TEXT,
-                          correction TEXT,
+                          correction_tokens TEXT,
                           token_logprobs TEXT,
-                          logprobs TEXT)''')
+                          top_logprobs TEXT)''')
         conn.commit()
 
         # Correction store for feature creation
@@ -472,13 +472,13 @@ class Correction:
             """
             Use large language model to correct an error based on the error value.
             """
-            prompt = None
             if error_dictionary['old_value'] != '':  # If there is no value to be transformed, skip.
                 error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
                 column_errors_positions = error_positions.original_column_errors().get(error_dictionary['column'])
                 column_errors_rows = [row for (row, col) in column_errors_positions]
 
-                error_correction_pairs : List[Tuple[str, str]] = []
+                # Construct pairs of ('error', 'correction') by iterating over the user input.
+                error_correction_pairs: List[Tuple[str, str]] = []
                 for labeled_row in d.labeled_tuples:
                     if labeled_row in column_errors_rows:
                         cell = labeled_row, error_dictionary['column']
@@ -487,11 +487,13 @@ class Correction:
                         if error != '':
                             error_correction_pairs.append((error, correction))
 
+                # Only do llm_value cleaning if there are >= 3 examples for cleaning that column.
                 if len(error_correction_pairs) >= 3:
-                    prompt = "You are a data cleaning machine that detects patterns to return a correction. If you do not find a correction, you return the token <NULL>. You always follow the example.\n---\n"
+                    prompt = "You are a data cleaning machine that detects patterns to return a correction. If you do "\
+                             "not find a correction, you return the token <NULL>. You always follow the example.\n---\n"
                     for (error, correction) in random.sample(error_correction_pairs, 3):
-                        prompt = prompt + f"error: {error}" + '\n' + f"correction: {correction}" + '\n'
-                    prompt = prompt + f"error: {error_dictionary['old_value']}" + '\n' + "correction: "
+                        prompt = prompt + f"error:{error}" + '\n' + f"correction:{correction}" + '\n'
+                    prompt = prompt + f"error:{error_dictionary['old_value']}" + '\n' + "correction:"
                     ai_prompts.append((error_cell, 'llm_value', prompt))
 
         if 'llm_vicinity' in self.FEATURE_GENERATORS and not is_synth and len(d.labeled_tuples) == self.LABELING_BUDGET:
@@ -535,7 +537,6 @@ class Correction:
                 d.synth_corrections.get('imputer')[error_cell] = imputer_corrections
             else:
                 d.corrections.get('imputer')[error_cell] = imputer_corrections
-
         return ai_prompts
 
     def prepare_augmented_models(self, d):
@@ -601,14 +602,12 @@ class Correction:
         if len(d.labeled_tuples) == self.LABELING_BUDGET:
             a = 1
 
-        all_correction_dicts = []
-
         # block for debugging llm-based cleaning
         if len(d.labeled_tuples) == self.LABELING_BUDGET:
             for error_cell, model_name, prompt in ai_prompts:
-                correction, token_logprobs, logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name)
-                correction_dict = helpers.llm_response_to_correction(correction, token_logprobs, logprobs)
-                d.corrections.get(model_name)[error_cell] = correction_dict
+                correction, token_logprobs, top_logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name)
+                correction_dicts = helpers.llm_response_to_corrections(correction, token_logprobs, top_logprobs)
+                d.corrections.get(model_name)[error_cell] = correction_dicts
 
         # with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         #     correction_dicts = executor.map(helpers.fetch_llm, prompts)
@@ -795,6 +794,9 @@ class Correction:
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
 
+            if len(d.labeled_tuples) == self.LABELING_BUDGET:
+                a = 1
+
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(
                 100 * len(d.corrected_cells) / len(d.detected_cells),
@@ -920,14 +922,13 @@ if __name__ == "__main__":
     synth_tuples = 0
     synth_cleaning_threshold = 1.33
     test_synth_data_direction = 'user_data'
-    #feature_generators = ['domain', 'vicinity', 'value', ]
     # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
-    feature_generators = ['llm_value']
+    feature_generators = ['domain', 'vicinity', 'llm_value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
     labeling_budget = 20
     n_best_pdeps = 30
-    n_rows = 50
+    n_rows = None
     rule_based_value_cleaning = 'V5'
     synth_tuples_error_threshold = 0
     training_time_limit = 30
