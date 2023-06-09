@@ -1,4 +1,7 @@
 import json
+import time
+import random
+import sqlite3
 import numpy as np
 from typing import Union, Dict, Tuple, List
 from dataclasses import dataclass
@@ -232,30 +235,95 @@ class Corrections:
         return pair_features
 
 
-def fetch_llm(prompt: str) -> Dict[str, float]:
+def connect_to_cache() -> sqlite3.Connection:
     """
-    Send request to openai to get a prompt resolved.
-    @return: A dictionary {correction_suggestion, pr}.
+    Connect to the cache for LLM prompts.
+    @return: a connection to the sqlite3 cache.
     """
-    correction_suggestion = None
+    conn = sqlite3.connect('cache.db')
+    return conn
+
+
+def fetch_cached_llm(dataset: str, error_cell: Tuple[int, int], prompt: str, correction_model_name: str):
+    """
+    Sending requests to LLMs is expensive (time & money). We use caching to mitigate that cost. As primary key for
+    a correction serves (dataset_name, error_cell, correction_model_name). This is imperfect, but a reasonable
+    approximation: Since the prompt-generation itself as well as its dependencies are non-deterministic, the prompt
+    cannot serve as part of the primary key.
+
+    If no correction is available in the cache, a request to the LLM is sent.
+
+    @param dataset: name of the dataset that is cleaned.
+    @param error_cell: (row, column) position of the error.
+    @param prompt: prompt that is sent to the LLM.
+    @param correction_model_name: "llm_vicinity" or "llm_value".
+    @return: Don't know yet.
+    """
+    conn = connect_to_cache()
+    cursor = conn.cursor()
+    cursor.execute("""SELECT
+                        correction,
+                        token_logprobs,
+                        logprobs
+                      FROM cache
+                      WHERE dataset=? AND row=? AND column=? AND correction_model=?""",
+                   (dataset, error_cell[0], error_cell[1], correction_model_name))
+    result = cursor.fetchone()
+    conn.close()
+    if result is not None:
+        return json.loads(result[0]), json.loads(result[1]), json.loads(result[2])  # access the correction
+    else:
+        fetch_llm(prompt, dataset, error_cell, correction_model_name)
+
+
+def fetch_llm(prompt: str, dataset: str, error_cell: Tuple[int, int], correction_model_name: str):
+    """
+    Send request to openai to get a prompt resolved. Write result into cache.
+    """
     if prompt is None:
         return {}
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "user", "content": prompt},
-            ]
-        )
-        correction_suggestion = response['choices'][0]['message']['content'].strip()
-        a = 1
-    except openai.error.RateLimitError as e:
-        print(e)
-        print("OpenAI API overloaded, skipping corrections.")
-    if correction_suggestion == '<NULL>' or correction_suggestion is None:
-        return {}
-    return {correction_suggestion: 1.0}
 
+    retries = 0
+    while True:
+        try:
+            response = openai.Completion.create(
+                model="text-davinci-003",
+                prompt=prompt,
+                logprobs=3
+            )
+            correction = json.dumps(response['choices'][0]['logprobs']['tokens'])
+            token_logprobs = json.dumps(response['choices'][0]['logprobs']['token_logprobs'])
+            logprobs = json.dumps(response['choices'][0]['logprobs'])
+            break
+        except openai.error.RateLimitError as e:
+            if retries > 5:
+                print('Exceeded maximum number of retries. Skipping correction. The OpenAI API appears unreachable:')
+                print(e)
+                return {}
+            delay = (2 ** retries) + random.random()
+            print(f"Rate limit exceeded, retrying in {delay} seconds.")
+            time.sleep(delay)
+            retries += 1
+        return {}
+
+    row, column = error_cell
+    conn = connect_to_cache()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO cache
+               (dataset, row, column, correction_model, correction, token_logprobs, logprobs)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (dataset, row, column, correction_model_name, correction, token_logprobs, logprobs)
+    )
+    conn.commit()
+    conn.close()
+    return correction, token_logprobs, logprobs
+
+
+def llm_response_to_correction(correction_tokens: List[str], token_logprobs: dict, logprobs: dict):
+    correction = ''.join(correction_tokens)
+    pr = np.exp(sum(token_logprobs))
+    return {correction: pr}
 
 def error_free_row_to_prompt(df: pd.DataFrame, row: int, column: int) -> Tuple[str, str]:
     """

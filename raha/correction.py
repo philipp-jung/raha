@@ -248,6 +248,19 @@ class Correction:
         d.value_corrections = {}
         d.sbert_cos_sim = {}
 
+        # Initialize LLM cache
+        conn = helpers.connect_to_cache()
+        cursor = conn.cursor()
+        cursor.execute('''CREATE TABLE IF NOT EXISTS cache
+                          (dataset TEXT,
+                          row INT,
+                          column INT,
+                          correction_model TEXT,
+                          correction TEXT,
+                          token_logprobs TEXT,
+                          logprobs TEXT)''')
+        conn.commit()
+
         # Correction store for feature creation
         corrections_features = []
         for feature in self.FEATURE_GENERATORS:
@@ -588,21 +601,21 @@ class Correction:
         if len(d.labeled_tuples) == self.LABELING_BUDGET:
             a = 1
 
-        prompts = [prompt for _, _, prompt in ai_prompts]
         all_correction_dicts = []
 
         # block for debugging llm-based cleaning
-        # if len(d.labeled_tuples) == self.LABELING_BUDGET:
-        #     for prompt in prompts:
-        #         correction = helpers.fetch_llm(prompt)
-        #         all_correction_dicts.append(correction)
+        if len(d.labeled_tuples) == self.LABELING_BUDGET:
+            for error_cell, model_name, prompt in ai_prompts:
+                correction, token_logprobs, logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name)
+                correction_dict = helpers.llm_response_to_correction(correction, token_logprobs, logprobs)
+                d.corrections.get(model_name)[error_cell] = correction_dict
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-            correction_dicts = executor.map(helpers.fetch_llm, prompts)
-        all_correction_dicts = list(correction_dicts)
+        # with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        #     correction_dicts = executor.map(helpers.fetch_llm, prompts)
+        # all_correction_dicts = list(correction_dicts)
 
-        for (error_cell, model_name, prompt), correction_dict in zip(ai_prompts, all_correction_dicts):
-            d.corrections.get(model_name)[error_cell] = correction_dict
+        # for (error_cell, model_name, prompt), correction_dict in zip(ai_prompts, all_correction_dicts):
+        #     d.corrections.get(model_name)[error_cell] = correction_dict
 
         if self.VERBOSE:
             print("Features generated.")
@@ -769,8 +782,6 @@ class Correction:
 
             is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
 
-            if len(d.labeled_tuples) == self.LABELING_BUDGET:
-                a = 1
             if is_valid_problem:
                 if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
                     gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
@@ -783,7 +794,6 @@ class Correction:
                 predicted_labels = gs_clf.predict(x_test)
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
-
 
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(
@@ -917,7 +927,7 @@ if __name__ == "__main__":
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
     labeling_budget = 20
     n_best_pdeps = 30
-    n_rows = 100
+    n_rows = 50
     rule_based_value_cleaning = 'V5'
     synth_tuples_error_threshold = 0
     training_time_limit = 30
