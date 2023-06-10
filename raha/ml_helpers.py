@@ -5,6 +5,29 @@ from sklearn.metrics import f1_score
 from typing import List, Dict, Tuple
 import hpo
 
+from helpers import Corrections
+
+
+def set_binary_pre_ensembling(predicted_probas: np.ndarray,
+                              all_error_correction_suggestions: List[Tuple],
+                              corrections: Corrections,
+                              model_name: str):
+    """
+    Similar to set_binary_cleaning_suggestions, the result of the pre-ensembling of the vicinity-features is used
+    to set the probabilities of a cleaning-suggestion of the ensembled cleaning model.
+    @param predicted_probas: numpy array where each entry is an array of length 2, representing the 2 classes.
+    @param all_error_correction_suggestions: list of tuples containing all error corrections, same length as
+    predicted_labels.
+    @param corrections: Corrections object that contains all correction suggestions used in the final ensembling.
+    @param model_name: Name of the correction model.
+    @return: None
+    """
+    for index, predicted_proba in enumerate(predicted_probas):
+        error_cell, correction_suggestion = all_error_correction_suggestions[index]
+        corrections_dict = corrections.get(model_name).get(error_cell, {})
+        corrections_dict[correction_suggestion] = predicted_proba[1]
+        corrections.get(model_name)[error_cell] = corrections_dict
+
 
 def set_binary_cleaning_suggestions(predicted_labels: List[int],
                                     all_error_correction_suggestions: List[Tuple],
@@ -17,7 +40,7 @@ def set_binary_cleaning_suggestions(predicted_labels: List[int],
     @param all_error_correction_suggestions: list of tuples containing all error corrections, same length as
     predicted_labels.
     @param corrected_cells: dictionary {error_cell: predicted_correction} that stores the cleaning results.
-    @return:
+    @return: None
     """
     for index, predicted_label in enumerate(predicted_labels):
         if predicted_label:

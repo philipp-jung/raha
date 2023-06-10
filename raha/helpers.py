@@ -187,36 +187,51 @@ class Corrections:
     it is guaranteed that all models return something for each error cell -- if there are no corrections made, that
     will be an empty list. If a correction or multiple corrections has/have been made, there will be a list of
     correction suggestions and feature vectors.
+
+    Vicinity correction models need to be ensembled themselves until they can be used for the general model ensembling.
+    To account for this, corrections that are ready to be used in the final ensembling are stored in correction_store,
+    while corrections that need further pre-processing are stored in raw_vicinity_store.
     """
 
-    def __init__(self, model_names: List[str]):
+    def __init__(self, model_names: List[str], raw_model_names: List[str]):
         self.correction_store = {name: dict() for name in model_names}
+        self.raw_vicinity_store = {name: dict() for name in raw_model_names}
 
-    def flat_correction_store(self, models: Union[List, None]):
+    def flatten_raw_store(self) -> Dict:
         """
-        Reshape the way corrections are stored to a format convenient for formulating the ensembling problem.
+        Reshape the way vicinity corrections are stored to a format convenient for formulating the ensembling problem.
         """
         flat_store = {}
-        model_selection = list(self.correction_store.keys()) if models is None else models
+        model_selection = self.raw_vicinity_store.keys()
         for model in model_selection:
-            if not model.startswith('vicinity'):
-                flat_store[model] = self.correction_store[model]
-            else:
-                for cell in self.correction_store[model]:
-                    for n_fd, corrections_pr in enumerate(self.correction_store[model][cell]):
-                        vicinity_model_name = f'{model}_{n_fd}'
-                        if flat_store.get(vicinity_model_name) is None:
-                            flat_store[vicinity_model_name] = {}
-                        flat_store[vicinity_model_name][cell] = corrections_pr
+            for cell in self.raw_vicinity_store[model]:
+                for n_fd, corrections_pr in enumerate(self.raw_vicinity_store[model][cell]):
+                    vicinity_model_name = f'{model}_{n_fd}'
+                    if flat_store.get(vicinity_model_name) is None:
+                        flat_store[vicinity_model_name] = {}
+                    flat_store[vicinity_model_name][cell] = corrections_pr
         return flat_store
 
     @property
     def available_corrections(self) -> List[str]:
         return list(self.correction_store.keys())
 
+    def raw_features(self) -> List[str]:
+        """Return a list describing the features the raw Corrections come from."""
+        return list(self.raw_vicinity_store.keys())
+
     def features(self) -> List[str]:
         """Return a list describing the features the Corrections come from."""
-        return list(self.flat_correction_store(None).keys())
+        return list(self.correction_store.keys())
+
+    def get_raw(self, model_name: str) -> Dict:
+        """
+        Same as get(), but returns raw corrections that need to be further processed until they are ready to be used
+        in the cleaning ensembling.
+        @param model_name: name of the model whose unprocessed corrections shoudl be returned.
+        @return: Dict
+        """
+        return self.raw_vicinity_store[model_name]
 
     def get(self, model_name: str) -> Dict:
         """
@@ -225,10 +240,13 @@ class Corrections:
         """
         return self.correction_store[model_name]
 
-    def assemble_pair_features(self, models: Union[List, None] = None) -> Dict[Tuple[int, int], Dict[str, List[float]]]:
+    def assemble_pair_features(self, raw_store: bool = False) -> Dict[Tuple[int, int], Dict[str, List[float]]]:
         """Return an object as d.pair_features has been in Baran."""
+        if raw_store:
+            flat_corrections = self.flatten_raw_store()
+        else:
+            flat_corrections = self.correction_store
         pair_features = defaultdict(dict)
-        flat_corrections = self.flat_correction_store(models)
         for mi, model in enumerate(flat_corrections):
             for cell in flat_corrections[model]:
                 for correction, pr in flat_corrections[model][cell].items():

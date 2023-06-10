@@ -262,17 +262,23 @@ class Correction:
         conn.commit()
 
         # Correction store for feature creation
-        corrections_features = []
+        corrections_features = []  # don't need further processing being used in ensembling.
+        raw_correction_features = []  # need further processing.
         for feature in self.FEATURE_GENERATORS:
             if feature == 'vicinity':
                 for o in self.VICINITY_ORDERS:
                     for feature_type in self.PDEP_FEATURES:
-                        corrections_features.append(f'vicinity_{feature_type}_{o}')
+                        model_name = f'vicinity_{feature_type}_{o}'
+                        if self.VICINITY_FEATURE_GENERATOR == 'pdep':
+                            corrections_features.append(model_name)  # to be populated after preprocessing
+                            raw_correction_features.append(model_name)
+                        elif self.VICINITY_FEATURE_GENERATOR == 'naive':
+                            corrections_features.append(model_name)
             elif feature != 'value':
                 corrections_features.append(feature)
 
-        d.corrections = helpers.Corrections(corrections_features)
-        d.synth_corrections = helpers.Corrections(corrections_features)
+        d.corrections = helpers.Corrections(corrections_features, raw_correction_features)
+        d.synth_corrections = helpers.Corrections(corrections_features, raw_correction_features)
 
         d.vicinity_models = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
@@ -455,9 +461,9 @@ class Correction:
                         features_selection=self.PDEP_FEATURES)
                     for feature_type in self.PDEP_FEATURES:  # can be pr, pdep, gpdep
                         if is_synth:
-                            d.synth_corrections.get(f'vicinity_{feature_type}_{o}')[error_cell] = pdep_corrections[feature_type]
+                            d.synth_corrections.get_raw(f'vicinity_{feature_type}_{o}')[error_cell] = pdep_corrections[feature_type]
                         else:
-                            d.corrections.get(f'vicinity_{feature_type}_{o}')[error_cell] = pdep_corrections[feature_type]
+                            d.corrections.get_raw(f'vicinity_{feature_type}_{o}')[error_cell] = pdep_corrections[feature_type]
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
                                  f'{self.VICINITY_FEATURE_GENERATOR}')
@@ -673,45 +679,19 @@ class Correction:
         if self.VERBOSE:
             print('Rule-based cleaning finished.')
 
-    def ensemble_vicinity_models(self, d):
-        """
-        Since there are many relationships between columns, we take into account cleaning suggestions from all of them
-        and ensemble them into a single feature. That single feature is used in binary_predict_corrections() to derive
-        the final cleaning suggestion.
-        """
+    def ensemble_synth_vicinity_models(self, d):
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
         column_errors = error_positions.original_column_errors()
-        vicinity_correction_models = [m for m in d.corrections.correction_store if m.startswith('vicinity')]
-
-        pair_features = d.corrections.assemble_pair_features(models=vicinity_correction_models)
-        synth_pair_features = d.synth_corrections.assemble_pair_features(vicinity_correction_models)
+        pair_features = d.synth_corrections.assemble_pair_features(raw_store=True)
 
         for j in column_errors:
-            score = ml_helpers.test_synth_data(d,
-                                               pair_features,
-                                               synth_pair_features,
-                                               self.CLASSIFICATION_MODEL,
-                                               j,
-                                               column_errors,
-                                               clean_on=self.TEST_SYNTH_DATA_DIRECTION)
-
-            if score >= self.SYNTH_CLEANING_THRESHOLD:
-                # now that we are certain about the synth data's usefulness, use additional training data.
-                x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
-                    column_errors,
-                    d.labeled_cells,
-                    pair_features,
-                    d.dataframe,
-                    synth_pair_features,
-                    j)
-            else:  # score is below threshold, don't use additional training data
-                x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
-                    column_errors,
-                    d.labeled_cells,
-                    pair_features,
-                    d.dataframe,
-                    {},
-                    j)
+            x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
+                column_errors,
+                d.labeled_cells,
+                pair_features,
+                d.dataframe,
+                {},
+                j)
 
             is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(pair_features, x_train, x_test, y_train, d)
 
@@ -725,9 +705,46 @@ class Correction:
                     raise ValueError('Unknown model.')
 
                 predicted_probas = gs_clf.predict_proba(x_test)
+                for vicinity_feature in d.synth_corrections.raw_features():
+                    ml_helpers.set_binary_pre_ensembling(predicted_probas, error_correction_suggestions,
+                                                         d.synth_corrections, vicinity_feature)
                 a = 1
-                # TODO continue here. Goal is to replace the vicinity cleaning suggestions in d.corrections with the
-                # probability that is ensembled above.
+
+    def ensemble_vicinity_models(self, d):
+        """
+        Since there are many relationships between columns, we take into account cleaning suggestions from all of them
+        and ensemble them into a single feature. That single feature is used in binary_predict_corrections() to derive
+        the final cleaning suggestion.
+        """
+        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+        column_errors = error_positions.original_column_errors()
+        pair_features = d.corrections.assemble_pair_features(raw_store=True)
+
+        for j in column_errors:
+            x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
+                column_errors,
+                d.labeled_cells,
+                pair_features,
+                d.dataframe,
+                {},
+                j)
+
+            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(pair_features, x_train, x_test, y_train, d)
+
+            if is_valid_problem:
+                if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
+                    gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
+                    gs_clf.fit(x_train, y_train)
+                elif self.CLASSIFICATION_MODEL == "CV":
+                    gs_clf = hpo.cross_validated_estimator(x_train, y_train)
+                else:
+                    raise ValueError('Unknown model.')
+
+                predicted_probas = gs_clf.predict_proba(x_test)
+                for vicinity_feature in d.corrections.raw_features():
+                    ml_helpers.set_binary_pre_ensembling(predicted_probas, error_correction_suggestions,
+                                                         d.corrections, vicinity_feature)
+                a = 1
 
     def binary_predict_corrections(self, d):
         """
@@ -837,6 +854,7 @@ class Correction:
                 self.rule_based_value_cleaning(d)
             if 'vicinity' in self.FEATURE_GENERATORS:
                 self.ensemble_vicinity_models(d)
+                self.ensemble_synth_vicinity_models(d)
             self.binary_predict_corrections(d)
             if self.RULE_BASED_VALUE_CLEANING:
                 # write the rule-based value corrections into the corrections dictionary. This overwrites
@@ -860,7 +878,7 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "rayyan"
+    dataset_name = "flights"
     version = 1
     error_fraction = 1
     error_class = 'simple_mcar'
@@ -869,10 +887,10 @@ if __name__ == "__main__":
     synth_cleaning_threshold = 1.33
     test_synth_data_direction = 'user_data'
     # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
-    feature_generators = ['domain', 'vicinity', 'llm_value']
+    feature_generators = ['domain', 'vicinity', 'value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
-    labeling_budget = 20
+    labeling_budget = 40
     n_best_pdeps = 30
     n_rows = None
     rule_based_value_cleaning = 'V5'
