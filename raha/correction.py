@@ -23,6 +23,7 @@ import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
 import sklearn.tree
+from sklearn.utils import compute_class_weight
 from typing import Dict, List, Union, Tuple
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
@@ -704,6 +705,9 @@ class Correction:
                 else:
                     raise ValueError('Unknown model.')
 
+                if len(d.labeled_tuples) == self.LABELING_BUDGET:
+                    a = 1
+
                 predicted_probas = gs_clf.predict_proba(x_test)
                 for vicinity_feature in d.synth_corrections.raw_features():
                     ml_helpers.set_binary_pre_ensembling(predicted_probas, error_correction_suggestions,
@@ -741,10 +745,16 @@ class Correction:
                     raise ValueError('Unknown model.')
 
                 predicted_probas = gs_clf.predict_proba(x_test)
+
+                high_probas = [x for x in predicted_probas if x[1] > 0.1]
+                if len(d.labeled_tuples) == self.LABELING_BUDGET:
+                    a = 1
+
                 for vicinity_feature in d.corrections.raw_features():
                     ml_helpers.set_binary_pre_ensembling(predicted_probas, error_correction_suggestions,
                                                          d.corrections, vicinity_feature)
-                a = 1
+
+
 
     def binary_predict_corrections(self, d):
         """
@@ -887,12 +897,12 @@ if __name__ == "__main__":
     synth_cleaning_threshold = 1.33
     test_synth_data_direction = 'user_data'
     # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
-    feature_generators = ['domain', 'vicinity', 'value']
+    feature_generators = ['vicinity']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
-    labeling_budget = 40
+    labeling_budget = 20
     n_best_pdeps = 30
-    n_rows = None
+    n_rows = 300
     rule_based_value_cleaning = 'V5'
     synth_tuples_error_threshold = 0
     training_time_limit = 30
