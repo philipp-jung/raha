@@ -15,7 +15,6 @@ import random
 import unicodedata
 import multiprocessing
 import json
-import concurrent.futures
 
 import numpy as np
 import sklearn.svm
@@ -23,10 +22,10 @@ import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
 import sklearn.tree
-from sklearn.utils import compute_class_weight
+import sklearn.feature_selection
+
 from typing import Dict, List, Union, Tuple
 import pandas as pd
-from sentence_transformers import SentenceTransformer, util
 
 import raha
 from raha import imputer
@@ -47,7 +46,7 @@ class Correction:
                  vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
                  n_best_pdeps: int, training_time_limit: int, rule_based_value_cleaning: Union[str, bool],
                  synth_tuples: int, synth_tuples_error_threshold: int, synth_cleaning_threshold: float,
-                 test_synth_data_direction: str, pdep_features: Tuple[str], pdep_corrections_compression: bool):
+                 test_synth_data_direction: str, pdep_features: Tuple[str]):
         """
         Parameters of the cleaning experiment.
         @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
@@ -100,7 +99,6 @@ class Correction:
         self.SYNTH_CLEANING_THRESHOLD = synth_cleaning_threshold
         self.TEST_SYNTH_DATA_DIRECTION = test_synth_data_direction
         self.PDEP_FEATURES = pdep_features
-        self.PDEP_CORRECTIONS_COMPRESSION = pdep_corrections_compression
 
         # original Baran
         self.PRETRAINED_VALUE_BASED_MODELS_PATH = ""
@@ -247,7 +245,6 @@ class Correction:
 
         # BEGIN Philipp's changes
         d.value_corrections = {}
-        d.sbert_cos_sim = {}
 
         # Initialize LLM cache
         conn = helpers.connect_to_cache()
@@ -264,22 +261,16 @@ class Correction:
 
         # Correction store for feature creation
         corrections_features = []  # don't need further processing being used in ensembling.
-        raw_correction_features = []  # need further processing.
+
         for feature in self.FEATURE_GENERATORS:
             if feature == 'vicinity':
                 for o in self.VICINITY_ORDERS:
-                    for feature_type in self.PDEP_FEATURES:
-                        model_name = f'vicinity_{feature_type}_{o}'
-                        if self.VICINITY_FEATURE_GENERATOR == 'pdep':
-                            corrections_features.append(model_name)  # to be populated after preprocessing
-                            raw_correction_features.append(model_name)
-                        elif self.VICINITY_FEATURE_GENERATOR == 'naive':
-                            corrections_features.append(model_name)
+                    corrections_features.append(f'vicinity_{o}')
             elif feature != 'value':
                 corrections_features.append(feature)
 
-        d.corrections = helpers.Corrections(corrections_features, raw_correction_features)
-        d.synth_corrections = helpers.Corrections(corrections_features, raw_correction_features)
+        d.corrections = helpers.Corrections(corrections_features)
+        d.synth_corrections = helpers.Corrections(corrections_features)
 
         d.vicinity_models = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
@@ -404,15 +395,15 @@ class Correction:
                 update_dictionary["vicinity"] = [cv if column != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
 
+        # TODO das hier stelle ich erstmal aus, weil es auf rayyan die Korrekturen kaputtmacht.
         # BEGIN Philipp's changes
-        if 'vicinity' in self.FEATURE_GENERATORS:
-            for o in self.VICINITY_ORDERS:
-                pdep.update_counts_dict(d.dataframe,
-                                        d.vicinity_models[o],
-                                        o,
-                                        cleaned_sampled_tuple)
+        # if 'vicinity' in self.FEATURE_GENERATORS:
+        #     for o in self.VICINITY_ORDERS:
+        #         pdep.update_counts_dict(d.dataframe,
+        #                                 d.vicinity_models[o],
+        #                                 o,
+        #                                 cleaned_sampled_tuple)
 
-        # Todo update sbert_models here instead of recalculating the whole thing every time a tuple is sampled.
         # END Philipp's changes
 
         if self.VERBOSE:
@@ -460,11 +451,10 @@ class Correction:
                         ed=error_dictionary,
                         n_best_pdeps=self.N_BEST_PDEPS,
                         features_selection=self.PDEP_FEATURES)
-                    for feature_type in self.PDEP_FEATURES:  # can be pr, pdep, gpdep
-                        if is_synth:
-                            d.synth_corrections.get_raw(f'vicinity_{feature_type}_{o}')[error_cell] = pdep_corrections[feature_type]
-                        else:
-                            d.corrections.get_raw(f'vicinity_{feature_type}_{o}')[error_cell] = pdep_corrections[feature_type]
+                    if is_synth:
+                        d.synth_corrections.get(f'vicinity_{o}')[error_cell] = pdep_corrections
+                    else:
+                        d.corrections.get(f'vicinity_{o}')[error_cell] = pdep_corrections
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
                                  f'{self.VICINITY_FEATURE_GENERATOR}')
@@ -498,7 +488,9 @@ class Correction:
                 if len(error_correction_pairs) >= 3:
                     prompt = "You are a data cleaning machine that detects patterns to return a correction. If you do "\
                              "not find a correction, you return the token <NULL>. You always follow the example.\n---\n"
-                    for (error, correction) in random.sample(error_correction_pairs, 3):
+                    # hypothesis on rayyan: It is crucial to give enough examples.
+                    n_pairs = min(10, len(error_correction_pairs))
+                    for (error, correction) in random.sample(error_correction_pairs, n_pairs):
                         prompt = prompt + f"error:{error}" + '\n' + f"correction:{correction}" + '\n'
                     prompt = prompt + f"error:{error_dictionary['old_value']}" + '\n' + "correction:"
                     ai_prompts.append((error_cell, 'llm_value', prompt))
@@ -518,11 +510,6 @@ class Correction:
                 final_row_as_string, _ = helpers.error_free_row_to_prompt(d.dataframe, error_dictionary['row'], error_dictionary['column'])
                 prompt = prompt + final_row_as_string + '\n' + 'correction: '
                 ai_prompts.append((error_cell, 'llm_vicinity', prompt))
-
-        if "sbert" in self.FEATURE_GENERATORS and not is_synth:
-            row, column = error_dictionary['row'], error_dictionary['column']
-            if not is_synth:
-                d.corrections.get('sbert')[error_cell] = d.sbert_cos_sim[(row, column)]
 
         if "domain" in self.FEATURE_GENERATORS:
             if is_synth:
@@ -574,19 +561,6 @@ class Correction:
                     d.imputer_models[i_col] = imp.predict_proba(d.typed_dataframe)
                 else:
                     d.imputer_models[i_col] = None
-
-        if 'sbert' in self.FEATURE_GENERATORS:
-            sbert_model = SentenceTransformer('all-MiniLM-L6-v2')  # keep model loaded
-            error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-            column_errors = error_positions.original_column_errors()
-            values_in_cols = {k: [val for val, _ in v.items()] for k, v in d.domain_models.items()}
-            d.sbert_models = {}
-            for col in column_errors:
-                emb_values = sbert_model.encode(values_in_cols[col])
-                for error_cell in column_errors[col]:
-                    error_value = error_positions.detected_cells[error_cell]
-                    emb_error = sbert_model.encode(error_value)
-                    d.sbert_cos_sim[error_cell] = {values_in_cols[col][i]: float(util.cos_sim(emb_error, emb_values[i])) for i, _ in enumerate(values_in_cols[col])}
 
     def generate_features(self, d, synchronous):
         """
@@ -680,82 +654,6 @@ class Correction:
         if self.VERBOSE:
             print('Rule-based cleaning finished.')
 
-    def ensemble_synth_vicinity_models(self, d):
-        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors()
-        pair_features = d.synth_corrections.assemble_pair_features(raw_store=True)
-
-        for j in column_errors:
-            x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
-                column_errors,
-                d.labeled_cells,
-                pair_features,
-                d.dataframe,
-                {},
-                j)
-
-            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(pair_features, x_train, x_test, y_train, d)
-
-            if is_valid_problem:
-                if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
-                    gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-                    gs_clf.fit(x_train, y_train)
-                elif self.CLASSIFICATION_MODEL == "CV":
-                    gs_clf = hpo.cross_validated_estimator(x_train, y_train)
-                else:
-                    raise ValueError('Unknown model.')
-
-                if len(d.labeled_tuples) == self.LABELING_BUDGET:
-                    a = 1
-
-                predicted_probas = gs_clf.predict_proba(x_test)
-                for vicinity_feature in d.synth_corrections.raw_features():
-                    ml_helpers.set_binary_pre_ensembling(predicted_probas, error_correction_suggestions,
-                                                         d.synth_corrections, vicinity_feature)
-                a = 1
-
-    def ensemble_vicinity_models(self, d):
-        """
-        Since there are many relationships between columns, we take into account cleaning suggestions from all of them
-        and ensemble them into a single feature. That single feature is used in binary_predict_corrections() to derive
-        the final cleaning suggestion.
-        """
-        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors()
-        pair_features = d.corrections.assemble_pair_features(raw_store=True)
-
-        for j in column_errors:
-            x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
-                column_errors,
-                d.labeled_cells,
-                pair_features,
-                d.dataframe,
-                {},
-                j)
-
-            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(pair_features, x_train, x_test, y_train, d)
-
-            if is_valid_problem:
-                if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
-                    gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-                    gs_clf.fit(x_train, y_train)
-                elif self.CLASSIFICATION_MODEL == "CV":
-                    gs_clf = hpo.cross_validated_estimator(x_train, y_train)
-                else:
-                    raise ValueError('Unknown model.')
-
-                predicted_probas = gs_clf.predict_proba(x_test)
-
-                high_probas = [x for x in predicted_probas if x[1] > 0.1]
-                if len(d.labeled_tuples) == self.LABELING_BUDGET:
-                    a = 1
-
-                for vicinity_feature in d.corrections.raw_features():
-                    ml_helpers.set_binary_pre_ensembling(predicted_probas, error_correction_suggestions,
-                                                         d.corrections, vicinity_feature)
-
-
-
     def binary_predict_corrections(self, d):
         """
         The ML problem as formulated in the Baran paper.
@@ -806,7 +704,7 @@ class Correction:
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
 
-            if len(d.labeled_tuples) == self.LABELING_BUDGET:
+            if len(d.labeled_tuples) == self.LABELING_BUDGET and j == 8:
                 a = 1
 
         if self.VERBOSE:
@@ -862,9 +760,6 @@ class Correction:
             self.generate_synth_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
-            if 'vicinity' in self.FEATURE_GENERATORS:
-                self.ensemble_vicinity_models(d)
-                self.ensemble_synth_vicinity_models(d)
             self.binary_predict_corrections(d)
             if self.RULE_BASED_VALUE_CLEANING:
                 # write the rule-based value corrections into the corrections dictionary. This overwrites
@@ -888,28 +783,27 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "flights"
+    dataset_name = "hospital"
     version = 1
     error_fraction = 1
     error_class = 'simple_mcar'
 
-    synth_tuples = 0
+    synth_tuples = 20
     synth_cleaning_threshold = 1.33
     test_synth_data_direction = 'user_data'
     # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
-    feature_generators = ['vicinity']
+    feature_generators = ['vicinity', 'domain', 'llm_value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
     labeling_budget = 20
-    n_best_pdeps = 30
-    n_rows = 300
+    n_best_pdeps = 3
+    n_rows = None
     rule_based_value_cleaning = 'V5'
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
     # pdep_features = ('pr', 'vote', 'pdep', 'gpdep')
     pdep_features = ['pr']
-    pdep_corrections_compression = True
     vicinity_orders = [1, 2]
 
     # Load Dataset object
@@ -922,7 +816,7 @@ if __name__ == "__main__":
     app = Correction(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
                      rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold, synth_cleaning_threshold,
-                     test_synth_data_direction, pdep_features, pdep_corrections_compression)
+                     test_synth_data_direction, pdep_features)
     app.VERBOSE = True
     seed = 0
     correction_dictionary = app.run(data, seed)

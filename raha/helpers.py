@@ -187,51 +187,24 @@ class Corrections:
     it is guaranteed that all models return something for each error cell -- if there are no corrections made, that
     will be an empty list. If a correction or multiple corrections has/have been made, there will be a list of
     correction suggestions and feature vectors.
-
-    Vicinity correction models need to be ensembled themselves until they can be used for the general model ensembling.
-    To account for this, corrections that are ready to be used in the final ensembling are stored in correction_store,
-    while corrections that need further pre-processing are stored in raw_vicinity_store.
     """
 
-    def __init__(self, model_names: List[str], raw_model_names: List[str]):
+    def __init__(self, model_names: List[str]):
         self.correction_store = {name: dict() for name in model_names}
-        self.raw_vicinity_store = {name: dict() for name in raw_model_names}
 
-    def flatten_raw_store(self) -> Dict:
-        """
-        Reshape the way vicinity corrections are stored to a format convenient for formulating the ensembling problem.
-        """
+    def flat_correction_store(self):
         flat_store = {}
-        model_selection = self.raw_vicinity_store.keys()
-        for model in model_selection:
-            for cell in self.raw_vicinity_store[model]:
-                for n_fd, corrections_pr in enumerate(self.raw_vicinity_store[model][cell]):
-                    vicinity_model_name = f'{model}_{n_fd}'
-                    if flat_store.get(vicinity_model_name) is None:
-                        flat_store[vicinity_model_name] = {}
-                    flat_store[vicinity_model_name][cell] = corrections_pr
+        for model in self.correction_store:
+            flat_store[model] = self.correction_store[model]
         return flat_store
 
     @property
     def available_corrections(self) -> List[str]:
         return list(self.correction_store.keys())
 
-    def raw_features(self) -> List[str]:
-        """Return a list describing the features the raw Corrections come from."""
-        return list(self.raw_vicinity_store.keys())
-
     def features(self) -> List[str]:
         """Return a list describing the features the Corrections come from."""
         return list(self.correction_store.keys())
-
-    def get_raw(self, model_name: str) -> Dict:
-        """
-        Same as get(), but returns raw corrections that need to be further processed until they are ready to be used
-        in the cleaning ensembling.
-        @param model_name: name of the model whose unprocessed corrections shoudl be returned.
-        @return: Dict
-        """
-        return self.raw_vicinity_store[model_name]
 
     def get(self, model_name: str) -> Dict:
         """
@@ -240,12 +213,9 @@ class Corrections:
         """
         return self.correction_store[model_name]
 
-    def assemble_pair_features(self, raw_store: bool = False) -> Dict[Tuple[int, int], Dict[str, List[float]]]:
+    def assemble_pair_features(self) -> Dict[Tuple[int, int], Dict[str, List[float]]]:
         """Return an object as d.pair_features has been in Baran."""
-        if raw_store:
-            flat_corrections = self.flatten_raw_store()
-        else:
-            flat_corrections = self.correction_store
+        flat_corrections = self.flat_correction_store()
         pair_features = defaultdict(dict)
         for mi, model in enumerate(flat_corrections):
             for cell in flat_corrections[model]:
@@ -368,14 +338,13 @@ def construct_llm_corrections(dictionaries: List[Dict[str, float]], current_sent
 
 
 def llm_response_to_corrections(correction_tokens: List[str], token_logprobs: dict, top_logprobs: List[Dict[str, float]]) -> Dict[str, float]:
-    if len(correction_tokens) <= 7:
-        corrections = construct_llm_corrections(top_logprobs)
-        # filter out all corrections with pr < 1% <=> logprob > -4.60517.
-        top_corrections = {c['correction']: np.exp(c['logprob']) for c in corrections if c['logprob'] > -4.60517}
-        return top_corrections
-    else:
-        correction = ''.join(correction_tokens)
-        return {correction: np.exp(sum(token_logprobs))}
+    # if len(correction_tokens) <= 7:
+    #     corrections = construct_llm_corrections(top_logprobs)
+    #     # filter out all corrections with pr < 1% <=> logprob > -4.60517.
+    #     top_corrections = {c['correction']: np.exp(c['logprob']) for c in corrections if c['logprob'] > -4.60517}
+    #     return top_corrections
+    correction = ''.join(correction_tokens)
+    return {correction: np.exp(sum(token_logprobs))}
 
 
 def error_free_row_to_prompt(df: pd.DataFrame, row: int, column: int) -> Tuple[str, str]:
