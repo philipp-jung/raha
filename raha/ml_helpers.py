@@ -5,26 +5,28 @@ from sklearn.metrics import f1_score
 from typing import List, Dict, Tuple
 import hpo
 
+from helpers import Corrections
 
-class VotingClassifier(object):
+
+def set_binary_pre_ensembling(predicted_probas: np.ndarray,
+                              all_error_correction_suggestions: List[Tuple],
+                              corrections: Corrections,
+                              model_name: str):
     """
-    Implements a voting classifier for pre-trained classifiers. Uses soft-voting to get the right label.
-    Inspired by https://stackoverflow.com/a/50295289.
+    Similar to set_binary_cleaning_suggestions, the result of the pre-ensembling of the vicinity-features is used
+    to set the probabilities of a cleaning-suggestion of the ensembled cleaning model.
+    @param predicted_probas: numpy array where each entry is an array of length 2, representing the 2 classes.
+    @param all_error_correction_suggestions: list of tuples containing all error corrections, same length as
+    predicted_labels.
+    @param corrections: Corrections object that contains all correction suggestions used in the final ensembling.
+    @param model_name: Name of the correction model.
+    @return: None
     """
-
-    def __init__(self, estimators: List[Tuple[str, sklearn.pipeline.Pipeline]]):
-        self.estimators = estimators
-
-    def predict(self, X):
-        # get values
-        Y = np.zeros([X.shape[0], len(self.estimators)], dtype=int)
-        for i, (name, clf) in enumerate(self.estimators):
-            Y[:, i] = clf.predict(X)
-        # voting
-        y = np.zeros(X.shape[0])
-        for i in range(X.shape[0]):
-            y[i] = np.argmax(np.bincount(Y[i, :]))
-        return y
+    for index, predicted_proba in enumerate(predicted_probas):
+        error_cell, correction_suggestion = all_error_correction_suggestions[index]
+        corrections_dict = corrections.get(model_name).get(error_cell, {})
+        corrections_dict[correction_suggestion] = predicted_proba[1]
+        corrections.get(model_name)[error_cell] = corrections_dict
 
 
 def set_binary_cleaning_suggestions(predicted_labels: List[int],
@@ -38,7 +40,7 @@ def set_binary_cleaning_suggestions(predicted_labels: List[int],
     @param all_error_correction_suggestions: list of tuples containing all error corrections, same length as
     predicted_labels.
     @param corrected_cells: dictionary {error_cell: predicted_correction} that stores the cleaning results.
-    @return:
+    @return: None
     """
     for index, predicted_label in enumerate(predicted_labels):
         if predicted_label:
@@ -46,7 +48,7 @@ def set_binary_cleaning_suggestions(predicted_labels: List[int],
             corrected_cells[error_cell] = predicted_correction
 
 
-def handle_edge_cases(x_train, x_test, y_train, d) -> Tuple[bool, List]:
+def handle_edge_cases(pair_features, x_train, x_test, y_train, d) -> Tuple[bool, List]:
     """
     Depending on the dataset and how much data has been labeled by the user, the data used to formulate the ML problem
     can lead to an invalid ML problem.
@@ -61,8 +63,8 @@ def handle_edge_cases(x_train, x_test, y_train, d) -> Tuple[bool, List]:
         return False, np.ones(len(x_test))
 
     elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
-        for cell in d.pair_features:
-            correction_dict = d.pair_features[cell]
+        for cell in pair_features:
+            correction_dict = pair_features[cell]
             if len(correction_dict) > 0:
                 # select the correction with the highest sum of features.
                 max_proba_feature = \
@@ -122,57 +124,6 @@ def generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
     return x_train, y_train, x_test, corrected_cells, all_error_correction_suggestions
 
 
-def multi_generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
-                                   labeled_cells: Dict[Tuple[int, int], List],
-                                   pair_features: Dict[Tuple[int, int], Dict[str, List]],
-                                   synth_pair_features: Dict[Tuple[int, int], Dict[str, List]],
-                                   df_dirty: pd.DataFrame,
-                                   column: int):
-    """
-    Generate data for the machine-learning problem modeling the issue as a multiclass classification.
-    We also leverage rows that do not contain errors to get more training data, called "synthetic" data.
-    """
-    x_train = []  # train feature vectors
-    y_train = []  # train labels
-    x_test = []  # test features vectors
-    corrected_cells = {}  # take user input as a cleaning result if available
-
-    correction_order = []
-    for error_cell in column_errors[column]:
-        correction_suggestions = pair_features.get(error_cell, [])
-        if len(correction_suggestions) > 0:
-            correction_order = list(correction_suggestions.keys())
-        if list(correction_suggestions.keys()) != [] and correction_order != list(correction_suggestions.keys()):
-            raise ValueError('Should not be possible.')
-        x = np.concatenate([pair_features[error_cell][suggestion] for suggestion in correction_suggestions])
-
-        if error_cell in labeled_cells and labeled_cells[error_cell][0] == 1:
-            # If an error-cell has been labeled by the user, use it to create the training dataset.
-            y = labeled_cells[error_cell][1]  # user input as label
-            corrected_cells[error_cell] = y
-            x_train.append(x)
-            y_train.append(y)
-
-        else:  # put all cells that contain an error without user-correction in the "test" set.
-            x_test.append(x)
-
-    if len(synth_pair_features) == 0 or len(y_train) == 0:
-        # abort if no synth features were created or no non-synth features were created.
-        return x_train, y_train, x_test, corrected_cells
-
-    for synth_cell in synth_pair_features:
-        if synth_cell[1] == column:
-            correction_suggestions = synth_pair_features.get(synth_cell, [])
-            if list(correction_suggestions.keys()) != [] and list(correction_suggestions.keys()) != correction_order:
-                raise ValueError('Should not be possible.')
-            x = np.concatenate([pair_features[error_cell][suggestion] for suggestion in correction_suggestions])
-            y = df_dirty.iloc[synth_cell]  # synth cell generation garantiert, dass die Zeile fehlerfrei ist.
-            x_train.append(x)
-            y_train.append(y)
-
-    return x_train, y_train, x_test, corrected_cells
-
-
 def generate_synth_test_data(synth_pair_features: Dict[Tuple[int, int], Dict[str, List]],
                              df_dirty: pd.DataFrame,
                              column: int) -> Tuple[List, List, List]:
@@ -195,7 +146,7 @@ def generate_synth_test_data(synth_pair_features: Dict[Tuple[int, int], Dict[str
     return x_test, y_test, all_error_correction_suggestions
 
 
-def test_synth_data(d, classification_model: str, column: int, column_errors: dict, clean_on: str) -> float:
+def test_synth_data(d, pair_features, synth_pair_features, classification_model: str, column: int, column_errors: dict, clean_on: str) -> float:
     """
     Test the difference in distribution between user_data and synth_data to determine if using synth_data in the
     cleaning problem is worthwhile.
@@ -209,12 +160,12 @@ def test_synth_data(d, classification_model: str, column: int, column_errors: di
     @return: f1-score of the ensembling model cleaning erronous values.
     """
     synth_x_test, synth_y_test, synth_error_correction_suggestions = generate_synth_test_data(
-        d.synth_pair_features, d.dataframe, column)
+        synth_pair_features, d.dataframe, column)
 
     x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = generate_train_test_data(
         column_errors,
         d.labeled_cells,
-        d.pair_features,
+        pair_features,
         d.dataframe,
         {},
         # d.synth_pair_features, # für das Experiment, bei dem ich die performance beim Reinigen der synth_daten
@@ -222,7 +173,7 @@ def test_synth_data(d, classification_model: str, column: int, column_errors: di
         column)
 
     score = 0.0
-    is_valid_problem, _ = handle_edge_cases(x_train, synth_x_test, y_train, d)
+    is_valid_problem, _ = handle_edge_cases(pair_features, x_train, synth_x_test, y_train, d)
     if not is_valid_problem:
         return score
 

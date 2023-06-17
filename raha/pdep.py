@@ -2,6 +2,8 @@ import pandas as pd
 from typing import Tuple, List, Dict, Union, Any
 from itertools import combinations
 from collections import Counter, namedtuple
+from ml_helpers import generate_train_test_data, handle_edge_cases
+import sklearn
 
 PdepTuple = namedtuple("PdepTuple", ["pdep", "gpdep"])
 
@@ -215,7 +217,7 @@ def gpdep(
     return None
 
 
-def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold):
+def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold) -> List[Dict[str, int]]:
     """
     Use Baran's original strategy to suggest corrections based on higher-order
     vicinity.
@@ -299,7 +301,7 @@ def pdep_vicinity_based_corrector(
     ed: dict,
     n_best_pdeps: int = 3,
     features_selection: tuple = ('pr', 'vote')
-) -> List[Dict]:
+) -> Dict:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
     grow in number at (n-1)^2 / 2 pace. Only take the `n_best_pdeps`
@@ -332,9 +334,6 @@ def pdep_vicinity_based_corrector(
     sorted_results = sorted(results_list, key=lambda x: x["pr"], reverse=True)
 
     highest_conditional_probabilities = {}
-    highest_pdeps = {}
-    highest_gpdeps = {}
-    votes = {}
 
     # Having a sorted dict allows us to only return the highest conditional
     # probability per correction by iterating over all generated corrections
@@ -342,28 +341,5 @@ def pdep_vicinity_based_corrector(
     for d in sorted_results:
         if highest_conditional_probabilities.get(d["correction"]) is None:
             highest_conditional_probabilities[d["correction"]] = d["pr"]
-        if highest_pdeps.get(d["correction"]) is None:
-            highest_pdeps[d["correction"]] = d['pdep']
-        if highest_gpdeps.get(d["correction"]) is None:
-            highest_gpdeps[d["correction"]] = d['gpdep']
 
-    # Below, I calculate the majority vote.
-    counts = Counter([x["correction"] for x in sorted_results])
-    n_corrections = sum(counts.values())
-
-    for correction in counts:
-        votes[correction] = counts[correction] / n_corrections
-
-    # Now, select relevant features. As of 2023-04-15, the two features are majority vote and
-    # highest conditional probability.
-    features = []
-    if 'pr' in features_selection:
-        features.append(highest_conditional_probabilities)
-    if 'pdep' in features_selection:
-        features.append(highest_pdeps)
-    if 'gpdep' in features_selection:
-        features.append(highest_gpdeps)
-    if 'vote' in features_selection:
-        features.append(votes)
-
-    return features
+    return highest_conditional_probabilities

@@ -8,7 +8,6 @@
 # All Rights Reserved
 ########################################
 
-
 import os
 import math
 import pickle
@@ -23,9 +22,10 @@ import sklearn.ensemble
 import sklearn.naive_bayes
 import sklearn.linear_model
 import sklearn.tree
-from typing import Dict, List, Union
+import sklearn.feature_selection
+
+from typing import Dict, List, Union, Tuple
 import pandas as pd
-from sentence_transformers import SentenceTransformer, util
 
 import raha
 from raha import imputer
@@ -36,6 +36,7 @@ from raha import ml_helpers
 from raha import value_cleaning
 from raha import value_helpers
 
+
 class Correction:
     """
     The main class.
@@ -45,7 +46,7 @@ class Correction:
                  vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
                  n_best_pdeps: int, training_time_limit: int, rule_based_value_cleaning: Union[str, bool],
                  synth_tuples: int, synth_tuples_error_threshold: int, synth_cleaning_threshold: float,
-                 test_synth_data_direction: str, pdep_features: List[str]):
+                 test_synth_data_direction: str, pdep_features: Tuple[str]):
         """
         Parameters of the cleaning experiment.
         @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
@@ -198,7 +199,7 @@ class Correction:
             for new_value in model[ed["column"]]:
                 pr = model[ed["column"]][new_value] / sum_scores
                 results_dictionary[new_value] = pr
-        return [results_dictionary]
+        return results_dictionary
 
     def initialize_dataset(self, d):
         """
@@ -244,13 +245,32 @@ class Correction:
 
         # BEGIN Philipp's changes
         d.value_corrections = {}
-        d.sbert_cos_sim = {}
 
-        # for debugging purposes only
-        d.domain_corrections = {}
-        d.naive_vicinity_corrections = {}
-        d.pdep_vicinity_corrections = {}
-        d.imputer_corrections = {}
+        # Initialize LLM cache
+        conn = helpers.connect_to_cache()
+        cursor = conn.cursor()
+        cursor.execute('''CREATE TABLE IF NOT EXISTS cache
+                          (dataset TEXT,
+                          row INT,
+                          column INT,
+                          correction_model TEXT,
+                          correction_tokens TEXT,
+                          token_logprobs TEXT,
+                          top_logprobs TEXT)''')
+        conn.commit()
+
+        # Correction store for feature creation
+        corrections_features = []  # don't need further processing being used in ensembling.
+
+        for feature in self.FEATURE_GENERATORS:
+            if feature == 'vicinity':
+                for o in self.VICINITY_ORDERS:
+                    corrections_features.append(f'vicinity_{o}')
+            elif feature != 'value':
+                corrections_features.append(feature)
+
+        d.corrections = helpers.Corrections(corrections_features)
+        d.synth_corrections = helpers.Corrections(corrections_features)
 
         d.vicinity_models = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
@@ -283,7 +303,7 @@ class Correction:
 
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
 
-        column_errors = error_positions.original_column_errors
+        column_errors = error_positions.original_column_errors()
 
         for j in column_errors:
             for error_cell in column_errors[j]:
@@ -375,42 +395,40 @@ class Correction:
                 update_dictionary["vicinity"] = [cv if column != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
 
+        # TODO das hier stelle ich erstmal aus, weil es auf rayyan die Korrekturen kaputtmacht.
         # BEGIN Philipp's changes
-        if 'vicinity' in self.FEATURE_GENERATORS:
-            for o in self.VICINITY_ORDERS:
-                pdep.update_counts_dict(d.dataframe,
-                                        d.vicinity_models[o],
-                                        o,
-                                        cleaned_sampled_tuple)
+        # if 'vicinity' in self.FEATURE_GENERATORS:
+        #     for o in self.VICINITY_ORDERS:
+        #         pdep.update_counts_dict(d.dataframe,
+        #                                 d.vicinity_models[o],
+        #                                 o,
+        #                                 cleaned_sampled_tuple)
 
-        # Todo update sbert_models here instead of recalculating the whole thing every time a tuple is sampled.
         # END Philipp's changes
 
         if self.VERBOSE:
             print("The error corrector models are updated with new labeled tuple {}.".format(d.sampled_tuple))
 
-    def _feature_generator_process(self, args):
+    def _feature_generator_process(self, args) -> List[Tuple[Tuple[int, int], str, Union[str, None]]]:
         """
         This method generates cleaning suggestions for one error in one cell. The suggestion
         gets turned into features for the classifier in predict_corrections(). It gets called
-        once for each each error cell.
+        once for each error cell.
 
         Depending on the value of `synchronous` in `generate_features()`, the method will
         be executed in parallel or not.
+
+        Returns a List of Tuples with the structure (error_cell, cleaning_model_name, prompt), where prompt is to be
+        sent to openai to clean cell error_cell using the approach called cleaning_model_name.
         """
-        d, cell, is_synth = args
+        ai_prompts: List[Tuple[Tuple[int, int], str, Union[str, None]]] = []
+        d, error_cell, is_synth = args
 
         # vicinity ist die Zeile, column ist die Zeilennummer, old_value ist der Fehler
-        error_dictionary = {"column": cell[1],
-                            "old_value": d.dataframe.iloc[cell],
-                            "vicinity": list(d.dataframe.iloc[cell[0], :]),
-                            "row": cell[0]}
-        naive_vicinity_corrections = []
-        pdep_vicinity_corrections = []
-        value_corrections = []
-        domain_corrections = []
-        imputer_corrections = []
-        sbert_corrections = []
+        error_dictionary = {"column": error_cell[1],
+                            "old_value": d.dataframe.iloc[error_cell],
+                            "vicinity": list(d.dataframe.iloc[error_cell[0], :]),
+                            "row": error_cell[0]}
 
         # Begin Philipps Changes
         if "vicinity" in self.FEATURE_GENERATORS:
@@ -420,7 +438,10 @@ class Correction:
                         counts_dict=d.vicinity_models[o],
                         ed=error_dictionary,
                         probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
-                    naive_vicinity_corrections.append(naive_corrections)
+                    if is_synth:
+                        d.synth_corrections.get(f'vicinity_{o}')[error_cell] = naive_corrections
+                    else:
+                        d.corrections.get(f'vicinity_{o}')[error_cell] = naive_corrections
 
             elif self.VICINITY_FEATURE_GENERATOR == 'pdep':
                 for o in self.VICINITY_ORDERS:
@@ -430,7 +451,10 @@ class Correction:
                         ed=error_dictionary,
                         n_best_pdeps=self.N_BEST_PDEPS,
                         features_selection=self.PDEP_FEATURES)
-                    pdep_vicinity_corrections.append(pdep_corrections)
+                    if is_synth:
+                        d.synth_corrections.get(f'vicinity_{o}')[error_cell] = pdep_corrections
+                    else:
+                        d.corrections.get(f'vicinity_{o}')[error_cell] = pdep_corrections
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
                                  f'{self.VICINITY_FEATURE_GENERATOR}')
@@ -439,15 +463,60 @@ class Correction:
             error = error_dictionary['old_value']
             value_corrections = d.value_models.cleaning_features(error, 'both')
             if not is_synth:
-                d.value_corrections[cell] = value_corrections
+                d.value_corrections[error_cell] = value_corrections
 
-        # TODO implement sbert for synth
-        if "sbert" in self.FEATURE_GENERATORS and not is_synth:
-            row, column = error_dictionary['row'], error_dictionary['column']
-            sbert_corrections = d.sbert_cos_sim[(row, column)]
+        if 'llm_value' in self.FEATURE_GENERATORS and not is_synth and len(d.labeled_tuples) == self.LABELING_BUDGET:
+            """
+            Use large language model to correct an error based on the error value.
+            """
+            if error_dictionary['old_value'] != '':  # If there is no value to be transformed, skip.
+                error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+                column_errors_positions = error_positions.original_column_errors().get(error_dictionary['column'])
+                column_errors_rows = [row for (row, col) in column_errors_positions]
+
+                # Construct pairs of ('error', 'correction') by iterating over the user input.
+                error_correction_pairs: List[Tuple[str, str]] = []
+                for labeled_row in d.labeled_tuples:
+                    if labeled_row in column_errors_rows:
+                        cell = labeled_row, error_dictionary['column']
+                        error = d.dataframe.iloc[cell]
+                        correction = d.labeled_cells[cell][1]
+                        if error != '':
+                            error_correction_pairs.append((error, correction))
+
+                # Only do llm_value cleaning if there are >= 3 examples for cleaning that column.
+                if len(error_correction_pairs) >= 3:
+                    prompt = "You are a data cleaning machine that detects patterns to return a correction. If you do "\
+                             "not find a correction, you return the token <NULL>. You always follow the example.\n---\n"
+                    # hypothesis on rayyan: It is crucial to give enough examples.
+                    n_pairs = min(10, len(error_correction_pairs))
+                    for (error, correction) in random.sample(error_correction_pairs, n_pairs):
+                        prompt = prompt + f"error:{error}" + '\n' + f"correction:{correction}" + '\n'
+                    prompt = prompt + f"error:{error_dictionary['old_value']}" + '\n' + "correction:"
+                    ai_prompts.append((error_cell, 'llm_value', prompt))
+
+        if 'llm_vicinity' in self.FEATURE_GENERATORS and not is_synth and len(d.labeled_tuples) == self.LABELING_BUDGET:
+            # use large language model to correct an error based on the error's vicinity. Inspired by Narayan et al.
+            # 2022.
+            error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+            row_errors = error_positions.updated_row_errors()
+            rows_without_errors = [i for i in range(d.dataframe.shape[0]) if len(row_errors[i]) == 0]
+            if len(rows_without_errors) >= 2:
+                rows = random.sample(rows_without_errors, 2)
+                prompt = "You are a data cleaning machine that detects patterns to return a correction. If you do not find a correction, you return the token <NULL>. You always follow the example.\n---\n"
+                for row in rows:
+                    row_as_string, correction = helpers.error_free_row_to_prompt(d.dataframe, row, error_dictionary['column'])
+                    prompt = prompt + row_as_string + '\n' + f'correction: {correction}' + '\n'
+                final_row_as_string, _ = helpers.error_free_row_to_prompt(d.dataframe, error_dictionary['row'], error_dictionary['column'])
+                prompt = prompt + final_row_as_string + '\n' + 'correction: '
+                ai_prompts.append((error_cell, 'llm_vicinity', prompt))
 
         if "domain" in self.FEATURE_GENERATORS:
-            domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
+            if is_synth:
+                d.synth_corrections.get('domain')[error_cell] = self._domain_based_corrector(d.domain_models, error_dictionary)
+            else:
+                d.corrections.get('domain')[error_cell] = self._domain_based_corrector(d.domain_models, error_dictionary)
+
         if "imputer" in self.FEATURE_GENERATORS:
             imputer_corrections = self._imputer_based_corrector(d.imputer_models, error_dictionary)
 
@@ -458,41 +527,11 @@ class Correction:
             # a feature with value 0.
             if len(d.labeled_tuples) == self.LABELING_BUDGET and len(imputer_corrections) == 0:
                 imputer_corrections = [{}]
-
-        # below block is for debugging purposes only.
-        d.domain_corrections[cell] = domain_corrections
-        d.naive_vicinity_corrections[cell] = naive_vicinity_corrections
-        d.pdep_vicinity_corrections[cell] = pdep_vicinity_corrections
-        d.imputer_corrections[cell] = imputer_corrections
-
-        if not self.RULE_BASED_VALUE_CLEANING and not is_synth:
-            # construct value corrections as in original Baran
-            # TODO I think this is broken rn. I changed the data structure value_corrections refers to.
-            value_corrections = [{correction: d[correction]['encoded_string_frequency']} for d in value_corrections for
-                                 correction in d]
-            models_corrections = value_corrections \
-                                 + domain_corrections \
-                                 + [corrections for order in naive_vicinity_corrections for corrections in order] \
-                                 + [corrections for order in pdep_vicinity_corrections for corrections in order] \
-                                 + imputer_corrections
-        elif not self.RULE_BASED_VALUE_CLEANING and is_synth:
-            raise ValueError('It is impossible to synthesize tuples and use the meta-learner to apply value-corrections'
-                             ' at the same time. Instead, perform RULE_BASED_VALUE_CLEANING, or set n_synth_tuples=0.')
-        else:  # do rule based value cleaning.
-            models_corrections = domain_corrections \
-                                 + [corrections for order in naive_vicinity_corrections for corrections in order] \
-                                 + [corrections for order in pdep_vicinity_corrections for corrections in order] \
-                                 + imputer_corrections \
-                                 + [sbert_corrections]
-        # End Philipps Changes
-
-        corrections_features = {}
-        for mi, model in enumerate(models_corrections):
-            for correction in model:
-                if correction not in corrections_features:
-                    corrections_features[correction] = np.zeros(len(models_corrections))
-                corrections_features[correction][mi] = model[correction]
-        return corrections_features
+            if is_synth:
+                d.synth_corrections.get('imputer')[error_cell] = imputer_corrections
+            else:
+                d.corrections.get('imputer')[error_cell] = imputer_corrections
+        return ai_prompts
 
     def prepare_augmented_models(self, d):
         """
@@ -523,50 +562,43 @@ class Correction:
                 else:
                     d.imputer_models[i_col] = None
 
-        if 'sbert' in self.FEATURE_GENERATORS:
-            sbert_model = SentenceTransformer('all-MiniLM-L6-v2')  # keep model loaded
-            error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-            column_errors = error_positions.original_column_errors
-            values_in_cols = {k: [val for val, _ in v.items()] for k, v in d.domain_models.items()}
-            d.sbert_models = {}
-            for col in column_errors:
-                emb_values = sbert_model.encode(values_in_cols[col])
-                for error_cell in column_errors[col]:
-                    error_value = error_positions.detected_cells[error_cell]
-                    emb_error = sbert_model.encode(error_value)
-                    d.sbert_cos_sim[error_cell] = {values_in_cols[col][i]: float(util.cos_sim(emb_error, emb_values[i])) for i, _ in enumerate(values_in_cols[col])}
-
-
     def generate_features(self, d, synchronous):
         """
         This method generates a feature vector for each pair of a data error
         and a potential correction.
         Philipp added a `synchronous` parameter to make debugging easier.
         """
-
-        d.pair_features = {}
-        d.synth_pair_features = {}
-        pairs_counter = 0
+        ai_prompts: List[Tuple[Tuple[int, int], str, Union[str, None]]] = []
         process_args_list = [[d, cell, False] for cell in d.detected_cells]
         if not synchronous:
             pool = multiprocessing.Pool()
-            feature_generation_results = pool.map(self._feature_generator_process, process_args_list)
+            prompt_lists = pool.map(self._feature_generator_process, process_args_list)
             pool.close()
+            for l in prompt_lists:
+                ai_prompts.extend(l)
         else:
-            feature_generation_results = []
             for args in process_args_list:
-                result = self._feature_generator_process(args)
-                feature_generation_results.append(result)
+                ai_prompts.extend(self._feature_generator_process(args))
 
-        for ci, corrections_features in enumerate(feature_generation_results):
-            cell = process_args_list[ci][1]
-            d.pair_features[cell] = {}
-            for correction in corrections_features:
-                d.pair_features[cell][correction] = corrections_features[correction]
-                pairs_counter += 1
+        if len(d.labeled_tuples) == self.LABELING_BUDGET:
+            a = 1
+
+        # block for debugging llm-based cleaning
+        if len(d.labeled_tuples) == self.LABELING_BUDGET:
+            for error_cell, model_name, prompt in ai_prompts:
+                correction, token_logprobs, top_logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name)
+                correction_dicts = helpers.llm_response_to_corrections(correction, token_logprobs, top_logprobs)
+                d.corrections.get(model_name)[error_cell] = correction_dicts
+
+        # with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        #     correction_dicts = executor.map(helpers.fetch_llm, prompts)
+        # all_correction_dicts = list(correction_dicts)
+
+        # for (error_cell, model_name, prompt), correction_dict in zip(ai_prompts, all_correction_dicts):
+        #     d.corrections.get(model_name)[error_cell] = correction_dict
 
         if self.VERBOSE:
-            print("{} pairs of (a data error, a potential correction) are featurized.".format(pairs_counter))
+            print("Features generated.")
 
     def generate_synth_features(self, d, synchronous):
         """
@@ -574,14 +606,14 @@ class Correction:
         error positions, carefully avoiding additional training data that contains known errors.
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        row_errors = error_positions.updated_row_errors
+        row_errors = error_positions.updated_row_errors()
 
         # determine rows with least amount of erronous values to sample from.
         candidate_rows = [(row, len(cells)) for row, cells in row_errors.items() if
                                    len(cells) <= self.SYNTH_TUPLES_ERROR_THRESHOLD]
         ranked_candidate_rows = sorted(candidate_rows, key=lambda x: x[1])
         if self.SYNTH_TUPLES > 0 and len(ranked_candidate_rows) > 0:
-            # sample randomly to prevent sorted data to mess with synth tuple sampling.
+            # sample randomly to prevent sorted data messing up the sampling process.
             random.seed(0)
             if len(ranked_candidate_rows) <= self.SYNTH_TUPLES:
                 synthetic_error_rows = random.sample([x[0] for x in ranked_candidate_rows], len(ranked_candidate_rows))
@@ -592,24 +624,14 @@ class Correction:
 
             if not synchronous:
                 pool = multiprocessing.Pool()
-                synth_feature_generation_results = pool.map(self._feature_generator_process, synth_args_list)
+                pool.map(self._feature_generator_process, synth_args_list)
                 pool.close()
             else:
-                synth_feature_generation_results = []
                 for args in synth_args_list:
-                    result = self._feature_generator_process(args)
-                    synth_feature_generation_results.append(result)
-
-            synth_pairs_counter = 0
-            for ci, corrections_features in enumerate(synth_feature_generation_results):
-                cell = synth_args_list[ci][1]
-                d.synth_pair_features[cell] = {}
-                for correction in corrections_features:
-                    d.synth_pair_features[cell][correction] = corrections_features[correction]
-                    synth_pairs_counter += 1
+                    self._feature_generator_process(args)
 
             if self.VERBOSE:
-                print(f"{synth_pairs_counter} pairs of synthetic (error, potential correction) are featurized.")
+                print(f"Synth features generated.")
 
     def rule_based_value_cleaning(self, d):
         """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
@@ -629,85 +651,21 @@ class Correction:
 
             if rule_based_suggestion is not None:
                 d.rule_based_value_corrections[cell] = rule_based_suggestion
-
-    def multi_predict_corrections(self, d):
-        """
-        In an effort to improve cleaning performance and adapt to non-categorical problems, we model the selection
-        of cleaning suggestions as a multi-category classification task.
-        """
-        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors
-        for col in column_errors:
-            x_train, y_train, x_test, user_corrected_cells = ml_helpers.multi_generate_train_test_data(column_errors,
-                                                                                                       d.labeled_cells,
-                                                                                                       d.pair_features,
-                                                                                                       d.synth_pair_features,
-                                                                                                       d.dataframe,
-                                                                                                       col)
-            for error_cell in user_corrected_cells:
-                d.corrected_cells[error_cell] = user_corrected_cells[error_cell]
-
-            if len(x_train) > 0 and len(x_test) > 0:
-                # TODO refactor so that AG blends in better.
-                if self.CLASSIFICATION_MODEL == "AG":
-                    gs_clf = hpo.ag_predictor(np.ndarray(x_train), y_train, self.TRAINING_TIME_LIMIT)
-                    if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
-                        predicted_labels = [y_train[0] for _ in range(len(x_test))]
-                    elif len(set(y_train)) > 1:
-                        df_test = pd.DataFrame(x_test)
-                        predicted_labels = gs_clf.predict(df_test)
-                else:
-                    if self.CLASSIFICATION_MODEL == "ABC":
-                        gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-                    elif self.CLASSIFICATION_MODEL == "CV":
-                        gs_clf = hpo.cross_validated_estimator(x_train, y_train)
-                    elif self.CLASSIFICATION_MODEL == "DTC":
-                        gs_clf = sklearn.tree.DecisionTreeClassifier()
-                    elif self.CLASSIFICATION_MODEL == "LOGR":
-                        gs_clf = sklearn.linear_model.LogisticRegression(multi_class="multinomial")
-                    else:
-                        raise ValueError('Unknown model.')
-
-                    if len(set(y_train)) == 1:  # only one class in the training data, so cast all results to that class.
-                        predicted_labels = [y_train[0] for _ in range(len(x_test))]
-                    elif len(set(y_train)) > 1:
-                        gs_clf.fit(x_train, y_train)
-                        predicted_labels = gs_clf.predict(x_test)
-
-                # set final cleaning suggestion from meta-learning result. User corrected cells are not overwritten!
-                for cell, label in zip(column_errors[col], predicted_labels):
-                    d.corrected_cells[cell] = label
-
-            elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
-                for cell in d.pair_features:
-                    correction_dict = d.pair_features[cell]
-                    if len(correction_dict) > 0:
-                        # select the correction with the highest sum of features.
-                        max_proba_feature = \
-                            sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
-                        d.corrected_cells[cell] = max_proba_feature[0]
-
-            elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
-                pass  # nothing to do here -- just use the manually corrected cells to correct all errors.
-
-            elif len(x_train) == 0:
-                pass  # nothing to learn because x_train is empty.
-            else:
-                raise ValueError('Invalid state')
-
         if self.VERBOSE:
-            print("{:.0f}% ({} / {}) of data errors are corrected.".format(
-                100 * len(d.corrected_cells) / len(d.detected_cells),
-                len(d.corrected_cells), len(d.detected_cells)))
+            print('Rule-based cleaning finished.')
 
     def binary_predict_corrections(self, d):
         """
         The ML problem as formulated in the Baran paper.
         """
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors
+        column_errors = error_positions.original_column_errors()
+        pair_features = d.corrections.assemble_pair_features()
+        synth_pair_features = d.synth_corrections.assemble_pair_features()
         for j in column_errors:
             score = ml_helpers.test_synth_data(d,
+                                               pair_features,
+                                               synth_pair_features,
                                                self.CLASSIFICATION_MODEL,
                                                j,
                                                column_errors,
@@ -718,20 +676,21 @@ class Correction:
                 x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
                     column_errors,
                     d.labeled_cells,
-                    d.pair_features,
+                    pair_features,
                     d.dataframe,
-                    d.synth_pair_features,
+                    synth_pair_features,
                     j)
             else:  # score is below threshold, don't use additional training data
                 x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
                     column_errors,
                     d.labeled_cells,
-                    d.pair_features,
+                    pair_features,
                     d.dataframe,
                     {},
                     j)
 
-            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
+            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(pair_features, x_train, x_test, y_train, d)
+
             if is_valid_problem:
                 if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
                     gs_clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
@@ -745,41 +704,8 @@ class Correction:
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
 
-
-        if self.VERBOSE:
-            print("{:.0f}% ({} / {}) of data errors are corrected.".format(
-                100 * len(d.corrected_cells) / len(d.detected_cells),
-                len(d.corrected_cells), len(d.detected_cells)))
-
-    def voting_binary_predict_corrections(self, d):
-        """
-        Train two binary classifiers. One with synth_tuples, the other without. Combine them via a voting ensemble
-        that sums up the class probabilities of both models.
-        """
-        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
-        column_errors = error_positions.original_column_errors
-        for j in column_errors:
-            classifiers = []
-            train_test_data = [
-                ml_helpers.generate_train_test_data(column_errors, d.labeled_cells, d.pair_features, d.dataframe, synth,
-                                                    j) for synth in ([], d.synth_pair_features)]
-
-            valid_problems = 0
-            for (x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions) in train_test_data:
-                is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d)
-                if is_valid_problem:
-                    valid_problems += 1
-                    clf = sklearn.ensemble.AdaBoostClassifier(n_estimators=100)
-                    clf.fit(x_train, y_train)
-                    classifiers.append(clf)
-
-            if valid_problems == 2:  # both problems need to be valid
-                est = [('no synth', classifiers[0]), ['synth', classifiers[1]]]
-                ensemble = ml_helpers.VotingClassifier(est)
-                predicted_labels = ensemble.predict(np.stack(x_test, axis=0))
-
-            ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions,
-                                                       user_corrected_cells, d)
+            if len(d.labeled_tuples) == self.LABELING_BUDGET and j == 8:
+                a = 1
 
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(
@@ -834,9 +760,7 @@ class Correction:
             self.generate_synth_features(d, synchronous=True)
             if self.RULE_BASED_VALUE_CLEANING:
                 self.rule_based_value_cleaning(d)
-            # self.voting_binary_predict_corrections(d)
             self.binary_predict_corrections(d)
-            # self.multi_predict_corrections(d)
             if self.RULE_BASED_VALUE_CLEANING:
                 # write the rule-based value corrections into the corrections dictionary. This overwrites
                 # results for domain & vicinity features. The idea is that the rule-based value
@@ -859,17 +783,18 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "beers"
+    dataset_name = "hospital"
     version = 1
     error_fraction = 1
     error_class = 'simple_mcar'
 
-    synth_tuples = 0
+    synth_tuples = 20
     synth_cleaning_threshold = 1.33
     test_synth_data_direction = 'user_data'
-    feature_generators = ['domain', 'vicinity', 'value',]
+    # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
+    feature_generators = ['vicinity', 'domain', 'llm_value']
     imputer_cache_model = False
-    clean_with_user_input = False
+    clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
     labeling_budget = 20
     n_best_pdeps = 3
     n_rows = None
@@ -877,8 +802,8 @@ if __name__ == "__main__":
     synth_tuples_error_threshold = 0
     training_time_limit = 30
     vicinity_feature_generator = "pdep"
-    # pdep_features = ['pr', 'vote', 'pdep', 'gpdep']
-    pdep_features = []
+    # pdep_features = ('pr', 'vote', 'pdep', 'gpdep')
+    pdep_features = ['pr']
     vicinity_orders = [1, 2]
 
     # Load Dataset object

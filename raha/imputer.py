@@ -134,8 +134,7 @@ def imputation_based_corrector(df: pd.DataFrame,
 
 def get_clean_table(df: pd.DataFrame, detected_cells: dict, user_input: pd.DataFrame) -> pd.DataFrame:
     """
-    Returns the biggest subset of a dataframe that doesn't contain any errors.
-    TODO: Ist es interessant, den userinput in den trainingsdaten stärker zu gewichten als die anderen Tupel?
+    Returns the subset of a dataframe that doesn't contain any errors.
 
     @param df: The typed dataframe to be cleaned, containing errors.
     @param detected_cells: Baran standard way of storing information on cells with errors.

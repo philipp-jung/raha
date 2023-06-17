@@ -10,3 +10,6 @@ raha/__pycache__/
 */datawigModels/
 */AutogluonModels
 **/.env
+
+# LLM sqlite-cache
+raha/cache.db
