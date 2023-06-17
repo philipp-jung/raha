@@ -1,3 +1,4 @@
+import os
 import json
 import time
 import random
@@ -9,9 +10,10 @@ from collections import defaultdict
 
 import openai
 import pandas as pd
-from openai_key import key
+import dotenv
 
-openai.api_key = key
+dotenv.load_dotenv()
+openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 
 def get_data_dict(
@@ -296,6 +298,10 @@ def fetch_llm(prompt: str, dataset: str, error_cell: Tuple[int, int], correction
             print(f"Rate limit exceeded, retrying in {delay} seconds.")
             time.sleep(delay)
             retries += 1
+        except openai.error.AuthenticationError:
+            print(f'Tried sending {correction_model_name} prompt to OpenAI to correct cell {error_cell}.')
+            print('However, there is no authentication provided in the .env file. Returning no corrections.')
+            return {}, {}, {}
 
     row, column = error_cell
     conn = connect_to_cache()
