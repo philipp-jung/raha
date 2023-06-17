@@ -68,7 +68,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-04-25-pdep-ensembling"
+    experiment_name = "2023-06-17-llm_value"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -105,7 +105,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": False,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["vicinity", "llm_value", "domain", "imputer"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -114,20 +114,11 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": "V5",
             "synth_cleaning_threshold": 0.9,
             "test_synth_data_direction": "user_data",
-            "pdep_features": ['pr', 'vote'],
+            "pdep_features": ['pr'],
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "pdep_features": [
-                    ['pr'],
-                    ['pdep'],
-                    ['gpdep'],
-                    ['pr', 'vote'],
-                    ['pr', 'pdep'],
-                    ['pr', 'gpdep'],
-                    ['pdep', 'gpdep'],
-                    ['pr', 'pdep', 'gpdep'],
-                ]
+            "synth_cleaning_threshold": [1.33, 0.9, 0.5],
         },
         runs=3,
         save_path=save_path,
@@ -135,94 +126,94 @@ if __name__ == "__main__":
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    rsk_openml = Ruska(
-        name=f"{experiment_name}-openml",
-        description="Benchmark pdep ensembling.",
-        commit="",
-        config={
-            "dataset": "1481",
-            "error_class": "simple_mcar",
-            "error_fraction": 1,
-            "labeling_budget": 20,
-            "synth_tuples": 100,
-            "synth_tuples_error_threshold": 0,
-            "imputer_cache_model": False,
-            "clean_with_user_input": False,
-            "training_time_limit": 30,
-            "feature_generators": ["vicinity"],
-            "classification_model": "ABC",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V5",
-            "synth_cleaning_threshold": 0.9,
-            "test_synth_data_direction": "user_data",
-            "pdep_features": ['pr', 'vote'],
-        },
-        ranges={
-            "dataset": [137, 1481, 184, 41027],
-            "pdep_features": [
-                    ['pr'],
-                    ['pdep'],
-                    ['gpdep'],
-                    ['pr', 'vote'],
-                    ['pr', 'pdep'],
-                    ['pr', 'gpdep'],
-                    ['pdep', 'gpdep'],
-                    ['pr', 'pdep', 'gpdep'],
-                ]
-        },
-        runs=3,
-        save_path=save_path,
-        chat_id=os.environ["TELEGRAM_CHAT_ID"],
-        token=os.environ["TELEGRAM_BOT_TOKEN"],
-    )
+    # rsk_openml = Ruska(
+    #     name=f"{experiment_name}-openml",
+    #     description="Benchmark pdep ensembling.",
+    #     commit="",
+    #     config={
+    #         "dataset": "1481",
+    #         "error_class": "simple_mcar",
+    #         "error_fraction": 1,
+    #         "labeling_budget": 20,
+    #         "synth_tuples": 100,
+    #         "synth_tuples_error_threshold": 0,
+    #         "imputer_cache_model": False,
+    #         "clean_with_user_input": False,
+    #         "training_time_limit": 30,
+    #         "feature_generators": ["vicinity"],
+    #         "classification_model": "ABC",
+    #         "vicinity_orders": [1, 2],
+    #         "vicinity_feature_generator": "pdep",
+    #         "n_rows": None,
+    #         "n_best_pdeps": 3,
+    #         "rule_based_value_cleaning": "V5",
+    #         "synth_cleaning_threshold": 0.9,
+    #         "test_synth_data_direction": "user_data",
+    #         "pdep_features": ['pr', 'vote'],
+    #     },
+    #     ranges={
+    #         "dataset": [137, 1481, 184, 41027],
+    #         "pdep_features": [
+    #                 ['pr'],
+    #                 ['pdep'],
+    #                 ['gpdep'],
+    #                 ['pr', 'vote'],
+    #                 ['pr', 'pdep'],
+    #                 ['pr', 'gpdep'],
+    #                 ['pdep', 'gpdep'],
+    #                 ['pr', 'pdep', 'gpdep'],
+    #             ]
+    #     },
+    #     runs=3,
+    #     save_path=save_path,
+    #     chat_id=os.environ["TELEGRAM_CHAT_ID"],
+    #     token=os.environ["TELEGRAM_BOT_TOKEN"],
+    # )
 
-    rsk_renuver = Ruska(
-        name=f"{experiment_name}-renuver",
-        description="Benchmark vicinity ensembling",
-        commit="",
-        config={
-            "dataset": "1481",
-            "error_class": "simple_mcar",
-            "error_fraction": 1,
-            "labeling_budget": 20,
-            "synth_tuples": 100,
-            "synth_tuples_error_threshold": 0,
-            "imputer_cache_model": False,
-            "clean_with_user_input": False,
-            "training_time_limit": 30,
-            "feature_generators": ["vicinity"],
-            "classification_model": "ABC",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V5",
-            "synth_cleaning_threshold": 0.9,
-            "test_synth_data_direction": "user_data",
-            "pdep_features": ['pr', 'vote'],
-        },
-        ranges={
-            "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
-            "pdep_features": [
-                    ['pr'],
-                    ['pdep'],
-                    ['gpdep'],
-                    ['pr', 'vote'],
-                    ['pr', 'pdep'],
-                    ['pr', 'gpdep'],
-                    ['pdep', 'gpdep'],
-                    ['pr', 'pdep', 'gpdep'],
-                ]
-        },
-        runs=3,
-        save_path=save_path,
-        chat_id=os.environ["TELEGRAM_CHAT_ID"],
-        token=os.environ["TELEGRAM_BOT_TOKEN"],
-    )
+    # rsk_renuver = Ruska(
+    #     name=f"{experiment_name}-renuver",
+    #     description="Benchmark vicinity ensembling",
+    #     commit="",
+    #     config={
+    #         "dataset": "1481",
+    #         "error_class": "simple_mcar",
+    #         "error_fraction": 1,
+    #         "labeling_budget": 20,
+    #         "synth_tuples": 100,
+    #         "synth_tuples_error_threshold": 0,
+    #         "imputer_cache_model": False,
+    #         "clean_with_user_input": False,
+    #         "training_time_limit": 30,
+    #         "feature_generators": ["vicinity"],
+    #         "classification_model": "ABC",
+    #         "vicinity_orders": [1, 2],
+    #         "vicinity_feature_generator": "pdep",
+    #         "n_rows": None,
+    #         "n_best_pdeps": 3,
+    #         "rule_based_value_cleaning": "V5",
+    #         "synth_cleaning_threshold": 0.9,
+    #         "test_synth_data_direction": "user_data",
+    #         "pdep_features": ['pr', 'vote'],
+    #     },
+    #     ranges={
+    #         "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
+    #         "pdep_features": [
+    #                 ['pr'],
+    #                 ['pdep'],
+    #                 ['gpdep'],
+    #                 ['pr', 'vote'],
+    #                 ['pr', 'pdep'],
+    #                 ['pr', 'gpdep'],
+    #                 ['pdep', 'gpdep'],
+    #                 ['pr', 'pdep', 'gpdep'],
+    #             ]
+    #     },
+    #     runs=3,
+    #     save_path=save_path,
+    #     chat_id=os.environ["TELEGRAM_CHAT_ID"],
+    #     token=os.environ["TELEGRAM_BOT_TOKEN"],
+    # )
 
     rsk_baran.run(experiment=run_baran, parallel=False)
-    rsk_openml.run(experiment=run_baran, parallel=True)
-    rsk_renuver.run(experiment=run_baran, parallel=True)
+    # rsk_openml.run(experiment=run_baran, parallel=True)
+    # rsk_renuver.run(experiment=run_baran, parallel=True)

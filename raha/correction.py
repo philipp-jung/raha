@@ -73,10 +73,10 @@ class Correction:
         @param synth_tuples: maximum number of tuples to synthesize training data with.
         @param synth_tuples_error_threshold: maximum number of errors in a row that is used to synthesize tuples.
         noise in the training data.
-        @param synth_cleaning_threshold: Threshold for column-cleaning to pass in order to leverage synth-data. Deactivates
-        if set to -1.
+        @param synth_cleaning_threshold: Threshold for column-cleaning to pass in order to leverage synth-data.
+        Deactivates if set to -1.
         @param test_synth_data_direction: Direction in which the synth data's usefulness for cleaning is being tested.
-        Set either to 'user_data' to clean user-data with synth-data. Or 'synth_data" to clean synth-data with
+        Set either to 'user_data' to clean user-data with synth-data. Or 'synth_data' to clean synth-data with
         user-inputs.
         @param pdep_features: List of features the pdep-feature-generator will return. Can be
         'pr' for conditional probability, 'vote' for how many FDs suggest the correction, 'pdep' for the
@@ -589,13 +589,6 @@ class Correction:
                 correction, token_logprobs, top_logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name)
                 correction_dicts = helpers.llm_response_to_corrections(correction, token_logprobs, top_logprobs)
                 d.corrections.get(model_name)[error_cell] = correction_dicts
-
-        # with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        #     correction_dicts = executor.map(helpers.fetch_llm, prompts)
-        # all_correction_dicts = list(correction_dicts)
-
-        # for (error_cell, model_name, prompt), correction_dict in zip(ai_prompts, all_correction_dicts):
-        #     d.corrections.get(model_name)[error_cell] = correction_dict
 
         if self.VERBOSE:
             print("Features generated.")
