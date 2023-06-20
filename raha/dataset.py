@@ -25,44 +25,105 @@ class Dataset:
     The dataset class.
     """
 
-    def __init__(self, dataset_dictionary, n_rows=None):
+    def __init__(self,
+                 dataset_name: str,
+                 error_fraction: Union[None, int] = None,
+                 version: Union[None, int] = None,
+                 error_class: Union[None, str] = None,
+                 n_rows: Union[None, int] = None):
         """
-        The constructor creates a dataset.
+        I currently use four different sources of datasets: the original Baran paper, the RENUVER paper, datasets that
+        I assemble from OpenML, and hand-selected datasets from the UCI website. Depending on the source, the datasets
+        differ:
+        - Datasets from the Baran paper are uniquely identified by their name.
+        - Datasets from the RENUVER paper are uniquely identified by their name, error_fraction and version in [1, 5].
+        - Datasets that I generate from OpenML are identified by their name and error_fraction.
+        - Datasets that I generate from UCI are identified by their name and error_fraction.
 
-        If n_rows is specified, the dataset gets subsetted to the first
-        n_rows rows.
+        Whenever possible, uses datasets that contain dtype information, stored as .parquet, which is beneficial for
+        the imputer feature generator.
+
+        @param dataset_name: Name of the dataset.
+        @param error_fraction: Baran datasets don't have this. The % of cells containing errors in RENUVER datasets and
+        the Ruska-corrupted datasets. The % of values in a column in OpenML datasets. Value between 0 - 100.
+        @param version: generating errors in Jenga is not deterministic. So it makes sense to create a couple of
+        versions to avoid outlier corruptions.
+        @param error_class: Strategy according to which an error has been created. Only applies to OpenML datasets.
+        @param n_rows: If n_rows is specified, the dataset gets subsetted to the first n_rows rows.
         """
-        self.name = dataset_dictionary["name"]
-        self.path = dataset_dictionary["path"]
-        self.dataframe = self.read_csv_dataset(dataset_dictionary["path"])
-        if dataset_dictionary.get('parquet_path') is not None:
-            self.typed_dataframe = self.read_parquet_dataset(dataset_dictionary.get('parquet_path'))
-        else:  # no .parquet with typed data available. fall back to .csv file.
-            self.typed_dataframe = self.dataframe
+        self.repaired_dataframe = None  # to be assigned after cleaning suggestions were applied.
+        self.error_fraction = None
+        self.version = None
+        self.error_class = None
+
+        openml_dataset_ids = ["725", "310", "1046", "823", "137", "42493", "4135", "251", "151", "40922", "40498", "30", "1459", "1481", "184", "375", "32", "41027", "6", "40685"]
+        renuver_dataset_ids = ["bridges", "cars", "glass", "restaurant"]
+        baran_dataset_ids = ["beers", "flights", "hospital", "tax", "rayyan", "toy", "debug", "synth-debug"]
+        uci_dataset_ids = ["adult", "breast-cancer", "letter", "nursery"]
+
+        if dataset_name in baran_dataset_ids:
+            self.path = f"../datasets/{dataset_name}/dirty.csv"
+            self.clean_path = f"../datasets/{dataset_name}/clean.csv"
+            self.parquet_path = self.path  # no parquet file is available.
+            self.typed_clean_path = self.clean_path  # no parquet file is available.
+
+            # Baran datasets do not have these parameters. Important to remove them for LLM caching.
+            self.name = dataset_name
+
+        elif dataset_name in renuver_dataset_ids:
+            self.path = f"../datasets/renuver/{dataset_name}/{dataset_name}_{error_fraction}_{version}.csv"
+            self.clean_path = f"../datasets/renuver/{dataset_name}/clean.csv"
+            self.parquet_path = self.path  # no parquet file is available.
+            self.typed_clean_path = self.clean_path  # no parquet file is available.
+
+            self.name = dataset_name
+            self.error_fraction = error_fraction
+            self.version = version
+
+        elif dataset_name in openml_dataset_ids:
+            if error_class is None:
+                raise ValueError('Please specify the error class with which the openml dataset has been corrupted.')
+            self.path = f"../datasets/openml/{dataset_name}/{error_class}_{error_fraction}.csv"
+            self.parquet_path = f"../datasets/openml/{dataset_name}/{error_class}_{error_fraction}.parquet"
+            self.clean_path = f"../datasets/openml/{dataset_name}/clean.csv"
+            self.typed_clean_path = os.path.splitext(self.clean_path)[0] + '.parquet'
+
+            self.name = dataset_name
+            self.error_class = error_class
+            self.error_fraction = error_fraction
+
+        elif dataset_name in uci_dataset_ids:
+            self.path = f"../datasets/{dataset_name}/MCAR/dirty_{error_fraction}.csv"
+            self.clean_path = f"../datasets/{dataset_name}/clean.csv"
+            self.parquet_path = self.path  # no parquet file is available.
+            self.typed_clean_path = self.clean_path  # no parquet file is available.
+
+            self.name = dataset_name
+            self.error_fraction = error_fraction
+
+        else:
+            raise ValueError(f'Dataset with name {dataset_name} is not known. Please add it to the config '
+                             f'in dataset.py.')
+
+        self.dataframe = self.read_csv_dataset(self.path)
+        self.clean_dataframe = self.read_csv_dataset(self.clean_path)
+
+        if self.parquet_path.endswith('.parquet'):
+            self.typed_dataframe = self.read_parquet_dataset(self.parquet_path)
+        else:  # if typed .parquet file is unavailable, fall back to .csv file.
+            self.typed_dataframe = self.read_csv_dataset(self.parquet_path)
+
+        if self.typed_clean_path.endswith('.parquet'):
+            self.typed_clean_dataframe = self.read_parquet_dataset(self.typed_clean_path)
+        else:  # if typed .parquet file is unavailable, fall back to .csv file.
+            self.typed_clean_dataframe = self.read_csv_dataset(self.typed_clean_path)
+
         if n_rows is not None:
             self.dataframe = self.dataframe.iloc[:n_rows, :]
-        if "clean_path" in dataset_dictionary:
-            self.has_ground_truth = True
-            self.clean_path = dataset_dictionary["clean_path"]
-            self.clean_dataframe = self.read_csv_dataset(dataset_dictionary["clean_path"])
-            if n_rows is not None:
-                self.clean_dataframe = self.clean_dataframe.iloc[:n_rows, :]
-            typed_clean_path = os.path.splitext(dataset_dictionary['clean_path'])[0] + '.parquet'
-            if os.path.exists(typed_clean_path):
-                self.typed_clean_dataframe = self.read_parquet_dataset(typed_clean_path)
-                if n_rows is not None:
-                    self.typed_clean_dataframe = self.typed_clean_dataframe.iloc[:n_rows, :]
-            else:  # no .parquet with typed dataframe available. fall back to .csv file.
-                self.typed_clean_dataframe = self.clean_dataframe
-                if n_rows is not None:
-                    self.typed_clean_dataframe = self.typed_clean_dataframe.iloc[:n_rows, :]
+            self.clean_dataframe = self.clean_dataframe.iloc[:n_rows, :]
+            self.typed_dataframe = self.typed_dataframe.iloc[:n_rows, :]
+            self.typed_clean_dataframe = self.typed_clean_dataframe.iloc[:n_rows, :]
 
-        if "repaired_path" in dataset_dictionary:
-            self.has_been_repaired = True
-            self.repaired_path = dataset_dictionary["repaired_path"]
-            self.repaired_dataframe = self.read_csv_dataset(dataset_dictionary["repaired_path"])
-            if n_rows is not None:
-                self.repaired_dataframe = self.repaired_dataframe.iloc[:n_rows, :]
 
     @staticmethod
     def value_normalizer(value):
@@ -74,7 +135,8 @@ class Dataset:
         value = value.strip("\t\n ")
         return value
 
-    def read_parquet_dataset(self, dataset_path: Union[str, None]):
+    @staticmethod
+    def read_parquet_dataset(dataset_path: Union[str, None]):
         """
         This method reads a dataset from a parquet file path. This is nice for the imputer because
         parquet preserves dtypes.
@@ -186,11 +248,6 @@ class Dataset:
 
 ########################################
 if __name__ == "__main__":
-    dataset_dict = {
-        "name": "toy",
-        "path": "datasets/dirty.csv",
-        "clean_path": "datasets/clean.csv"
-    }
-    d = Dataset(dataset_dict)
+    d = Dataset('toy')
     print(d.get_data_quality())
 ########################################

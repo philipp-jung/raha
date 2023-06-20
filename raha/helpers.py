@@ -16,103 +16,6 @@ dotenv.load_dotenv()
 openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 
-def get_data_dict(
-    dataset_name: Union[str, int],
-    error_fraction: Union[int, None] = None,
-    version: Union[int, None] = None,
-    error_class: Union[str, None] = None
-) -> Dict:
-    """
-    I currently use four different sources of datasets: the original Baran paper, the RENUVER paper, datasets that
-    I assemble from OpenML, and hand-selected datasets from the UCI website. Depending on the source, the datasets
-    differ:
-    - Datasets from the Baran paper are uniquely identified by their name.
-    - Datasets from the RENUVER paper are uniquely identified by their name, error_fraction and version in [1, 5].
-    - Datasets that I generate from OpenML are identified by their name and error_fraction.
-    - Datasets that I generate from UCI are identified by their name and error_fraction.
-    @param dataset_name: Name of the dataset.
-    @param error_fraction: Baran datasets don't have this. The % of cells containing errors in RENUVER datasets and the
-    Ruska-corrupted datasets. The % of values in a column in OpenML datasets. Value between 0 - 100.
-    @param version: generating errors in Jenga is not deterministic. So it makes sense to create a couple of versions
-    to avoid outlier corruptions.
-    @return: A data dictionary as expected by Baran. I hacked this to make the imputer feature generator use a version
-    of the dataset that comes with dtypes.
-    """
-    dataset_name = str(dataset_name)
-    openml_dataset_ids = [
-        725,
-        310,
-        1046,
-        823,
-        137,
-        42493,
-        4135,
-        251,
-        151,
-        40922,
-        40498,
-        30,
-        1459,
-        1481,
-        184,
-        375,
-        32,
-        41027,
-        6,
-        40685,
-    ]
-    openml_dataset_ids = [str(x) for x in openml_dataset_ids]
-
-    if dataset_name in ["bridges", "cars", "glass", "restaurant"]:  # renuver dataset
-        data_dict = {
-            "name": dataset_name,
-            "path": f"../datasets/renuver/{dataset_name}/{dataset_name}_{error_fraction}_{version}.csv",
-            "clean_path": f"../datasets/renuver/{dataset_name}/clean.csv",
-        }
-
-    elif dataset_name in [
-        "beers",
-        "flights",
-        "hospital",
-        "tax",
-        "rayyan",
-        "toy",
-        "debug",
-        "synth-debug"
-    ]:  # Baran dataset
-        data_dict = {
-            "name": dataset_name,
-            "path": f"../datasets/{dataset_name}/dirty.csv",
-            "clean_path": f"../datasets/{dataset_name}/clean.csv",
-        }
-
-    elif dataset_name in openml_dataset_ids:  # OpenML dataset
-        if error_class is None:
-            raise ValueError('Please specify the error class with which the openml dataset has been corrupted.')
-        data_dict = {
-            "name": dataset_name,
-            "path": f"../datasets/openml/{dataset_name}/{error_class}_{error_fraction}.csv",
-            "parquet_path": f"../datasets/openml/{dataset_name}/{error_class}_{error_fraction}.parquet",
-            "clean_path": f"../datasets/openml/{dataset_name}/clean.csv",
-        }
-
-    elif dataset_name in [
-        "adult",
-        "breast-cancer",
-        "letter",
-        "nursery",
-    ]:  # ruska-corrupted datasets
-        data_dict = {
-            "name": dataset_name,
-            "path": f"../datasets/{dataset_name}/MCAR/dirty_{error_fraction}.csv",
-            "clean_path": f"../datasets/{dataset_name}/clean.csv",
-        }
-
-    else:
-        raise ValueError("Dataset not supported.")
-    return data_dict
-
-
 def assemble_cleaning_suggestion(
     transformation_string: str, model_name: str, old_value: str
 ) -> Union[str, None]:
@@ -238,7 +141,13 @@ def connect_to_cache() -> sqlite3.Connection:
     return conn
 
 
-def fetch_cached_llm(dataset: str, error_cell: Tuple[int, int], prompt: str, correction_model_name: str) -> Tuple[dict, dict, dict]:
+def fetch_cached_llm(dataset: str,
+                     error_cell: Tuple[int,int],
+                     prompt: str,
+                     correction_model_name: str,
+                     error_fraction: Union[None, int] = None,
+                     version: Union[None, int] = None,
+                     error_class: Union[None, str] = None) -> Tuple[dict, dict, dict]:
     """
     Sending requests to LLMs is expensive (time & money). We use caching to mitigate that cost. As primary key for
     a correction serves (dataset_name, error_cell, correction_model_name). This is imperfect, but a reasonable
@@ -251,26 +160,62 @@ def fetch_cached_llm(dataset: str, error_cell: Tuple[int, int], prompt: str, cor
     @param error_cell: (row, column) position of the error.
     @param prompt: prompt that is sent to the LLM.
     @param correction_model_name: "llm_vicinity" or "llm_value".
+    @param error_fraction: Fraction of errors in the dataset.
+    @param version: Version of the dataset. See dataset.py for details.
+    @param error_class: Class of the error, e.g. MCAR
     @return: correction_tokens, token_logprobs, and top_logprobs.
     """
+    dataset_name = dataset
+
     conn = connect_to_cache()
     cursor = conn.cursor()
-    cursor.execute("""SELECT
-                        correction_tokens,
-                        token_logprobs,
-                        top_logprobs
-                      FROM cache
-                      WHERE dataset=? AND row=? AND column=? AND correction_model=?""",
-                   (dataset, error_cell[0], error_cell[1], correction_model_name))
+    query = f"""SELECT
+                 correction_tokens,
+                 token_logprobs,
+                 top_logprobs
+               FROM cache
+               WHERE
+                 dataset=?
+                 AND row=?
+                 AND column=?
+                 AND correction_model=?"""
+    parameters = [dataset_name, error_cell[0], error_cell[1], correction_model_name]
+    # Add conditions for optional parameters
+    if error_fraction is not None:
+        query += f" AND error_fraction=?"
+        parameters.append(error_fraction)
+    else:
+        query += " AND error_fraction IS NULL"
+
+    if version is not None:
+        query += " AND version=?"
+        parameters.append(version)
+    else:
+        query += " AND version IS NULL"
+
+    if error_class is not None:
+        query += f" AND error_class={error_class}"
+        parameters.append(error_class)
+    else:
+        query += " AND error_class IS NULL"
+
+    cursor.execute(query, tuple(parameters))
     result = cursor.fetchone()
     conn.close()
     if result is not None:
         return json.loads(result[0]), json.loads(result[1]), json.loads(result[2])  # access the correction
     else:
-        return fetch_llm(prompt, dataset, error_cell, correction_model_name)
+        return fetch_llm(prompt, dataset, error_cell, correction_model_name, error_fraction, version, error_class)
 
 
-def fetch_llm(prompt: str, dataset: str, error_cell: Tuple[int, int], correction_model_name: str) -> Tuple[dict, dict, dict]:
+def fetch_llm(prompt: str,
+              dataset: str,
+              error_cell: Tuple[int, int],
+              correction_model_name: str,
+              error_fraction: Union[None, int] = None,
+              version: Union[None, int] = None,
+              error_class: Union[None, str] = None
+              ) -> Tuple[dict, dict, dict]:
     """
     Send request to openai to get a prompt resolved. Write result into cache.
     """
@@ -308,9 +253,9 @@ def fetch_llm(prompt: str, dataset: str, error_cell: Tuple[int, int], correction
     cursor = conn.cursor()
     cursor.execute(
         """INSERT INTO cache
-               (dataset, row, column, correction_model, correction_tokens, token_logprobs, top_logprobs)
-                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (dataset, row, column, correction_model_name, json.dumps(correction_tokens), json.dumps(token_logprobs), json.dumps(top_logprobs))
+               (dataset, row, column, correction_model, correction_tokens, token_logprobs, top_logprobs, error_fraction, version, error_class)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (dataset, row, column, correction_model_name, json.dumps(correction_tokens), json.dumps(token_logprobs), json.dumps(top_logprobs), error_fraction, version, error_class)
     )
     conn.commit()
     conn.close()
@@ -361,6 +306,6 @@ def error_free_row_to_prompt(df: pd.DataFrame, row: int, column: int) -> Tuple[s
     """
     values = df.iloc[row, :].values
     row_values = [f"{x}," if i != column else "<Error>," for i, x in enumerate(values)]
-    row = ''.join(row_values)[:-1]
+    assembled_row_values = ''.join(row_values)[:-1]
     correction = df.iloc[row, column]
-    return row, correction
+    return assembled_row_values, correction

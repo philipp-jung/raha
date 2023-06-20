@@ -496,14 +496,16 @@ class Correction:
             error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
             row_errors = error_positions.updated_row_errors()
             rows_without_errors = [i for i in range(d.dataframe.shape[0]) if len(row_errors[i]) == 0]
-            if len(rows_without_errors) >= 2:
-                rows = random.sample(rows_without_errors, 2)
-                prompt = "You are a data cleaning machine that detects patterns to return a correction. If you do not find a correction, you return the token <NULL>. You always follow the example.\n---\n"
+            if len(rows_without_errors) >= 3:
+                prompt = "You are a data cleaning machine that returns a correction, which is a single expression. If "\
+                         "you do not find a correction, return the token <NULL>. You always follow the example.\n---\n"
+                n_pairs = min(5, len(rows_without_errors))
+                rows = random.sample(rows_without_errors, n_pairs)
                 for row in rows:
                     row_as_string, correction = helpers.error_free_row_to_prompt(d.dataframe, row, error_dictionary['column'])
-                    prompt = prompt + row_as_string + '\n' + f'correction: {correction}' + '\n'
+                    prompt = prompt + row_as_string + '\n' + f'correction:{correction}' + '\n'
                 final_row_as_string, _ = helpers.error_free_row_to_prompt(d.dataframe, error_dictionary['row'], error_dictionary['column'])
-                prompt = prompt + final_row_as_string + '\n' + 'correction: '
+                prompt = prompt + final_row_as_string + '\n' + 'correction:'
                 ai_prompts.append((error_cell, 'llm_vicinity', prompt))
 
         if "domain" in self.FEATURE_GENERATORS:
@@ -581,7 +583,7 @@ class Correction:
         # block for debugging llm-based cleaning
         if len(d.labeled_tuples) == self.LABELING_BUDGET:
             for error_cell, model_name, prompt in ai_prompts:
-                correction, token_logprobs, top_logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name)
+                correction, token_logprobs, top_logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name, d.error_fraction, d.version)
                 correction_dicts = helpers.llm_response_to_corrections(correction, token_logprobs, top_logprobs)
                 d.corrections.get(model_name)[error_cell] = correction_dicts
 
@@ -771,21 +773,21 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "flights"
+    dataset_name = "hospital"
     version = 1
-    error_fraction = 1
+    error_fraction = 3
     error_class = 'simple_mcar'
 
     synth_tuples = 20
     synth_cleaning_threshold = 1.33
     test_synth_data_direction = 'user_data'
     # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
-    feature_generators = ['vicinity', 'imputer']
+    feature_generators = ['domain', 'vicinity', 'llm_value', 'llm_vicinity']
     imputer_cache_model = True
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
     labeling_budget = 20
     n_best_pdeps = 3
-    n_rows = 200
+    n_rows = None
     rule_based_value_cleaning = 'V5'
     synth_tuples_error_threshold = 0
     training_time_limit = 30
@@ -794,11 +796,8 @@ if __name__ == "__main__":
     pdep_features = ['pr']
     vicinity_orders = [1, 2]
 
-    # Load Dataset object
-    data_dict = helpers.get_data_dict(dataset_name, error_fraction, version, error_class)
-
     # Set this parameter to keep runtimes low when debugging
-    data = raha.dataset.Dataset(data_dict, n_rows=n_rows)
+    data = raha.dataset.Dataset(dataset_name, error_fraction, version, error_class, n_rows)
     data.detected_cells = data.get_errors_dictionary()
 
     app = Correction(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
