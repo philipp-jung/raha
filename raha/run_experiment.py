@@ -19,19 +19,9 @@ def run_baran(i: int, c: dict):
     logger.info(f"Started experiment {i}.")
     logger.debug(f"Started experiment {i} with config {c}.")
     version = c["run"] + 1  # dataset versions are 1-indexed, Ruska runs are 0-indexed.
-    data_dict = raha.helpers.get_data_dict(
-        c["dataset"], c["error_fraction"], version, c["error_class"]
-    )
 
     try:
-        version = (
-            c["run"] + 1
-        )  # dataset versions are 1-indexed, Ruska runs are 0-indexed.
-        data_dict = raha.helpers.get_data_dict(
-            c["dataset"], c["error_fraction"], version, c["error_class"]
-        )
-
-        data = raha.Dataset(data_dict, n_rows=c["n_rows"])
+        data = raha.Dataset(c['dataset'], c['error_fraction'], version, c['error_class'], c["n_rows"])
         data.detected_cells = data.get_errors_dictionary()
 
         app = raha.Correction(
