@@ -390,7 +390,7 @@ class Correction:
                 update_dictionary["vicinity"] = [cv if column != cj and d.labeled_cells[(d.sampled_tuple, cj)][0] == 1
                                                  else self.IGNORE_SIGN for cj, cv in enumerate(cleaned_sampled_tuple)]
 
-        # TODO das hier stelle ich erstmal aus, weil es auf rayyan die Korrekturen kaputtmacht.
+        # TODO bug fixen. Macht auf rayyan die Korrekturen kaputt.
         # BEGIN Philipp's changes
         # if 'vicinity' in self.FEATURE_GENERATORS:
         #     for o in self.VICINITY_ORDERS:
@@ -741,10 +741,16 @@ class Correction:
                   "------------------------------------------------------------------------")
         self.initialize_models(d)
 
+        if self.LABELING_BUDGET == 0:
+            self.prepare_augmented_models(d)
+            self.generate_features(d, synchronous=True)
+            self.generate_synth_features(d, synchronous=True)
+            self.binary_predict_corrections(d)
+
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
             self.sample_tuple(d, random_seed=random_seed)
             self.label_with_ground_truth(d)
-            self.update_models(d)
+            # self.update_models(d)
             self.prepare_augmented_models(d)
             self.generate_features(d, synchronous=True)
             self.generate_synth_features(d, synchronous=True)
@@ -773,16 +779,16 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "hospital"
-    version = 1
+    dataset_name = "restaurant"
+    version = 2
     error_fraction = 3
     error_class = 'simple_mcar'
 
-    synth_tuples = 20
-    synth_cleaning_threshold = 1.33
+    synth_tuples = 100
+    synth_cleaning_threshold = 0.9
     test_synth_data_direction = 'user_data'
     # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
-    feature_generators = ['domain', 'vicinity', 'llm_value', 'llm_vicinity']
+    feature_generators = ['llm_value', 'llm_vicinity']
     imputer_cache_model = True
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
     labeling_budget = 20

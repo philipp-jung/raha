@@ -90,8 +90,6 @@ def generate_train_test_data(column_errors: Dict[int, List[Tuple[int, int]]],
                              df_dirty: pd.DataFrame,
                              synth_pair_features: Dict[Tuple[int, int], Dict[str, List]],
                              column: int):
-    """
-    """
     x_train = []  # train feature vectors
     y_train = []  # train labels
     x_test = []  # test features vectors
@@ -150,6 +148,7 @@ def test_synth_data(d, pair_features, synth_pair_features, classification_model:
     """
     Test the difference in distribution between user_data and synth_data to determine if using synth_data in the
     cleaning problem is worthwhile.
+
     @param d: baran dataset object
     @param classification_model: which sklearn model to use for ensembling
     @param column: column that is being cleaned
@@ -167,10 +166,12 @@ def test_synth_data(d, pair_features, synth_pair_features, classification_model:
         d.labeled_cells,
         pair_features,
         d.dataframe,
-        {},
-        # d.synth_pair_features, # für das Experiment, bei dem ich die performance beim Reinigen der synth_daten
-        # messe, will ich keine synth_daten in den Trainingsdaten haben.
+        {},  # keine synth daten: ich will ja wissen, wie gut die Verteilung ohne synth-daten vorhergesagt wird.
         column)
+
+    # this condition enables unsupervised cleaning.
+    if len(synth_x_test) > 0 and len(synth_y_test) > 0 and len(x_train) == 0:
+        return 1.0  # no user-data available, but synth-data availble: Use that synth data to clean.
 
     score = 0.0
     is_valid_problem, _ = handle_edge_cases(pair_features, x_train, synth_x_test, y_train, d)
