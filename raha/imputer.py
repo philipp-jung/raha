@@ -42,6 +42,10 @@ def train_cleaning_model(df: pd.DataFrame,
     # leveraging them. I currently keep this to have control over the data in one place.
     df_train, df_test = train_test_split(df, test_size=.1)
 
+    # Since I concatenate dataframes earlier, duplicate index entries are possible. Which is why I reset the index.
+    df_train.reset_index(drop=True, inplace=True)
+    df_test.reset_index(drop=True, inplace=True)
+
     try:
         if not use_cache:
             raise FileNotFoundError
