@@ -194,7 +194,7 @@ def fetch_cached_llm(dataset: str,
         query += " AND version IS NULL"
 
     if error_class is not None:
-        query += f" AND error_class={error_class}"
+        query += f" AND error_class=?"
         parameters.append(error_class)
     else:
         query += " AND error_class IS NULL"

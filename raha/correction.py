@@ -583,7 +583,7 @@ class Correction:
         # block for debugging llm-based cleaning
         if len(d.labeled_tuples) == self.LABELING_BUDGET:
             for error_cell, model_name, prompt in ai_prompts:
-                correction, token_logprobs, top_logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name, d.error_fraction, d.version)
+                correction, token_logprobs, top_logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name, d.error_fraction, d.version, d.error_class)
                 correction_dicts = helpers.llm_response_to_corrections(correction, token_logprobs, top_logprobs)
                 d.corrections.get(model_name)[error_cell] = correction_dicts
 
@@ -779,21 +779,21 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "restaurant"
-    version = 2
-    error_fraction = 3
+    dataset_name = "6"
+    version = 1
+    error_fraction = 5
     error_class = 'simple_mcar'
 
     synth_tuples = 100
     synth_cleaning_threshold = 0.9
     test_synth_data_direction = 'user_data'
     # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
-    feature_generators = ['llm_value', 'llm_vicinity']
-    imputer_cache_model = True
+    feature_generators = ['llm_vicinity', 'llm_value']
+    imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
     labeling_budget = 20
     n_best_pdeps = 3
-    n_rows = None
+    n_rows = 1000
     rule_based_value_cleaning = 'V5'
     synth_tuples_error_threshold = 0
     training_time_limit = 30

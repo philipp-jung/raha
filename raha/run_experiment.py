@@ -118,8 +118,8 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
-        description="Benchmark pdep ensembling.",
-        commit="",
+        description="Benchmark LLM-Ensemble",
+        commit="9dedb852c68a8b3f4adfd82e128fbf5dc0d1cd10",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
@@ -128,37 +128,29 @@ if __name__ == "__main__":
             "synth_tuples": 100,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
-            "clean_with_user_input": False,
+            "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["vicinity", "llm_value", "llm_vicinity", "domain", "imputer"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
-            "n_rows": None,
+            "n_rows": 1000,
             "n_best_pdeps": 3,
             "rule_based_value_cleaning": "V5",
             "synth_cleaning_threshold": 0.9,
             "test_synth_data_direction": "user_data",
-            "pdep_features": ['pr', 'vote'],
+            "pdep_features": ['pr']
         },
         ranges={
-            "dataset": [137, 1481, 184, 41027],
-            "pdep_features": [
-                    ['pr'],
-                    ['pdep'],
-                    ['gpdep'],
-                    ['pr', 'vote'],
-                    ['pr', 'pdep'],
-                    ['pr', 'gpdep'],
-                    ['pdep', 'gpdep'],
-                    ['pr', 'pdep', 'gpdep'],
-                ]
+            "dataset": ["6", "137", "184", "1481", "41027", "42493"],
+            "error_class": ["simple_mcar", 'imputer_simple_mcar'],
+            "error_fraction": [1, 5]
         },
         runs=3,
         save_path=save_path,
         chat_id=os.environ["TELEGRAM_CHAT_ID"],
         token=os.environ["TELEGRAM_BOT_TOKEN"],
-    )
+        )
 
     rsk_renuver = Ruska(
         name=f"{experiment_name}-renuver",
@@ -196,5 +188,5 @@ if __name__ == "__main__":
     )
 
     # rsk_baran.run(experiment=run_baran, parallel=False)
-    # rsk_openml.run(experiment=run_baran, parallel=True)
-    rsk_renuver.run(experiment=run_baran, parallel=True)
+    rsk_openml.run(experiment=run_baran, parallel=False)
+    # rsk_renuver.run(experiment=run_baran, parallel=True)
