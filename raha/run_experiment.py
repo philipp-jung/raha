@@ -58,7 +58,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-06-26-llm_value"
+    experiment_name = "2023-06-30-ablation_study"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -108,7 +108,13 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "synth_cleaning_threshold": [1.33, 0.9, 0.5],
+            "feature_generators": [
+                ["llm_value", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_value", "domain", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "domain"],
+            ]
         },
         runs=3,
         save_path=save_path,
@@ -142,6 +148,13 @@ if __name__ == "__main__":
             "pdep_features": ['pr']
         },
         ranges={
+            "feature_generators": [
+                ["llm_value", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_value", "domain", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "domain"],
+            ],
             "dataset": ["6", "137", "184", "1481", "41027", "42493"],
             "error_class": ["simple_mcar", 'imputer_simple_mcar'],
             "error_fraction": [1, 5]
@@ -178,8 +191,15 @@ if __name__ == "__main__":
             "pdep_features": ['pr'],
         },
         ranges={
+            "error_fraction": [1, 3],
+            "feature_generators": [
+                ["llm_value", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_value", "domain", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "domain"],
+            ],
             "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
-            "synth_cleaning_threshold": [1.33, 0.9, 0.5],
         },
         runs=2,
         save_path=save_path,
@@ -187,6 +207,6 @@ if __name__ == "__main__":
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    # rsk_baran.run(experiment=run_baran, parallel=False)
+    rsk_baran.run(experiment=run_baran, parallel=False)
     rsk_openml.run(experiment=run_baran, parallel=False)
-    # rsk_renuver.run(experiment=run_baran, parallel=True)
+    rsk_renuver.run(experiment=run_baran, parallel=False)

@@ -779,9 +779,9 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "6"
+    dataset_name = "letter"
     version = 1
-    error_fraction = 5
+    error_fraction = 1
     error_class = 'simple_mcar'
 
     synth_tuples = 100
