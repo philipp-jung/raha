@@ -214,9 +214,6 @@ class Correction:
         This method initializes the error corrector models.
         """
         d.value_models = value_cleaning.ValueCleaning()
-        d.pdeps = {c: {cc: {} for cc in range(d.dataframe.shape[1])}
-                   for c in range(d.dataframe.shape[1])}
-
         d.domain_models = {}
 
         for row in d.dataframe.itertuples():
@@ -268,9 +265,10 @@ class Correction:
         d.synth_corrections = helpers.Corrections(corrections_features)
 
         d.vicinity_models = {}
+        d.lhs_values_frequencies = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
             for o in self.VICINITY_ORDERS:
-                d.vicinity_models[o] = pdep.calculate_counts_dict(
+                d.vicinity_models[o], d.lhs_values_frequencies[o] = pdep.calculate_counts_dict(
                     df=d.dataframe,
                     detected_cells=d.detected_cells,
                     order=o,
@@ -392,12 +390,12 @@ class Correction:
 
         # TODO bug fixen. Macht auf rayyan die Korrekturen kaputt.
         # BEGIN Philipp's changes
-        # if 'vicinity' in self.FEATURE_GENERATORS:
-        #     for o in self.VICINITY_ORDERS:
-        #         pdep.update_counts_dict(d.dataframe,
-        #                                 d.vicinity_models[o],
-        #                                 o,
-        #                                 cleaned_sampled_tuple)
+        if 'vicinity' in self.FEATURE_GENERATORS:
+            for o in self.VICINITY_ORDERS:
+                pdep.update_counts_dict(d.dataframe,
+                                        d.vicinity_models[o],
+                                        o,
+                                        cleaned_sampled_tuple)
 
         # END Philipp's changes
 
@@ -539,8 +537,7 @@ class Correction:
         if self.VICINITY_FEATURE_GENERATOR == 'pdep' and 'vicinity' in self.FEATURE_GENERATORS:
             d.inv_vicinity_gpdeps = {}
             for order in self.VICINITY_ORDERS:
-                vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models,
-                                                       d.dataframe, d.detected_cells, order)
+                vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models, d.lhs_values_frequencies, d.dataframe, d.detected_cells, order)
                 d.inv_vicinity_gpdeps[order] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
 
         if 'imputer' in self.FEATURE_GENERATORS and len(d.labeled_tuples) == self.LABELING_BUDGET:
@@ -750,7 +747,7 @@ class Correction:
         while len(d.labeled_tuples) < self.LABELING_BUDGET:
             self.sample_tuple(d, random_seed=random_seed)
             self.label_with_ground_truth(d)
-            # self.update_models(d)
+            self.update_models(d)
             self.prepare_augmented_models(d)
             self.generate_features(d, synchronous=True)
             self.generate_synth_features(d, synchronous=True)
@@ -779,21 +776,21 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "letter"
+    dataset_name = "toy"
     version = 1
-    error_fraction = 1
-    error_class = 'simple_mcar'
+    error_fraction = 10
+    error_class = 'imputer_simple_mcar'
 
     synth_tuples = 100
     synth_cleaning_threshold = 0.9
     test_synth_data_direction = 'user_data'
-    # feature_generators = ['domain', 'vicinity', 'value', 'llm_vicinity', 'llm_value']
-    feature_generators = ['llm_vicinity', 'llm_value']
+    feature_generators = ['vicinity']
+    # feature_generators = ['llm_vicinity', 'llm_value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
-    labeling_budget = 20
+    labeling_budget = 0
     n_best_pdeps = 3
-    n_rows = 1000
+    n_rows = None
     rule_based_value_cleaning = 'V5'
     synth_tuples_error_threshold = 0
     training_time_limit = 30
