@@ -96,19 +96,19 @@ def update_vicinity_model(
                     if counts_dict[lhs_cols][rhs_col].get(lhs_vals) is None:
                         counts_dict[lhs_cols][rhs_col][lhs_vals] = {}
 
-                        # Update counts of values in the LHS
-                        if lhs_values[lhs_cols][rhs_col].get(lhs_vals) is None:
-                            lhs_values[lhs_cols][rhs_col][lhs_vals] = 1
-                        else:
-                            lhs_values[lhs_cols][rhs_col][lhs_vals] += 1
+                    # Update counts of values in the LHS
+                    if lhs_values[lhs_cols][rhs_col].get(lhs_vals) is None:
+                        lhs_values[lhs_cols][rhs_col][lhs_vals] = 1
+                    else:
+                        lhs_values[lhs_cols][rhs_col][lhs_vals] += 1
 
-                        rhs_val = clean_sampled_tuple[rhs_col]
-                        if counts_dict[lhs_cols][rhs_col].get(lhs_vals) is None:
-                            counts_dict[lhs_cols][rhs_col][lhs_vals] = {}
-                        if counts_dict[lhs_cols][rhs_col][lhs_vals].get(rhs_val) is None:
-                            counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
-                        else:
-                            counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
+                    rhs_val = clean_sampled_tuple[rhs_col]
+                    if counts_dict[lhs_cols][rhs_col].get(lhs_vals) is None:
+                        counts_dict[lhs_cols][rhs_col][lhs_vals] = {}
+                    if counts_dict[lhs_cols][rhs_col][lhs_vals].get(rhs_val) is None:
+                        counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
+                    else:
+                        counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
 
 
 def expected_pdep(
@@ -281,24 +281,11 @@ def calc_all_gpdeps(
     lhss = set([x for x in counts_dict[order].keys()])
     rhss = list(range(n_cols))
 
-    ok = []
-    negative = []
-    too_large = []
-
     gpdeps = {lhs: {} for lhs in lhss}
     for lhs in lhss:
         for rhs in rhss:
             N = error_corrected_row_count(n_rows, row_errors, lhs, rhs)
             gpdeps[lhs][rhs] = gpdep(N, counts_dict, lhs_values_frequencies, lhs, rhs, order)
-            if gpdeps[lhs][rhs] is not None:
-                if gpdeps[lhs][rhs].gpdep < 0:
-                    negative.append(gpdeps[lhs][rhs].gpdep)
-                elif gpdeps[lhs][rhs].gpdep > 1:
-                    too_large.append(gpdeps[lhs][rhs].gpdep)
-                else:
-                    ok.append(gpdeps[lhs][rhs].gpdep)
-    if max(negative) < -0.01:
-        a = 1
     return gpdeps
 
 

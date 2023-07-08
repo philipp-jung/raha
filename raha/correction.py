@@ -579,9 +579,6 @@ class Correction:
             for args in process_args_list:
                 ai_prompts.extend(self._feature_generator_process(args))
 
-        if len(d.labeled_tuples) == self.LABELING_BUDGET:
-            a = 1
-
         # block for debugging llm-based cleaning
         if len(d.labeled_tuples) == self.LABELING_BUDGET:
             for error_cell, model_name, prompt in ai_prompts:
@@ -696,9 +693,6 @@ class Correction:
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
 
-            if len(d.labeled_tuples) == self.LABELING_BUDGET:
-                a = 1
-
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(
                 100 * len(d.corrected_cells) / len(d.detected_cells),
@@ -706,7 +700,7 @@ class Correction:
 
     def clean_with_user_input(self, d):
         """
-        The user input ideally contains completely correct data. It should be leveraged for optimal cleaning
+        User input ideally contains completely correct data. It should be leveraged for optimal cleaning
         performance.
         """
         if not self.CLEAN_WITH_USER_INPUT:
@@ -781,15 +775,15 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "flights"
+    dataset_name = "rayyan"
     version = 1
     error_fraction = 10
     error_class = 'imputer_simple_mcar'
 
-    synth_tuples = 100
+    synth_tuples = 0
     synth_cleaning_threshold = 0.9
     test_synth_data_direction = 'user_data'
-    feature_generators = ['llm_value', 'vicinity', 'domain', 'llm_vicinity']
+    feature_generators = ['llm_value', 'domain', 'vicinity']
     # feature_generators = ['llm_vicinity', 'llm_value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
