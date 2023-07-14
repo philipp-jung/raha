@@ -1,10 +1,8 @@
 ########################################
-# Baran: The Error Correction System
-# Mohammad Mahdavi
-# moh.mahdavi.l@gmail.com
-# April 2019
-# Big Data Management Group
-# TU Berlin
+# Mirmir: A Holistic Value Imputation System
+# Philipp Jung
+# philippjung@posteo.de
+# July 2023
 # All Rights Reserved
 ########################################
 
@@ -37,7 +35,7 @@ from raha import value_cleaning
 from raha import value_helpers
 
 
-class Correction:
+class Cleaning:
     """
     The main class.
     """
@@ -83,6 +81,7 @@ class Correction:
         pdep-score of the dependency providing the correction, and 'gpdep' for the gpdep-socre of said
         dependency.
         """
+
         # Philipps changes
         self.SYNTH_TUPLES = synth_tuples
         self.SYNTH_TUPLES_ERROR_THRESHOLD = synth_tuples_error_threshold
@@ -100,18 +99,12 @@ class Correction:
         self.TEST_SYNTH_DATA_DIRECTION = test_synth_data_direction
         self.PDEP_FEATURES = pdep_features
 
-        # original Baran
-        self.PRETRAINED_VALUE_BASED_MODELS_PATH = ""
-        self.VALUE_ENCODINGS = ["identity", "unicode"]
+        # Inherited from Baran
         self.IGNORE_SIGN = "<<<IGNORE_THIS_VALUE>>>"
         self.VERBOSE = False
         self.SAVE_RESULTS = False
-        self.ONLINE_PHASE = False
         self.LABELING_BUDGET = labeling_budget
-        self.MIN_CORRECTION_CANDIDATE_PROBABILITY = 0.00
-        self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
-        self.REVISION_WINDOW_SIZE = 5
 
         # variable for debugging CV
         self.n_true_classes = {}
@@ -200,7 +193,6 @@ class Correction:
         """
         This method initializes the dataset.
         """
-        self.ONLINE_PHASE = True
         d.results_folder = os.path.join(os.path.dirname(d.path), "raha-baran-results-" + d.name)
         if self.SAVE_RESULTS and not os.path.exists(d.results_folder):
             os.mkdir(d.results_folder)
@@ -294,7 +286,7 @@ class Correction:
         remaining_column_uncorrected_cells = {}
         remaining_column_uncorrected_cells_error_values = {}
 
-        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.labeled_cells)
 
         column_errors = error_positions.original_column_errors()
 
@@ -429,8 +421,7 @@ class Correction:
                 for o in self.VICINITY_ORDERS:
                     naive_corrections = pdep.vicinity_based_corrector_order_n(
                         counts_dict=d.vicinity_models[o],
-                        ed=error_dictionary,
-                        probability_threshold=self.MIN_CORRECTION_CANDIDATE_PROBABILITY)
+                        ed=error_dictionary)
                     if is_synth:
                         d.synth_corrections.get(f'vicinity_{o}')[error_cell] = naive_corrections
                     else:
@@ -463,7 +454,7 @@ class Correction:
             Use large language model to correct an error based on the error value.
             """
             if error_dictionary['old_value'] != '':  # If there is no value to be transformed, skip.
-                error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+                error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.labeled_cells)
                 column_errors_positions = error_positions.original_column_errors().get(error_dictionary['column'])
                 column_errors_rows = [row for (row, col) in column_errors_positions]
 
@@ -491,7 +482,7 @@ class Correction:
         if 'llm_vicinity' in self.FEATURE_GENERATORS and not is_synth and len(d.labeled_tuples) == self.LABELING_BUDGET:
             # use large language model to correct an error based on the error's vicinity. Inspired by Narayan et al.
             # 2022.
-            error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+            error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.labeled_cells)
             row_errors = error_positions.updated_row_errors()
             rows_without_errors = [i for i in range(d.dataframe.shape[0]) if len(row_errors[i]) == 0]
             if len(rows_without_errors) >= 3:
@@ -536,7 +527,7 @@ class Correction:
         """
 
         shape = d.dataframe.shape
-        error_positions = helpers.ErrorPositions(d.detected_cells, shape, d.corrected_cells)
+        error_positions = helpers.ErrorPositions(d.detected_cells, shape, d.labeled_cells)
         row_errors = error_positions.updated_row_errors()
 
         if self.VICINITY_FEATURE_GENERATOR == 'pdep' and 'vicinity' in self.FEATURE_GENERATORS:
@@ -569,6 +560,8 @@ class Correction:
         """
         ai_prompts: List[Tuple[Tuple[int, int], str, Union[str, None]]] = []
         process_args_list = [[d, cell, False] for cell in d.detected_cells]
+
+        # generate all features but the llm-features
         if not synchronous:
             pool = multiprocessing.Pool()
             prompt_lists = pool.map(self._feature_generator_process, process_args_list)
@@ -579,7 +572,7 @@ class Correction:
             for args in process_args_list:
                 ai_prompts.extend(self._feature_generator_process(args))
 
-        # block for debugging llm-based cleaning
+        # generate llm-features
         if len(d.labeled_tuples) == self.LABELING_BUDGET:
             for error_cell, model_name, prompt in ai_prompts:
                 correction, token_logprobs, top_logprobs = helpers.fetch_cached_llm(d.name, error_cell, prompt, model_name, d.error_fraction, d.version, d.error_class)
@@ -594,7 +587,7 @@ class Correction:
         Generate additional training data by using data from the dirty dataframe. This leverages the information about
         error positions, carefully avoiding additional training data that contains known errors.
         """
-        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.labeled_cells)
         row_errors = error_positions.updated_row_errors()
 
         # determine rows with least amount of erronous values to sample from.
@@ -647,18 +640,26 @@ class Correction:
         """
         The ML problem as formulated in the Baran paper.
         """
-        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.corrected_cells)
+        error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.labeled_cells)
         column_errors = error_positions.original_column_errors()
         pair_features = d.corrections.assemble_pair_features()
         synth_pair_features = d.synth_corrections.assemble_pair_features()
+
         for j in column_errors:
-            score = ml_helpers.test_synth_data(d,
-                                               pair_features,
-                                               synth_pair_features,
-                                               self.CLASSIFICATION_MODEL,
-                                               j,
-                                               column_errors,
-                                               clean_on=self.TEST_SYNTH_DATA_DIRECTION)
+            if d.corrections.value_cleaning_pct(column_errors[j]) > 0.3:
+                # disable synth tuples if strong value cleaning suggestions exist.
+                score = 0
+            else:  # evaluate synth tuples.
+                score = ml_helpers.test_synth_data(d,
+                                                   pair_features,
+                                                   synth_pair_features,
+                                                   self.CLASSIFICATION_MODEL,
+                                                   j,
+                                                   column_errors,
+                                                   clean_on=self.TEST_SYNTH_DATA_DIRECTION)
+
+            # if len(d.labeled_tuples) == self.LABELING_BUDGET and score >= self.SYNTH_CLEANING_THRESHOLD:
+            #     a = 1
 
             if score >= self.SYNTH_CLEANING_THRESHOLD:
                 # now that we are certain about the synth data's usefulness, use additional training data.
@@ -690,7 +691,6 @@ class Correction:
                     raise ValueError('Unknown model.')
 
                 predicted_labels = gs_clf.predict(x_test)
-
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
 
         if self.VERBOSE:
@@ -775,15 +775,15 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "rayyan"
+    dataset_name = "cars"
     version = 1
-    error_fraction = 10
+    error_fraction = 3
     error_class = 'imputer_simple_mcar'
 
     synth_tuples = 0
     synth_cleaning_threshold = 0.9
     test_synth_data_direction = 'user_data'
-    feature_generators = ['llm_value', 'domain', 'vicinity']
+    feature_generators = ['llm_value', 'domain', 'vicinity', 'llm_vicinity']
     # feature_generators = ['llm_vicinity', 'llm_value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
@@ -803,7 +803,7 @@ if __name__ == "__main__":
     data = raha.dataset.Dataset(dataset_name, error_fraction, version, error_class, n_rows)
     data.detected_cells = data.get_errors_dictionary()
 
-    app = Correction(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
+    app = Cleaning(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
                      rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold, synth_cleaning_threshold,
                      test_synth_data_direction, pdep_features)

@@ -123,8 +123,10 @@ def expected_pdep(
     if pdep_B is None:
         return None
 
-    n_distinct_values_A = len(counts_dict[order][A][B])
+    if pdep_B == 1:  # division by 0
+        return None
 
+    n_distinct_values_A = len(counts_dict[order][A][B])
     return pdep_B + (n_distinct_values_A - 1) / (n_rows - 1) * (1 - pdep_B)
 
 
@@ -237,7 +239,7 @@ def gpdep(
     return None
 
 
-def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold) -> List[Dict[str, int]]:
+def vicinity_based_corrector_order_n(counts_dict, ed) -> List[Dict[str, int]]:
     """
     Use Baran's original strategy to suggest corrections based on higher-order
     vicinity.
@@ -264,8 +266,7 @@ def vicinity_based_corrector_order_n(counts_dict, ed, probability_threshold) -> 
                 sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
                 for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
                     pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
-                    if pr >= probability_threshold:
-                        results_dictionary[rhs_val] = pr
+                    results_dictionary[rhs_val] = pr
         results_list.append(results_dictionary)
     return results_list
 

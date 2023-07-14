@@ -56,7 +56,7 @@ def assemble_cleaning_suggestion(
 class ErrorPositions:
     detected_cells: Dict[Tuple[int, int], Union[str, float, int]]
     table_shape: Tuple[int, int]
-    corrected_cells: Dict[Tuple[int, int], Tuple[int, str]]
+    labeled_cells: Dict[Tuple[int, int], Tuple[int, str]]
 
     def original_column_errors(self) -> Dict[int, List[Tuple[int, int]]]:
         column_errors = {j: [] for j in range(self.table_shape[1])}
@@ -68,7 +68,7 @@ class ErrorPositions:
     def updated_column_errors(self) -> Dict[int, List[Tuple[int, int]]]:
         column_errors = {j: [] for j in range(self.table_shape[1])}
         for (row, col), error_value in self.detected_cells.items():
-            if (row, col) not in self.corrected_cells:
+            if (row, col) not in self.labeled_cells:
                 column_errors[col].append((row, col))
         return column_errors
 
@@ -81,7 +81,7 @@ class ErrorPositions:
     def updated_row_errors(self) -> Dict[int, List[Tuple[int, int]]]:
         row_errors = {i: [] for i in range(self.table_shape[0])}
         for (row, col), error_value in self.detected_cells.items():
-            if (row, col) not in self.corrected_cells:
+            if (row, col) not in self.labeled_cells:
                 row_errors[row].append((row, col))
         return row_errors
 
@@ -130,6 +130,26 @@ class Corrections:
                         pair_features[cell][correction] = np.zeros(len(features))
                     pair_features[cell][correction][mi] = pr
         return pair_features
+
+    def value_cleaning_pct(self, errors_in_column: List[Tuple[int, int]], confidence_threshold: float = .9) -> float:
+        """
+        Per column, calculate the share of value corrections with a confidence higher than confidence_threshold.
+        That resulting percentage can be used to estimate if value cleaning can be leveraged on the dataset.
+        @param errors_in_column: A list with tuples of errors in a column.
+        @param confidence_threshold: The value correction's probability needs to surpass the threshold to be taken into
+        account.
+        @return: Percentage of erronous values per column for which a confident value correction was made.
+        """
+        if 'llm_value' not in self.available_corrections or len(errors_in_column) == 0:
+            return 0.0
+
+        confident_corrections = 0
+        for error_cell in errors_in_column:
+            correction_suggestions = self.correction_store['llm_value'].get(error_cell)
+            if correction_suggestions is not None:
+                if list(correction_suggestions.values())[0] > confidence_threshold:
+                    confident_corrections += 1
+        return confident_corrections/len(errors_in_column)
 
 
 def connect_to_cache() -> sqlite3.Connection:

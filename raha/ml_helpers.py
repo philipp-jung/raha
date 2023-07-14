@@ -63,13 +63,14 @@ def handle_edge_cases(pair_features, x_train, x_test, y_train, d) -> Tuple[bool,
         return False, np.ones(len(x_test))
 
     elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
-        for cell in pair_features:
-            correction_dict = pair_features[cell]
-            if len(correction_dict) > 0:
-                # select the correction with the highest sum of features.
-                max_proba_feature = \
-                    sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
-                d.corrected_cells[cell] = max_proba_feature[0]
+        # DEBUG: Unclear if this is a good idea to begin with.
+        # for cell in pair_features:
+        #     correction_dict = pair_features[cell]
+        #     if len(correction_dict) > 0:
+        #         # select the correction with the highest sum of features.
+        #         max_proba_feature = \
+        #             sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
+        #         d.corrected_cells[cell] = max_proba_feature[0]
         return False, []
 
     elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
