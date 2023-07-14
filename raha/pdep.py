@@ -321,7 +321,8 @@ def pdep_vicinity_based_corrector(
     counts_dict: dict,
     ed: dict,
     n_best_pdeps: int = 3,
-    features_selection: tuple = ('pr', 'vote')
+    features_selection: tuple = ('pr', 'vote'),
+    gpdep_threshold: float = 0.5
 ) -> Dict:
     """
     Leverage gpdep to avoid having correction suggestion feature columns
@@ -361,6 +362,7 @@ def pdep_vicinity_based_corrector(
     # like this.
     for d in sorted_results:
         if highest_conditional_probabilities.get(d["correction"]) is None:
-            highest_conditional_probabilities[d["correction"]] = d["pr"]
+            if d['gpdep'] > gpdep_threshold:
+                highest_conditional_probabilities[d["correction"]] = d["pr"]
 
     return highest_conditional_probabilities

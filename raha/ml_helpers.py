@@ -48,29 +48,25 @@ def set_binary_cleaning_suggestions(predicted_labels: List[int],
             corrected_cells[error_cell] = predicted_correction
 
 
-def handle_edge_cases(pair_features, x_train, x_test, y_train, d) -> Tuple[bool, List]:
+def handle_edge_cases(x_train, x_test, y_train, labeled_tuples) -> Tuple[bool, List]:
     """
     Depending on the dataset and how much data has been labeled by the user, the data used to formulate the ML problem
     can lead to an invalid ML problem.
     To prevent the application from stopping unexpectedly, edge-cases are handled here.
+
+    If this software was engineered more elegantly, this function would not exist. But there is always a balance
+    between elegance and pace of development. And we run pretty fast.
 
     @return: A tuple whose first position is a boolean, indicating if the ML problem should be started. The second
     position is a list of predicted labels. Which is used when the ML problem should not be started.
     """
     if sum(y_train) == 0:  # no correct suggestion was created for any of the error cells.
         return False, []  # nothing to do, need more user-input to work.
+
     elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
         return False, np.ones(len(x_test))
 
-    elif len(d.labeled_tuples) == 0:  # no training data is available because no user labels have been set.
-        # DEBUG: Unclear if this is a good idea to begin with.
-        # for cell in pair_features:
-        #     correction_dict = pair_features[cell]
-        #     if len(correction_dict) > 0:
-        #         # select the correction with the highest sum of features.
-        #         max_proba_feature = \
-        #             sorted([v for v in correction_dict.items()], key=lambda x: sum(x[1]), reverse=True)[0]
-        #         d.corrected_cells[cell] = max_proba_feature[0]
+    elif len(labeled_tuples) == 0:  # no training data is available because no user labels have been set.
         return False, []
 
     elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
@@ -175,7 +171,7 @@ def test_synth_data(d, pair_features, synth_pair_features, classification_model:
         return 1.0  # no user-data available, but synth-data availble: Use that synth data to clean.
 
     score = 0.0
-    is_valid_problem, _ = handle_edge_cases(pair_features, x_train, synth_x_test, y_train, d)
+    is_valid_problem, _ = handle_edge_cases(x_train, synth_x_test, y_train, d.labeled_tuples)
     if not is_valid_problem:
         return score
 

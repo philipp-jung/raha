@@ -95,7 +95,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "llm_value", "llm_vicinity", "domain", "imputer"],
+            "feature_generators": ["vicinity", "llm_value", "domain"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -108,13 +108,6 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "feature_generators": [
-                ["llm_value", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_value", "domain", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "domain"],
-            ]
         },
         runs=3,
         save_path=save_path,
@@ -136,7 +129,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "llm_value", "llm_vicinity", "domain", "imputer"],
+            "feature_generators": ["vicinity", "llm_value", "domain"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -148,13 +141,6 @@ if __name__ == "__main__":
             "pdep_features": ['pr']
         },
         ranges={
-            "feature_generators": [
-                ["llm_value", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_value", "domain", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "domain"],
-            ],
             "dataset": ["6", "137", "184", "1481", "41027", "42493"],
             "error_class": ["simple_mcar", 'imputer_simple_mcar'],
             "error_fraction": [1, 5]
@@ -179,7 +165,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "llm_value", "llm_vicinity", "domain", "imputer"],
+            "feature_generators": ["vicinity", "llm_value", "domain"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -189,17 +175,12 @@ if __name__ == "__main__":
             "synth_cleaning_threshold": 0.9,
             "test_synth_data_direction": "user_data",
             "pdep_features": ['pr'],
+            "pdep_threshold": 0.5,
         },
         ranges={
             "error_fraction": [1, 3],
-            "feature_generators": [
-                ["llm_value", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_value", "domain", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "domain"],
-            ],
             "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
+            "pdep_threshold": [0, 0.3, 0.6, 0.9]
         },
         runs=2,
         save_path=save_path,

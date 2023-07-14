@@ -44,7 +44,7 @@ class Cleaning:
                  vicinity_orders: List[int], vicinity_feature_generator: str, imputer_cache_model: bool,
                  n_best_pdeps: int, training_time_limit: int, rule_based_value_cleaning: Union[str, bool],
                  synth_tuples: int, synth_tuples_error_threshold: int, synth_cleaning_threshold: float,
-                 test_synth_data_direction: str, pdep_features: Tuple[str]):
+                 test_synth_data_direction: str, pdep_features: Tuple[str], gpdep_threshold: float):
         """
         Parameters of the cleaning experiment.
         @param labeling_budget: How many tuples are labeled by the user. Baran default is 20.
@@ -80,6 +80,7 @@ class Cleaning:
         'pr' for conditional probability, 'vote' for how many FDs suggest the correction, 'pdep' for the
         pdep-score of the dependency providing the correction, and 'gpdep' for the gpdep-socre of said
         dependency.
+        @param gpdep_threshold: Threshold a suggestion's gpdep score must pass before it is used to generate a feature.
         """
 
         # Philipps changes
@@ -98,6 +99,7 @@ class Cleaning:
         self.SYNTH_CLEANING_THRESHOLD = synth_cleaning_threshold
         self.TEST_SYNTH_DATA_DIRECTION = test_synth_data_direction
         self.PDEP_FEATURES = pdep_features
+        self.GPDEP_THRESHOLD = gpdep_threshold
 
         # Inherited from Baran
         self.IGNORE_SIGN = "<<<IGNORE_THIS_VALUE>>>"
@@ -434,7 +436,8 @@ class Cleaning:
                         counts_dict=d.vicinity_models[o],
                         ed=error_dictionary,
                         n_best_pdeps=self.N_BEST_PDEPS,
-                        features_selection=self.PDEP_FEATURES)
+                        features_selection=self.PDEP_FEATURES,
+                        gpdep_threshold=self.GPDEP_THRESHOLD)
                     if is_synth:
                         d.synth_corrections.get(f'vicinity_{o}')[error_cell] = pdep_corrections
                     else:
@@ -679,7 +682,7 @@ class Cleaning:
                     {},
                     j)
 
-            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(pair_features, x_train, x_test, y_train, d)
+            is_valid_problem, predicted_labels = ml_helpers.handle_edge_cases(x_train, x_test, y_train, d.labeled_tuples)
 
             if is_valid_problem:
                 if self.CLASSIFICATION_MODEL == "ABC" or sum(y_train) <= 2:
@@ -691,6 +694,12 @@ class Cleaning:
                     raise ValueError('Unknown model.')
 
                 predicted_labels = gs_clf.predict(x_test)
+
+            # if len(d.labeled_tuples) == self.LABELING_BUDGET and j == 8:
+            #     for x, y in zip(x_train, y_train):
+            #         if y == 1:
+            #             print(x, y)
+
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
 
         if self.VERBOSE:
@@ -775,19 +784,20 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "cars"
+    dataset_name = "rayyan"
     version = 1
     error_fraction = 3
     error_class = 'imputer_simple_mcar'
 
     synth_tuples = 0
     synth_cleaning_threshold = 0.9
+    gpdep_threshold = 0.5
     test_synth_data_direction = 'user_data'
-    feature_generators = ['llm_value', 'domain', 'vicinity', 'llm_vicinity']
+    feature_generators = ['llm_value', 'domain', 'vicinity']
     # feature_generators = ['llm_vicinity', 'llm_value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
-    labeling_budget = 20
+    labeling_budget = 10
     n_best_pdeps = 3
     n_rows = None
     # rule_based_value_cleaning = 'V5'
@@ -806,7 +816,7 @@ if __name__ == "__main__":
     app = Cleaning(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
                      vicinity_feature_generator, imputer_cache_model, n_best_pdeps, training_time_limit,
                      rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold, synth_cleaning_threshold,
-                     test_synth_data_direction, pdep_features)
+                     test_synth_data_direction, pdep_features, gpdep_threshold)
     app.VERBOSE = True
     seed = 0
     correction_dictionary = app.run(data, seed)
