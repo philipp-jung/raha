@@ -661,9 +661,6 @@ class Cleaning:
                                                    column_errors,
                                                    clean_on=self.TEST_SYNTH_DATA_DIRECTION)
 
-            # if len(d.labeled_tuples) == self.LABELING_BUDGET and score >= self.SYNTH_CLEANING_THRESHOLD:
-            #     a = 1
-
             if score >= self.SYNTH_CLEANING_THRESHOLD:
                 # now that we are certain about the synth data's usefulness, use additional training data.
                 x_train, y_train, x_test, user_corrected_cells, error_correction_suggestions = ml_helpers.generate_train_test_data(
@@ -694,11 +691,6 @@ class Cleaning:
                     raise ValueError('Unknown model.')
 
                 predicted_labels = gs_clf.predict(x_test)
-
-            # if len(d.labeled_tuples) == self.LABELING_BUDGET and j == 8:
-            #     for x, y in zip(x_train, y_train):
-            #         if y == 1:
-            #             print(x, y)
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
 
@@ -784,22 +776,23 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "rayyan"
+    dataset_name = "6"
     version = 1
-    error_fraction = 3
-    error_class = 'imputer_simple_mcar'
+    error_fraction = 5
+    error_class = 'simple_mcar'
+    # error_class = 'imputer_simple_mcar'
 
     synth_tuples = 0
     synth_cleaning_threshold = 0.9
-    gpdep_threshold = 0.5
+    gpdep_threshold = 0.3
     test_synth_data_direction = 'user_data'
-    feature_generators = ['llm_value', 'domain', 'vicinity']
+    feature_generators = ['llm_vicinity', ]
     # feature_generators = ['llm_vicinity', 'llm_value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
-    labeling_budget = 10
+    labeling_budget = 20
     n_best_pdeps = 3
-    n_rows = None
+    n_rows = 1000
     # rule_based_value_cleaning = 'V5'
     rule_based_value_cleaning = None
     synth_tuples_error_threshold = 0

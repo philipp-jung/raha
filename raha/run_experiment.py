@@ -24,7 +24,7 @@ def run_baran(i: int, c: dict):
         data = raha.Dataset(c['dataset'], c['error_fraction'], version, c['error_class'], c["n_rows"])
         data.detected_cells = data.get_errors_dictionary()
 
-        app = raha.Correction(
+        app = raha.Cleaning(
             c["labeling_budget"],
             c["classification_model"],
             c["clean_with_user_input"],
@@ -39,7 +39,8 @@ def run_baran(i: int, c: dict):
             c["synth_tuples_error_threshold"],
             c["synth_cleaning_threshold"],
             c["test_synth_data_direction"],
-            c["pdep_features"]
+            c["pdep_features"],
+            c["gpdep_threshold"],
         )
         app.VERBOSE = False
         seed = None
@@ -58,7 +59,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-06-30-ablation_study"
+    experiment_name = "2023-07-16-benchmark_llm_vicinity_working"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -83,7 +84,7 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
-        description="Benchmark pdep ensembling.",
+        description="Latest benchmark.",
         commit="",
         config={
             "dataset": "1481",
@@ -95,7 +96,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "llm_value", "domain"],
+            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -105,6 +106,7 @@ if __name__ == "__main__":
             "synth_cleaning_threshold": 0.9,
             "test_synth_data_direction": "user_data",
             "pdep_features": ['pr'],
+            "gpdep_threshold": 0.5,
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
@@ -117,7 +119,7 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
-        description="Benchmark LLM-Ensemble",
+        description="Latest benchmark.",
         commit="9dedb852c68a8b3f4adfd82e128fbf5dc0d1cd10",
         config={
             "dataset": "1481",
@@ -129,7 +131,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "llm_value", "domain"],
+            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -138,12 +140,13 @@ if __name__ == "__main__":
             "rule_based_value_cleaning": "V5",
             "synth_cleaning_threshold": 0.9,
             "test_synth_data_direction": "user_data",
-            "pdep_features": ['pr']
+            "pdep_features": ['pr'],
+            "gpdep_threshold": 0.5,
         },
         ranges={
-            "dataset": ["6", "137", "184", "1481", "41027", "42493"],
+            "dataset": ["6", "137", "184", "1481", "41027"],
             "error_class": ["simple_mcar", 'imputer_simple_mcar'],
-            "error_fraction": [1, 5]
+            "error_fraction": [5]
         },
         runs=3,
         save_path=save_path,
@@ -153,7 +156,7 @@ if __name__ == "__main__":
 
     rsk_renuver = Ruska(
         name=f"{experiment_name}-renuver",
-        description="Benchmark LLM-Ensemble",
+        description="Latest benchmark.",
         commit="",
         config={
             "dataset": "1481",
@@ -165,7 +168,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "llm_value", "domain"],
+            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -175,7 +178,7 @@ if __name__ == "__main__":
             "synth_cleaning_threshold": 0.9,
             "test_synth_data_direction": "user_data",
             "pdep_features": ['pr'],
-            "pdep_threshold": 0.5,
+            "gpdep_threshold": 0.5,
         },
         ranges={
             "error_fraction": [1, 3],
