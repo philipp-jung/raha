@@ -13,11 +13,11 @@ import random
 import unicodedata
 import multiprocessing
 import json
+from itertools import combinations
 
 import numpy as np
 import sklearn.svm
 import sklearn.ensemble
-import sklearn.naive_bayes
 import sklearn.linear_model
 import sklearn.tree
 import sklearn.feature_selection
@@ -250,8 +250,14 @@ class Cleaning:
 
         for feature in self.FEATURE_GENERATORS:
             if feature == 'vicinity':
-                for o in self.VICINITY_ORDERS:
-                    corrections_features.append(f'vicinity_{o}')
+                if self.VICINITY_FEATURE_GENERATOR == 'pdep':
+                    for o in self.VICINITY_ORDERS:
+                        corrections_features.append(f'vicinity_{o}')
+                elif self.VICINITY_FEATURE_GENERATOR == 'naive':  # every lhs combination creates a feature
+                    _, cols = d.dataframe.shape
+                    for o in self.VICINITY_ORDERS:
+                        for lhs in combinations(range(cols), o):
+                            corrections_features.append(f'vicinity_{o}_{str(lhs)}')
             elif feature != 'value':
                 corrections_features.append(feature)
 
@@ -425,9 +431,11 @@ class Cleaning:
                         counts_dict=d.vicinity_models[o],
                         ed=error_dictionary)
                     if is_synth:
-                        d.synth_corrections.get(f'vicinity_{o}')[error_cell] = naive_corrections
+                        for lhs in naive_corrections:
+                            d.synth_corrections.get(f'vicinity_{o}_{str(lhs)}')[error_cell] = naive_corrections[lhs]
                     else:
-                        d.corrections.get(f'vicinity_{o}')[error_cell] = naive_corrections
+                        for lhs in naive_corrections:
+                            d.corrections.get(f'vicinity_{o}_{str(lhs)}')[error_cell] = naive_corrections[lhs]
 
             elif self.VICINITY_FEATURE_GENERATOR == 'pdep':
                 for o in self.VICINITY_ORDERS:
@@ -776,7 +784,7 @@ if __name__ == "__main__":
     # configure Cleaning object
     classification_model = "ABC"
 
-    dataset_name = "6"
+    dataset_name = "letter"
     version = 1
     error_fraction = 5
     error_class = 'simple_mcar'
@@ -786,7 +794,7 @@ if __name__ == "__main__":
     synth_cleaning_threshold = 0.9
     gpdep_threshold = 0.3
     test_synth_data_direction = 'user_data'
-    feature_generators = ['llm_vicinity', ]
+    feature_generators = ['vicinity']
     # feature_generators = ['llm_vicinity', 'llm_value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
@@ -797,7 +805,7 @@ if __name__ == "__main__":
     rule_based_value_cleaning = None
     synth_tuples_error_threshold = 0
     training_time_limit = 30
-    vicinity_feature_generator = "pdep"
+    vicinity_feature_generator = "naive"
     # pdep_features = ('pr', 'vote', 'pdep', 'gpdep')
     pdep_features = ['pr']
     vicinity_orders = [1, 2]

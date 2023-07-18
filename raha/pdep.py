@@ -239,7 +239,7 @@ def gpdep(
     return None
 
 
-def vicinity_based_corrector_order_n(counts_dict, ed) -> List[Dict[str, int]]:
+def vicinity_based_corrector_order_n(counts_dict, ed) -> Dict[str, Dict[str, float]]:
     """
     Use Baran's original strategy to suggest corrections based on higher-order
     vicinity.
@@ -257,18 +257,18 @@ def vicinity_based_corrector_order_n(counts_dict, ed) -> List[Dict[str, int]]:
 
     """
     rhs_col = ed["column"]
-    results_list = []
 
+    results_dictionary = {}
     for lhs_cols in list(counts_dict.keys()):
-        results_dictionary = {}
+        if results_dictionary.get(lhs_cols) is None:
+            results_dictionary[lhs_cols] = {}
         for lhs_vals in combinations(ed["vicinity"], len(lhs_cols)):
             if rhs_col not in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
                 sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
                 for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
                     pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
-                    results_dictionary[rhs_val] = pr
-        results_list.append(results_dictionary)
-    return results_list
+                    results_dictionary[lhs_cols][rhs_val] = pr
+    return results_dictionary
 
 
 def calc_all_gpdeps(

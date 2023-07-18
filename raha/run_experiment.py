@@ -59,7 +59,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-07-16-benchmark_llm_vicinity_working"
+    experiment_name = "2023-07-18-vicinity_feature_strategy_benchmark"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -82,56 +82,21 @@ if __name__ == "__main__":
     fh.setFormatter(formatter)
     logging.root.addHandler(fh)
 
-    rsk_baran = Ruska(
-        name=f"{experiment_name}-baran",
-        description="Latest benchmark.",
+    rsk_additional = Ruska(
+        name=f"{experiment_name}-additional",
+        description="Show the effectiveness of higher-order FDs.",
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
-            "error_fraction": 1,
+            "error_fraction": 5,
             "labeling_budget": 20,
             "synth_tuples": 100,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
-            "classification_model": "ABC",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V5",
-            "synth_cleaning_threshold": 0.9,
-            "test_synth_data_direction": "user_data",
-            "pdep_features": ['pr'],
-            "gpdep_threshold": 0.5,
-        },
-        ranges={
-            "dataset": ["beers", "flights", "hospital", "rayyan"],
-        },
-        runs=3,
-        save_path=save_path,
-        chat_id=os.environ["TELEGRAM_CHAT_ID"],
-        token=os.environ["TELEGRAM_BOT_TOKEN"],
-    )
-
-    rsk_openml = Ruska(
-        name=f"{experiment_name}-openml",
-        description="Latest benchmark.",
-        commit="9dedb852c68a8b3f4adfd82e128fbf5dc0d1cd10",
-        config={
-            "dataset": "1481",
-            "error_class": "simple_mcar",
-            "error_fraction": 1,
-            "labeling_budget": 20,
-            "synth_tuples": 100,
-            "synth_tuples_error_threshold": 0,
-            "imputer_cache_model": False,
-            "clean_with_user_input": True,
-            "training_time_limit": 30,
-            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
+            "feature_generators": ["vicinity"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -144,53 +109,13 @@ if __name__ == "__main__":
             "gpdep_threshold": 0.5,
         },
         ranges={
-            "dataset": ["6", "137", "184", "1481", "41027"],
-            "error_class": ["simple_mcar", 'imputer_simple_mcar'],
-            "error_fraction": [5]
+            "dataset": ['adult', 'letter'],
+            "vicinity_feature_generator": ['naive', 'pdep'],
         },
         runs=3,
         save_path=save_path,
         chat_id=os.environ["TELEGRAM_CHAT_ID"],
         token=os.environ["TELEGRAM_BOT_TOKEN"],
-        )
-
-    rsk_renuver = Ruska(
-        name=f"{experiment_name}-renuver",
-        description="Latest benchmark.",
-        commit="",
-        config={
-            "dataset": "1481",
-            "error_class": "simple_mcar",
-            "error_fraction": 1,
-            "labeling_budget": 20,
-            "synth_tuples": 100,
-            "synth_tuples_error_threshold": 0,
-            "imputer_cache_model": False,
-            "clean_with_user_input": True,
-            "training_time_limit": 30,
-            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
-            "classification_model": "ABC",
-            "vicinity_orders": [1, 2],
-            "vicinity_feature_generator": "pdep",
-            "n_rows": None,
-            "n_best_pdeps": 3,
-            "rule_based_value_cleaning": "V5",
-            "synth_cleaning_threshold": 0.9,
-            "test_synth_data_direction": "user_data",
-            "pdep_features": ['pr'],
-            "gpdep_threshold": 0.5,
-        },
-        ranges={
-            "error_fraction": [1, 3],
-            "dataset": ['bridges', 'cars', 'glass', 'restaurant'],
-            "pdep_threshold": [0, 0.3, 0.6, 0.9]
-        },
-        runs=2,
-        save_path=save_path,
-        chat_id=os.environ["TELEGRAM_CHAT_ID"],
-        token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    rsk_baran.run(experiment=run_baran, parallel=False)
-    rsk_openml.run(experiment=run_baran, parallel=False)
-    rsk_renuver.run(experiment=run_baran, parallel=False)
+    rsk_additional.run(experiment=run_baran, parallel=True)
