@@ -20,6 +20,7 @@ def run_baran(i: int, c: dict):
 
     version = c['run'] + 1  # dataset versions are 1-indexed, Ruska runs are 0-indexed.
     data_dict = helpers.get_data_dict(c['dataset'], c['error_fraction'], version, c['error_class'])
+    data_dict['n_rows'] = c.get('n_rows')
 
     data = dataset.Dataset(data_dict)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
@@ -32,9 +33,8 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2022-12-25-openml-validate-raha"
-    # save_path = "/root/measurements/"
-    save_path="/Users/philipp/code/validate_raha/raha"
+    experiment_name = "2023-06-29-openml-validate-raha"
+    save_path = "/root/measurements/"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
     logging.getLogger("ruska").setLevel(logging.DEBUG)
@@ -59,17 +59,18 @@ if __name__ == "__main__":
     rsk_openml = Ruska(
         name=experiment_name,
         save_path=save_path,
-        description="Measure all openml datasets to benchmark with Baran.",
+        description="Measure all OpenML datasets, and subset to n_rows = 1000 for valid benchmark.",
         commit="",
         config={
             "dataset": "beers",
             "error_class": "simple_mcar",
             "error_fraction": 1,
+            "n_rows": 1000,
         },
         ranges={
             "dataset": [137, 1481, 184, 41027, 42493, 6],
-            "error_fraction": [1, 5, 10],
-            "error_class": ["imputer_simple_mcar", "simple_mcar"]
+            "error_class": ['imputer_simple_mcar', 'simple_mcar'],
+            "error_fraction": [1, 5],
         },
         runs=3,
         chat_id=os.environ['TELEGRAM_CHAT_ID'],
