@@ -59,7 +59,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-07-18-vicinity_feature_strategy_benchmark"
+    experiment_name = "2023-07-19-ablation_study_leave_one_out"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -82,21 +82,63 @@ if __name__ == "__main__":
     fh.setFormatter(formatter)
     logging.root.addHandler(fh)
 
-    rsk_additional = Ruska(
-        name=f"{experiment_name}-additional",
-        description="Show the effectiveness of higher-order FDs.",
+    rsk_baran = Ruska(
+        name=f"{experiment_name}-baran",
+        description="Repeat Ablation study with latest version.",
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
-            "error_fraction": 5,
+            "error_fraction": 1,
             "labeling_budget": 20,
             "synth_tuples": 100,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
+            "classification_model": "ABC",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": "V5",
+            "synth_cleaning_threshold": 0.9,
+            "test_synth_data_direction": "user_data",
+            "pdep_features": ['pr'],
+            "gpdep_threshold": 0.5,
+        },
+        ranges={
+            "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "feature_generators": [
+                ["llm_value", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_value", "domain", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "domain"],
+            ]
+        },
+        runs=3,
+        save_path=save_path,
+        chat_id=os.environ["TELEGRAM_CHAT_ID"],
+        token=os.environ["TELEGRAM_BOT_TOKEN"],
+    )
+
+    rsk_openml = Ruska(
+        name=f"{experiment_name}-openml",
+        description="Repeat Ablation study with latest version.",
+        commit="9dedb852c68a8b3f4adfd82e128fbf5dc0d1cd10",
+        config={
+            "dataset": "1481",
+            "error_class": "simple_mcar",
+            "error_fraction": 1,
+            "labeling_budget": 20,
+            "synth_tuples": 100,
+            "synth_tuples_error_threshold": 0,
+            "imputer_cache_model": False,
+            "clean_with_user_input": True,
+            "training_time_limit": 30,
+            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -109,8 +151,58 @@ if __name__ == "__main__":
             "gpdep_threshold": 0.5,
         },
         ranges={
-            "dataset": ['adult', 'letter'],
-            "vicinity_feature_generator": ['naive', 'pdep'],
+            "feature_generators": [
+                ["llm_value", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_value", "domain", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "domain"],
+            ],
+            "dataset": ["6", "137", "184", "1481", "41027", "42493"],
+            "error_class": ["simple_mcar", 'imputer_simple_mcar'],
+            "error_fraction": [1, 5]
+        },
+        runs=3,
+        save_path=save_path,
+        chat_id=os.environ["TELEGRAM_CHAT_ID"],
+        token=os.environ["TELEGRAM_BOT_TOKEN"],
+        )
+
+    rsk_renuver = Ruska(
+        name=f"{experiment_name}-renuver",
+        description="Repeat ablation study with latest version.",
+        commit="",
+        config={
+            "dataset": "1481",
+            "error_class": "simple_mcar",
+            "error_fraction": 1,
+            "labeling_budget": 20,
+            "synth_tuples": 100,
+            "synth_tuples_error_threshold": 0,
+            "imputer_cache_model": False,
+            "clean_with_user_input": True,
+            "training_time_limit": 30,
+            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
+            "classification_model": "ABC",
+            "vicinity_orders": [1, 2],
+            "vicinity_feature_generator": "pdep",
+            "n_rows": None,
+            "n_best_pdeps": 3,
+            "rule_based_value_cleaning": "V5",
+            "synth_cleaning_threshold": 0.9,
+            "test_synth_data_direction": "user_data",
+            "pdep_features": ['pr'],
+            "gpdep_threshold": 0.5,
+        },
+        ranges={
+            "error_fraction": [1, 3],
+            "feature_generators": [
+                ["llm_value", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_vicinity", "domain", "imputer"],
+                ["vicinity", "llm_value", "domain", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
+                ["vicinity", "llm_value", "llm_vicinity", "domain"],
+            ],
         },
         runs=3,
         save_path=save_path,
@@ -118,4 +210,6 @@ if __name__ == "__main__":
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    rsk_additional.run(experiment=run_baran, parallel=True)
+    rsk_baran.run(experiment=run_baran, parallel=False)
+    rsk_openml.run(experiment=run_baran, parallel=False)
+    rsk_renuver.run(experiment=run_baran, parallel=False)
