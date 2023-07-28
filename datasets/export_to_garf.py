@@ -2,14 +2,19 @@ import pandas as pd
 import sqlite3
 
 
-def create_tables_for_dataset(name: str, path: str, path_dirty: str):
+def create_tables_for_dataset(name: str, path: str, path_dirty: str, n_rows=None):
     connection = sqlite3.connect('export_to_garf.db')
     df_clean = pd.read_csv(path, dtype=str)
+    if n_rows is not None:
+        df_clean = df_clean.iloc[:n_rows, :]
 
     df_clean['Label'] = None
     df_clean.to_sql(f"{name}", connection, if_exists="replace", index=False)
 
     df_dirty = pd.read_csv(path_dirty, dtype=str)
+
+    if n_rows is not None:
+        df_dirty = df_dirty.iloc[:n_rows, :]
 
     df_dirty['Label'] = None
     df_dirty.to_sql(f"{name}_copy", connection, if_exists="replace", index=False)
@@ -44,7 +49,7 @@ def main():
                 agg_name = f'{dataset_name}_{error_class}_{error_fraction}'
                 path = f"../datasets/openml/{dataset_name}/clean.csv"
                 path_dirty = f"../datasets/openml/{dataset_name}/{error_class}_{error_fraction}.csv"
-                create_tables_for_dataset(agg_name, path, path_dirty)
+                create_tables_for_dataset(agg_name, path, path_dirty, 1000)
 
 
 if __name__ == '__main__':

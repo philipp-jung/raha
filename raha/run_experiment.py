@@ -59,7 +59,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-07-19-ablation_study_leave_one_out"
+    experiment_name = "2023-07-28-vicinity-orders-benchmark"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -96,7 +96,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
+            "feature_generators": ["vicinity"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -110,13 +110,7 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "feature_generators": [
-                ["llm_value", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_value", "domain", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "domain"],
-            ]
+            "vicinity_orders": [[1], [1, 2]],
         },
         runs=3,
         save_path=save_path,
@@ -138,7 +132,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
+            "feature_generators": ["vicinity"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -151,16 +145,10 @@ if __name__ == "__main__":
             "gpdep_threshold": 0.5,
         },
         ranges={
-            "feature_generators": [
-                ["llm_value", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_value", "domain", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "domain"],
-            ],
             "dataset": ["6", "137", "184", "1481", "41027", "42493"],
             "error_class": ["simple_mcar", 'imputer_simple_mcar'],
-            "error_fraction": [1, 5]
+            "error_fraction": [1, 5],
+            "vicinity_orders": [[1], [1, 2]],
         },
         runs=3,
         save_path=save_path,
@@ -182,7 +170,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity", "domain", "llm_value", "llm_vicinity", "imputer"],
+            "feature_generators": ["vicinity"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -195,14 +183,9 @@ if __name__ == "__main__":
             "gpdep_threshold": 0.5,
         },
         ranges={
+            "vicinity_orders": [[1], [1, 2]],
             "error_fraction": [1, 3],
-            "feature_generators": [
-                ["llm_value", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_vicinity", "domain", "imputer"],
-                ["vicinity", "llm_value", "domain", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "imputer"],
-                ["vicinity", "llm_value", "llm_vicinity", "domain"],
-            ],
+            'dataset': ['bridges', 'cars', 'glass', 'restaurant'],
         },
         runs=3,
         save_path=save_path,
@@ -210,6 +193,6 @@ if __name__ == "__main__":
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    rsk_baran.run(experiment=run_baran, parallel=False)
-    rsk_openml.run(experiment=run_baran, parallel=False)
-    rsk_renuver.run(experiment=run_baran, parallel=False)
+    rsk_baran.run(experiment=run_baran, parallel=True)
+    rsk_openml.run(experiment=run_baran, parallel=True)
+    rsk_renuver.run(experiment=run_baran, parallel=True)
