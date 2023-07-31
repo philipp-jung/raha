@@ -782,33 +782,31 @@ class Cleaning:
 
 if __name__ == "__main__":
     # configure Cleaning object
-    classification_model = "ABC"
 
     dataset_name = "letter"
-    version = 1
-    error_fraction = 5
     error_class = 'simple_mcar'
+    error_fraction = 1
+    version = 1
     # error_class = 'imputer_simple_mcar'
 
-    synth_tuples = 0
+    labeling_budget = 20
+    synth_tuples = 100
+    synth_tuples_error_threshold = 0
     synth_cleaning_threshold = 0.9
-    gpdep_threshold = 0.3
-    test_synth_data_direction = 'user_data'
-    feature_generators = ['vicinity']
-    # feature_generators = ['llm_vicinity', 'llm_value']
     imputer_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
-    labeling_budget = 20
+    gpdep_threshold = 0.3
+    training_time_limit = 30
+    feature_generators = ['vicinity']
+    classification_model = "ABC"
+    vicinity_orders = [1, 2]
     n_best_pdeps = 3
     n_rows = 1000
-    # rule_based_value_cleaning = 'V5'
     rule_based_value_cleaning = None
-    synth_tuples_error_threshold = 0
-    training_time_limit = 30
-    vicinity_feature_generator = "naive"
+    vicinity_feature_generator = "pdep"
     # pdep_features = ('pr', 'vote', 'pdep', 'gpdep')
     pdep_features = ['pr']
-    vicinity_orders = [1, 2]
+    test_synth_data_direction = 'user_data'
 
     # Set this parameter to keep runtimes low when debugging
     data = raha.dataset.Dataset(dataset_name, error_fraction, version, error_class, n_rows)
