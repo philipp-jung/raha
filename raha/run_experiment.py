@@ -59,7 +59,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-07-28-vicinity-orders-benchmark"
+    experiment_name = "2023-08-05-fd-imputer"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
-        description="Repeat Ablation study with latest version.",
+        description="Clean all datasets with the exact FD imputer.",
         commit="",
         config={
             "dataset": "1481",
@@ -109,8 +109,7 @@ if __name__ == "__main__":
             "gpdep_threshold": 0.5,
         },
         ranges={
-            "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "vicinity_orders": [[1], [1, 2]],
+            "dataset": ["fd"],
         },
         runs=3,
         save_path=save_path,
@@ -120,7 +119,7 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
-        description="Repeat Ablation study with latest version.",
+        description="Clean all datasets with the exact FD imputer.",
         commit="9dedb852c68a8b3f4adfd82e128fbf5dc0d1cd10",
         config={
             "dataset": "1481",
@@ -132,7 +131,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["fd"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -146,9 +145,7 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["6", "137", "184", "1481", "41027", "42493"],
-            "error_class": ["simple_mcar", 'imputer_simple_mcar'],
             "error_fraction": [1, 5],
-            "vicinity_orders": [[1], [1, 2]],
         },
         runs=3,
         save_path=save_path,
@@ -158,7 +155,7 @@ if __name__ == "__main__":
 
     rsk_renuver = Ruska(
         name=f"{experiment_name}-renuver",
-        description="Repeat ablation study with latest version.",
+        description="Clean all datasets with the exact FD imputer.",
         commit="",
         config={
             "dataset": "1481",
@@ -170,7 +167,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["fd"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -183,9 +180,8 @@ if __name__ == "__main__":
             "gpdep_threshold": 0.5,
         },
         ranges={
-            "vicinity_orders": [[1], [1, 2]],
-            "error_fraction": [1, 3],
             'dataset': ['bridges', 'cars', 'glass', 'restaurant'],
+            "error_fraction": [1, 3],
         },
         runs=3,
         save_path=save_path,
