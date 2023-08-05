@@ -812,7 +812,7 @@ class Cleaning:
 if __name__ == "__main__":
     # configure Cleaning object
 
-    dataset_name = "flights"
+    dataset_name = "rayyan"
     error_class = 'simple_mcar'
     error_fraction = 1
     version = 1

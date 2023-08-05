@@ -493,11 +493,9 @@ def mine_fds(df_clean_iterative: pd.DataFrame, df_ground_truth: pd.DataFrame) ->
     @return: a dictionary of functional dependencies. The keys are the left-hand-side of the dependency, the values are
     the right-hand-side of the dependency.
     """
-    # Add some entropy to the file names to avoid collisions
-    random_string = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
-    clean_path = "tmp/clean_" + random_string + ".csv"
-    dirty_path = "tmp/dirty_" + random_string + ".csv"
-    fd_path = "tmp/fds_" + random_string + ".txt"
+    clean_path = "tmp/clean.csv"
+    dirty_path = "tmp/dirty.csv"
+    fd_path = "tmp/fds.txt"
     # Write dirty data to disk
     df_clean_iterative.to_csv(dirty_path, index=False)
     df_ground_truth.to_csv(clean_path, index=False)
@@ -505,7 +503,7 @@ def mine_fds(df_clean_iterative: pd.DataFrame, df_ground_truth: pd.DataFrame) ->
     # Execute HyFDMirmir. Do not write output to stdout.
     try:
         subprocess.run(["java", "-jar", "HyFDMimir-1.3.jar", dirty_path, clean_path, fd_path],
-                       stdout = subprocess.DEVNULL)
+                       stdout=subprocess.DEVNULL)
     except FileNotFoundError:
         print("HyFDMimir-1.3.jar not found. Please compile it first, following the instructions in the README.")
         exit(1)
