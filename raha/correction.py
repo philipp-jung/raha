@@ -556,7 +556,7 @@ class Cleaning:
             inputted_rows = list(d.labeled_tuples.keys())
             df_user_input = d.clean_dataframe.iloc[inputted_rows, :]  # careful, this is ground truth.
             df_clean_iterative = pdep.cleanest_version(d.dataframe, df_user_input)
-            d.fds = pdep.mine_fds(df_clean_iterative, d.clean_path)
+            d.fds = pdep.mine_fds(df_clean_iterative, d.clean_dataframe)
 
             # calculate gpdeps
             shape = d.dataframe.shape

@@ -482,23 +482,24 @@ def cleanest_version(df_dirty: pd.DataFrame, user_input: pd.DataFrame) -> pd.Dat
     return df_clean_iterative
 
 
-def mine_fds(df_clean_iterative: pd.DataFrame, clean_dataset_path: str) -> Dict[Tuple, int]:
+def mine_fds(df_clean_iterative: pd.DataFrame, df_ground_truth: pd.DataFrame) -> Dict[Tuple, int]:
     """
     Mine functional dependencies using HyFD. The function calls a jar file called HyFdMirmir-1.3.jar with the following
     parameters:
     @param df_clean_iterative: dirty data, enriched with user input. The cleanest version of the dataset we know without
     touching ground-truth.
-    @param clean_dataset_path: path to where the ground-truth is located. Used by HyFDMirmir to determine error positions.
+    @param df_ground_truth: Ground truth, used by HyFDMirmir to determine error positions.
     @return: a dictionary of functional dependencies. The keys are the left-hand-side of the dependency, the values are
     the right-hand-side of the dependency.
     """
 
     # Write dirty data to disk
     df_clean_iterative.to_csv("tmp/dirty.csv", index=False)
+    df_ground_truth.to_csv("tmp/clean.csv", index=False)
 
     # Execute HyFDMirmir and handle exceptions.
     try:
-        subprocess.run(["java", "-jar", "HyFDMimir-1.3.jar", "tmp/dirty.csv", clean_dataset_path, "tmp/fds.txt"])
+        subprocess.run(["java", "-jar", "HyFDMimir-1.3.jar", "tmp/dirty.csv", "tmp/clean.csv", "tmp/fds.txt"])
     except FileNotFoundError:
         print("HyFDMimir-1.3.jar not found. Please compile it first, following the instructions in the README.")
         exit(1)
@@ -521,6 +522,7 @@ def mine_fds(df_clean_iterative: pd.DataFrame, clean_dataset_path: str) -> Dict[
                 fds[lhs] = rhs
 
     # Remove temporary files.
+    os.remove("tmp/clean.csv")
     os.remove("tmp/dirty.csv")
     os.remove("tmp/fds.txt")
 
