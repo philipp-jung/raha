@@ -96,7 +96,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["vicinity"],
+            "feature_generators": ["fd"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -109,7 +109,7 @@ if __name__ == "__main__":
             "gpdep_threshold": 0.5,
         },
         ranges={
-            "dataset": ["fd"],
+            "dataset": ["beers", "flights", "hospital", "rayyan"],
         },
         runs=3,
         save_path=save_path,
