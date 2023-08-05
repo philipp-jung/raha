@@ -502,9 +502,10 @@ def mine_fds(df_clean_iterative: pd.DataFrame, df_ground_truth: pd.DataFrame) ->
     df_clean_iterative.to_csv(dirty_path, index=False)
     df_ground_truth.to_csv(clean_path, index=False)
 
-    # Execute HyFDMirmir and handle exceptions.
+    # Execute HyFDMirmir. Do not write output to stdout.
     try:
-        subprocess.run(["java", "-jar", "HyFDMimir-1.3.jar", dirty_path, clean_path, fd_path])
+        subprocess.run(["java", "-jar", "HyFDMimir-1.3.jar", dirty_path, clean_path, fd_path],
+                       stdout = subprocess.DEVNULL)
     except FileNotFoundError:
         print("HyFDMimir-1.3.jar not found. Please compile it first, following the instructions in the README.")
         exit(1)
