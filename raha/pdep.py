@@ -1,3 +1,6 @@
+import os
+import csv
+import subprocess
 import pandas as pd
 from typing import Tuple, List, Dict, Union
 from itertools import combinations
@@ -15,11 +18,54 @@ def calculate_frequency(df: pd.DataFrame, col: int):
     return counts.to_dict()
 
 
-def calculate_counts_dict(
+def mine_fd_counts(
     df: pd.DataFrame,
     detected_cells: Dict[Tuple, str],
-    order=1,
-    ignore_sign="<<<IGNORE_THIS_VALUE>>>",
+    fds: Dict[Tuple, int],
+) -> Tuple[dict, dict]:
+    """
+    Calculates a dictionary d that contains the absolute counts of how
+    often values in the lhs occur with values in the rhs in the table df,
+    for a given set of fds.
+    @param df: dataset that is to be cleaned.
+    @param detected_cells: detected error positions.
+    @param fds: known functional dependencies in the dataset.
+    @return:
+    """
+    lhs_values = defaultdict(lambda: defaultdict(dict))
+    d = {lhs: {rhs: {}} for lhs, rhs in fds.items()}
+
+    for row in df.itertuples(index=True):
+        i_row, row = row[0], row[1:]
+        for lhs_cols, rhs_col in fds.items():
+            lhs_vals = tuple(row[lhs_col] for lhs_col in lhs_cols)
+            rhs_val = row[rhs_col]
+
+            lhs_contains_error = any(
+                [(i_row, lhs_col) in detected_cells for lhs_col in lhs_cols]
+            )
+            rhs_contains_error = (i_row, rhs_col) in detected_cells
+            if not lhs_contains_error and not rhs_contains_error:
+                # update conditional counts
+                if lhs_values[lhs_cols][rhs_col].get(lhs_vals) is None:
+                    lhs_values[lhs_cols][rhs_col][lhs_vals] = 1
+                else:
+                    lhs_values[lhs_cols][rhs_col][lhs_vals] += 1
+
+                if d[lhs_cols][rhs_col].get(lhs_vals) is None:
+                    d[lhs_cols][rhs_col][lhs_vals] = {}
+                if d[lhs_cols][rhs_col][lhs_vals].get(rhs_val) is None:
+                    d[lhs_cols][rhs_col][lhs_vals][rhs_val] = 1.0
+                else:
+                    d[lhs_cols][rhs_col][lhs_vals][rhs_val] += 1.0
+    return d, lhs_values
+
+
+def mine_all_counts(
+        df: pd.DataFrame,
+        detected_cells: Dict[Tuple, str],
+        order=1,
+        ignore_sign="<<<IGNORE_THIS_VALUE>>>",
 ) -> Tuple[dict, dict]:
     """
     Calculates a dictionary d that contains the absolute counts of how
@@ -114,11 +160,10 @@ def update_vicinity_model(
 def expected_pdep(
     n_rows: int,
     counts_dict: dict,
-    order: int,
     A: Tuple[int, ...],
     B: int,
 ) -> Union[float, None]:
-    pdep_B = pdep_0(n_rows, counts_dict, order, B, A)
+    pdep_B = pdep_0(n_rows, counts_dict, B, A)
 
     if pdep_B is None:
         return None
@@ -126,7 +171,10 @@ def expected_pdep(
     if pdep_B == 1:  # division by 0
         return None
 
-    n_distinct_values_A = len(counts_dict[order][A][B])
+    if n_rows == 1:  # division by 0
+        return 0
+
+    n_distinct_values_A = len(counts_dict[A][B])
     return pdep_B + (n_distinct_values_A - 1) / (n_rows - 1) * (1 - pdep_B)
 
 
@@ -159,7 +207,6 @@ def error_corrected_row_count(
 def pdep_0(
         n_rows: int,
         counts_dict: dict,
-        order: int,
         B: int,
         A: Tuple[int, ...]
 ) -> Union[float, None]:
@@ -174,9 +221,9 @@ def pdep_0(
     # calculate the frequency of each RHS value, given that the values in all columns covered by LHS and RHS contain
     # no error.
     rhs_abs_frequencies = defaultdict(int)
-    for lhs_vals in counts_dict[order][A][B]:
-        for rhs_val in counts_dict[order][A][B][lhs_vals]:
-            rhs_abs_frequencies[rhs_val] += counts_dict[order][A][B][lhs_vals][rhs_val]
+    for lhs_vals in counts_dict[A][B]:
+        for rhs_val in counts_dict[A][B][lhs_vals]:
+            rhs_abs_frequencies[rhs_val] += counts_dict[A][B][lhs_vals][rhs_val]
 
     sum_components = []
     for rhs_frequency in rhs_abs_frequencies.values():
@@ -188,7 +235,6 @@ def pdep(
     n_rows: int,
     counts_dict: dict,
     lhs_values_frequencies: dict,
-    order: int,
     A: Tuple[int, ...],
     B: int,
 ) -> Union[float, None]:
@@ -203,8 +249,8 @@ def pdep(
 
     sum_components = []
 
-    for lhs_val, rhs_dict in counts_dict[order][A][B].items():  # lhs_val same as A_i
-        lhs_counts = lhs_values_frequencies[order][A][B][lhs_val]  # same as a_i
+    for lhs_val, rhs_dict in counts_dict[A][B].items():  # lhs_val same as A_i
+        lhs_counts = lhs_values_frequencies[A][B][lhs_val]  # same as a_i
         for rhs_val, rhs_counts in rhs_dict.items():  # rhs_counts same as n_ij
             sum_components.append(rhs_counts**2 / lhs_counts)
     return sum(sum_components) / n_rows
@@ -216,7 +262,6 @@ def gpdep(
     lhs_values_frequencies: dict,
     A: Tuple[int, ...],
     B: int,
-    order: int,
 ) -> Union[PdepTuple, None]:
     """
     Calculates the *genuine* probabilistic dependence (gpdep) between
@@ -226,15 +271,11 @@ def gpdep(
     if B in A:  # pdep([A,..],A) = 1
         return None
 
-    pdep_A_B = pdep(n_rows, counts_dict, lhs_values_frequencies, order, A, B)
-    epdep_A_B = expected_pdep(n_rows, counts_dict, order, A, B)
+    pdep_A_B = pdep(n_rows, counts_dict, lhs_values_frequencies, A, B)
+    epdep_A_B = expected_pdep(n_rows, counts_dict, A, B)
 
     if pdep_A_B is not None and epdep_A_B is not None:
         gpdep_A_B = pdep_A_B - epdep_A_B
-        # if (1 - epdep_A_B) < gpdep_A_B:
-        #     a = 1
-        # elif pdep_A_B > 1:
-        #     a = 1
         return PdepTuple(pdep_A_B, gpdep_A_B)
     return None
 
@@ -271,12 +312,29 @@ def vicinity_based_corrector_order_n(counts_dict, ed) -> Dict[str, Dict[str, flo
     return results_dictionary
 
 
+def fd_calc_gpdeps(
+    counts_dict: dict, lhs_values_frequencies: dict, shape: Tuple[int, int], row_errors
+) -> Dict[Tuple, Dict[int, PdepTuple]]:
+    """
+    Calculate all gpdeps in a given set of functional dependencies. The difference to calc_all_gpdeps
+    is that the counts_dict in this version only contains some FDs, and not all possible FDs in some orders.
+    """
+    n_rows, n_cols = shape
+    lhss = list(counts_dict.keys())
+
+    gpdeps = {lhs: {} for lhs in lhss}
+    for lhs in counts_dict:
+        for rhs in counts_dict[lhs]:
+            N = error_corrected_row_count(n_rows, row_errors, lhs, rhs)
+            gpdeps[lhs][rhs] = gpdep(N, counts_dict, lhs_values_frequencies, lhs, rhs)
+    return gpdeps
+
+
 def calc_all_gpdeps(
     counts_dict: dict, lhs_values_frequencies: dict, shape: Tuple[int, int], row_errors, order: int
 ) -> Dict[Tuple, Dict[int, PdepTuple]]:
     """
-    Calculate all gpdeps in dataframe df, with an order implied by the depth
-    of counts_dict.
+    Calculate gpdeps in dataframe df for left hand side values of order `order`.
     """
     n_rows, n_cols = shape
     lhss = set([x for x in counts_dict[order].keys()])
@@ -286,7 +344,7 @@ def calc_all_gpdeps(
     for lhs in lhss:
         for rhs in rhss:
             N = error_corrected_row_count(n_rows, row_errors, lhs, rhs)
-            gpdeps[lhs][rhs] = gpdep(N, counts_dict, lhs_values_frequencies, lhs, rhs, order)
+            gpdeps[lhs][rhs] = gpdep(N, counts_dict[order], lhs_values_frequencies[order], lhs, rhs)
     return gpdeps
 
 
@@ -315,6 +373,51 @@ def invert_and_sort_gpdeps(
         }
     return inverse_gpdeps
 
+
+def fd_based_corrector(
+    inverse_gpdeps: Dict[int, Dict[Tuple, PdepTuple]],
+    counts_dict: dict,
+    ed: dict,
+    feature: str = "pr"
+) -> Dict:
+    """
+    Leverage exact FDs and gpdep to make cleaning suggestions.
+    """
+    rhs_col = ed["column"]
+    gpdeps = inverse_gpdeps.get(rhs_col)
+
+    if gpdeps is None:
+        return {}
+
+    results_list = []
+
+    for lhs_cols, pdep_tuple in gpdeps.items():
+        lhs_vals = tuple([ed["vicinity"][x] for x in lhs_cols])
+
+        if rhs_col not in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
+            sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
+            for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
+                pr = counts_dict[lhs_cols][rhs_col][lhs_vals][rhs_val] / sum_scores
+
+                results_list.append(
+                    {"correction": rhs_val,
+                     "pr": pr,
+                     "pdep": pdep_tuple.pdep if pdep_tuple is not None else 0,
+                     "gpdep": pdep_tuple.gpdep if pdep_tuple is not None else 0}
+                )
+
+    sorted_results = sorted(results_list, key=lambda x: x[feature], reverse=True)
+
+    highest_conditional_probabilities = {}
+
+    # Having a sorted dict allows us to only return the highest conditional
+    # probability per correction by iterating over all generated corrections
+    # like this.
+    for d in sorted_results:
+        if highest_conditional_probabilities.get(d["correction"]) is None:
+            highest_conditional_probabilities[d["correction"]] = d["pr"]
+
+    return highest_conditional_probabilities
 
 def pdep_vicinity_based_corrector(
     inverse_sorted_gpdeps: Dict[int, Dict[tuple, PdepTuple]],
@@ -366,3 +469,59 @@ def pdep_vicinity_based_corrector(
                 highest_conditional_probabilities[d["correction"]] = d["pr"]
 
     return highest_conditional_probabilities
+
+
+def cleanest_version(df_dirty: pd.DataFrame, user_input: pd.DataFrame) -> pd.DataFrame:
+    """
+    Returns the cleanest version of the dataset we know without touching ground-truth.
+    @param df_dirty: dirty data
+    @param user_input: user input
+    @return: cleanest version of the dataset we know without touching ground-truth
+    """
+    df_clean_iterative = user_input.combine_first(df_dirty)
+    return df_clean_iterative
+
+
+def mine_fds(df_clean_iterative: pd.DataFrame, clean_dataset_path: str) -> Dict[Tuple, int]:
+    """
+    Mine functional dependencies using HyFD. The function calls a jar file called HyFdMirmir-1.3.jar with the following
+    parameters:
+    @param df_clean_iterative: dirty data, enriched with user input. The cleanest version of the dataset we know without
+    touching ground-truth.
+    @param clean_dataset_path: path to where the ground-truth is located. Used by HyFDMirmir to determine error positions.
+    @return: a dictionary of functional dependencies. The keys are the left-hand-side of the dependency, the values are
+    the right-hand-side of the dependency.
+    """
+
+    # Write dirty data to disk
+    df_clean_iterative.to_csv("tmp/dirty.csv", index=False)
+
+    # Execute HyFDMirmir and handle exceptions.
+    try:
+        subprocess.run(["java", "-jar", "HyFDMimir-1.3.jar", "tmp/dirty.csv", clean_dataset_path, "tmp/fds.txt"])
+    except FileNotFoundError:
+        print("HyFDMimir-1.3.jar not found. Please compile it first, following the instructions in the README.")
+        exit(1)
+
+    # Read the output of HyFDMimir into memory.
+
+    fds = {}
+    with open("tmp/fds.txt", "r") as f:
+        while True:
+            line = f.readline()
+            if not line:
+                break
+            lhs, rhs = line.split("->")
+            rhs = rhs.strip()
+            if len(lhs) == 0:
+                print('WARNING: Mined FD with empty LHS: ' + line)
+            else:
+                lhs = tuple([int(x) for x in lhs.split(",")])
+                rhs = int(rhs.strip())
+                fds[lhs] = rhs
+
+    # Remove temporary files.
+    os.remove("tmp/dirty.csv")
+    os.remove("tmp/fds.txt")
+
+    return fds

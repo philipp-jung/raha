@@ -13,3 +13,6 @@ raha/__pycache__/
 
 # LLM sqlite-cache
 raha/cache.db
+
+# HyFDMirmir
+HyFDMimir/

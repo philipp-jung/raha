@@ -22,7 +22,7 @@ class TestPdep(unittest.TestCase):
                 ],
             }
         )
-        cls.counts_dict = {1: pdep.calculate_counts_dict(cls.df, [{}], order=1)}
+        cls.counts_dict = {1: pdep.mine_all_counts(cls.df, [{}], order=1)}
         cls.n_rows = cls.df.shape[0]
 
         # make references to columns more lisible
@@ -74,7 +74,7 @@ class TestErrorPdep(unittest.TestCase):
         marked as an error.
         """
         detected_cells = {(0, 0): "0"}
-        counts_dict = {1: pdep.calculate_counts_dict(self.df, detected_cells, order=1) }
+        counts_dict = {1: pdep.mine_all_counts(self.df, detected_cells, order=1)}
         pdep_id = round(pdep.pdep(self.n_rows, counts_dict, detected_cells, 1, tuple([0])), 2)
         self.assertEqual(pdep_id, 0.33)
 
@@ -84,7 +84,7 @@ class TestErrorPdep(unittest.TestCase):
         marked as an error.
         """
         detected_cells = {(0, 0): "0", (1, 0): "1", (2, 0): "2", (3, 0): "3"}
-        counts_dict = {1: pdep.calculate_counts_dict(self.df, detected_cells, order=1)}
+        counts_dict = {1: pdep.mine_all_counts(self.df, detected_cells, order=1)}
         pdep_id = pdep.pdep(self.n_rows, counts_dict, detected_cells, 1, tuple([0]))
         self.assertIsNone(pdep_id)
 
@@ -94,7 +94,7 @@ class TestErrorPdep(unittest.TestCase):
         are marked as errors.
         """
         detected_cells = {(0, 0): "0", (1, 0): "1"}
-        counts_dict = {1: pdep.calculate_counts_dict(self.df, detected_cells, order=1)}
+        counts_dict = {1: pdep.mine_all_counts(self.df, detected_cells, order=1)}
         pdep_a_b = round(pdep.pdep(self.n_rows, counts_dict, detected_cells, 1, tuple([0]), 1), 2)
         self.assertEqual(1, pdep_a_b)
 
@@ -104,7 +104,7 @@ class TestErrorPdep(unittest.TestCase):
         are marked as errors.
         """
         detected_cells = {(0, 1): "Otto", (1, 1): "Hanna"}
-        counts_dict = {1: pdep.calculate_counts_dict(self.df, detected_cells, order=1)}
+        counts_dict = {1: pdep.mine_all_counts(self.df, detected_cells, order=1)}
         pdep_a_b = round(pdep.pdep(self.n_rows, counts_dict, detected_cells, 1, tuple([0]), 1), 2)
         self.assertEqual(pdep_a_b, 1)
 
@@ -113,7 +113,7 @@ class TestErrorPdep(unittest.TestCase):
         Test that pdep(id, name) is None if all values in A are errors.
         """
         detected_cells = {(0, 0): "0", (1, 0): "1", (2, 0): "2", (3, 0): "3"}
-        counts_dict = {1: pdep.calculate_counts_dict(self.df, detected_cells, order=1)}
+        counts_dict = {1: pdep.mine_all_counts(self.df, detected_cells, order=1)}
         pdep_a_b = pdep.pdep(self.n_rows, counts_dict, detected_cells, 1, tuple([0]), 1)
         self.assertIsNone(pdep_a_b)
 
@@ -122,7 +122,7 @@ class TestErrorPdep(unittest.TestCase):
         Test that pdep(id, name) is None if all values in A are errors.
         """
         detected_cells = {(0, 0): "Otto", (1, 0): "Hanna", (2, 0): "Peter", (3, 0): "Ella"}
-        counts_dict = {1: pdep.calculate_counts_dict(self.df, detected_cells, order=1)}
+        counts_dict = {1: pdep.mine_all_counts(self.df, detected_cells, order=1)}
         pdep_a_b = pdep.pdep(self.n_rows, counts_dict, detected_cells, 1, tuple([0]), 1)
         self.assertIsNone(pdep_a_b)
 

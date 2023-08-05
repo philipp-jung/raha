@@ -268,7 +268,7 @@ class Cleaning:
         d.lhs_values_frequencies = {}
         if 'vicinity' in self.FEATURE_GENERATORS:
             for o in self.VICINITY_ORDERS:
-                d.vicinity_models[o], d.lhs_values_frequencies[o] = pdep.calculate_counts_dict(
+                d.vicinity_models[o], d.lhs_values_frequencies[o] = pdep.mine_all_counts(
                     df=d.dataframe,
                     detected_cells=d.detected_cells,
                     order=o,
@@ -424,6 +424,10 @@ class Cleaning:
                             "row": error_cell[0]}
 
         # Begin Philipps Changes
+        if "fd" in self.FEATURE_GENERATORS:
+            fd_corrections = pdep.fd_based_corrector(d.fd_inverted_gpdeps, d.fd_counts_dict, error_dictionary, 'gpdep')
+            d.corrections.get('fd')[error_cell] = fd_corrections
+
         if "vicinity" in self.FEATURE_GENERATORS:
             if self.VICINITY_FEATURE_GENERATOR == 'naive':
                 for o in self.VICINITY_ORDERS:
@@ -546,6 +550,28 @@ class Cleaning:
             for order in self.VICINITY_ORDERS:
                 vicinity_gpdeps = pdep.calc_all_gpdeps(d.vicinity_models, d.lhs_values_frequencies, shape, row_errors, order)
                 d.inv_vicinity_gpdeps[order] = pdep.invert_and_sort_gpdeps(vicinity_gpdeps)
+
+        if 'fd' in self.FEATURE_GENERATORS:
+            # calculate FDs
+            inputted_rows = list(d.labeled_tuples.keys())
+            df_user_input = d.clean_dataframe.iloc[inputted_rows, :]  # careful, this is ground truth.
+            df_clean_iterative = pdep.cleanest_version(d.dataframe, df_user_input)
+            d.fds = pdep.mine_fds(df_clean_iterative, d.clean_path)
+
+            # calculate gpdeps
+            shape = d.dataframe.shape
+            error_positions = helpers.ErrorPositions(d.detected_cells, shape, d.labeled_cells)
+            row_errors = error_positions.updated_row_errors()
+            d.fd_counts_dict, lhs_values_frequencies = pdep.mine_fd_counts(d.dataframe, d.detected_cells, d.fds)
+            gpdeps = pdep.fd_calc_gpdeps(d.fd_counts_dict, lhs_values_frequencies, shape, row_errors)
+
+            d.fd_inverted_gpdeps = {}
+            for lhs in gpdeps:
+                for rhs in gpdeps[lhs]:
+                    if rhs not in d.fd_inverted_gpdeps:
+                        d.fd_inverted_gpdeps[rhs] = {}
+                    d.fd_inverted_gpdeps[rhs][lhs] = gpdeps[lhs][rhs]
+
 
         if 'imputer' in self.FEATURE_GENERATORS and len(d.labeled_tuples) == self.LABELING_BUDGET:
             # simulate user input by reading labeled data from the typed dataframe
@@ -702,6 +728,9 @@ class Cleaning:
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
 
+        # if self.sampled_tuples == self.LABELING_BUDGET:
+        #     a = 1
+
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(
                 100 * len(d.corrected_cells) / len(d.detected_cells),
@@ -783,7 +812,7 @@ class Cleaning:
 if __name__ == "__main__":
     # configure Cleaning object
 
-    dataset_name = "letter"
+    dataset_name = "flights"
     error_class = 'simple_mcar'
     error_fraction = 1
     version = 1
@@ -797,7 +826,7 @@ if __name__ == "__main__":
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
     gpdep_threshold = 0.3
     training_time_limit = 30
-    feature_generators = ['vicinity']
+    feature_generators = ['fd']
     classification_model = "ABC"
     vicinity_orders = [1, 2]
     n_best_pdeps = 3
