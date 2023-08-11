@@ -425,6 +425,8 @@ class Cleaning:
 
         # Begin Philipps Changes
         if "fd" in self.FEATURE_GENERATORS:
+            if self.sampled_tuples == self.LABELING_BUDGET:
+                a = 1
             fd_corrections = pdep.fd_based_corrector(d.fd_inverted_gpdeps, d.fd_counts_dict, error_dictionary, 'gpdep')
             d.corrections.get('fd')[error_cell] = fd_corrections
 
@@ -562,7 +564,7 @@ class Cleaning:
             shape = d.dataframe.shape
             error_positions = helpers.ErrorPositions(d.detected_cells, shape, d.labeled_cells)
             row_errors = error_positions.updated_row_errors()
-            d.fd_counts_dict, lhs_values_frequencies = pdep.mine_fd_counts(d.dataframe, d.detected_cells, d.fds)
+            d.fd_counts_dict, lhs_values_frequencies = pdep.mine_fd_counts(d.dataframe, row_errors, d.fds)
             gpdeps = pdep.fd_calc_gpdeps(d.fd_counts_dict, lhs_values_frequencies, shape, row_errors)
 
             d.fd_inverted_gpdeps = {}
@@ -728,8 +730,8 @@ class Cleaning:
 
             ml_helpers.set_binary_cleaning_suggestions(predicted_labels, error_correction_suggestions, d.corrected_cells)
 
-        # if self.sampled_tuples == self.LABELING_BUDGET:
-        #     a = 1
+        if self.sampled_tuples == self.LABELING_BUDGET:
+            a = 1
 
         if self.VERBOSE:
             print("{:.0f}% ({} / {}) of data errors are corrected.".format(
@@ -812,7 +814,7 @@ class Cleaning:
 if __name__ == "__main__":
     # configure Cleaning object
 
-    dataset_name = "rayyan"
+    dataset_name = "flights"
     error_class = 'simple_mcar'
     error_fraction = 1
     version = 1
@@ -830,7 +832,7 @@ if __name__ == "__main__":
     classification_model = "ABC"
     vicinity_orders = [1, 2]
     n_best_pdeps = 3
-    n_rows = 1000
+    n_rows = None
     rule_based_value_cleaning = None
     vicinity_feature_generator = "pdep"
     # pdep_features = ('pr', 'vote', 'pdep', 'gpdep')
