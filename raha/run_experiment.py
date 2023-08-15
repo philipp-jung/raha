@@ -96,7 +96,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["fd"],
+            "feature_generators": ["llm_value", "llm_vicinity", "imputer", "fd"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -110,6 +110,16 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
+            "feature_generators": [
+                ["llm_vicinity", "imputer", "fd"],
+                ["llm_value", "imputer", "fd"],
+                ["llm_value", "llm_vicinity", "fd"],
+                ["llm_value", "llm_vicinity", "imputer"],
+                ["llm_value"],
+                ["llm_vicinity"],
+                ["imputer"],
+                ["fd"]
+            ],
         },
         runs=3,
         save_path=save_path,
@@ -131,7 +141,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["fd"],
+            "feature_generators": ["llm_value", "llm_vicinity", "imputer", "fd"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -146,6 +156,16 @@ if __name__ == "__main__":
         ranges={
             "dataset": ["6", "137", "184", "1481", "41027", "42493"],
             "error_fraction": [1, 5],
+            "feature_generators": [
+                ["llm_vicinity", "imputer", "fd"],
+                ["llm_value", "imputer", "fd"],
+                ["llm_value", "llm_vicinity", "fd"],
+                ["llm_value", "llm_vicinity", "imputer"],
+                ["llm_value"],
+                ["llm_vicinity"],
+                ["imputer"],
+                ["fd"]
+            ],
         },
         runs=3,
         save_path=save_path,
@@ -167,7 +187,7 @@ if __name__ == "__main__":
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["fd"],
+            "feature_generators": ["llm_value", "llm_vicinity", "imputer", "fd"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -182,6 +202,16 @@ if __name__ == "__main__":
         ranges={
             'dataset': ['bridges', 'cars', 'glass', 'restaurant'],
             "error_fraction": [1, 3],
+            "feature_generators": [
+                ["llm_vicinity", "imputer", "fd"],
+                ["llm_value", "imputer", "fd"],
+                ["llm_value", "llm_vicinity", "fd"],
+                ["llm_value", "llm_vicinity", "imputer"],
+                ["llm_value"],
+                ["llm_vicinity"],
+                ["imputer"],
+                ["fd"]
+            ],
         },
         runs=3,
         save_path=save_path,

@@ -393,12 +393,10 @@ def fd_based_corrector(
         return {}
 
     results_list = []
-    debugging = []
 
     for lhs_cols, pdep_tuple in gpdeps.items():
         lhs_vals = tuple([ed["vicinity"][x] for x in lhs_cols])
 
-        debugging.append({'lhs_cols': lhs_cols, 'lhs_vals': lhs_vals, 'rhs_col': rhs_col})
         if rhs_col not in lhs_cols and lhs_vals in counts_dict[lhs_cols][rhs_col]:
             sum_scores = sum(counts_dict[lhs_cols][rhs_col][lhs_vals].values())
             for rhs_val in counts_dict[lhs_cols][rhs_col][lhs_vals]:
