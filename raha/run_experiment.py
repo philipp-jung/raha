@@ -59,7 +59,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-08-05-fd-imputer"
+    experiment_name = "2023-08-26-unsupervised-benchmark"
     save_path = "/root/measurements"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -84,19 +84,19 @@ if __name__ == "__main__":
 
     rsk_baran = Ruska(
         name=f"{experiment_name}-baran",
-        description="Clean all datasets with the exact FD imputer.",
+        description="Unsupervised benchmark.",
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
             "error_fraction": 1,
-            "labeling_budget": 20,
+            "labeling_budget": 0,
             "synth_tuples": 100,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["llm_value", "llm_vicinity", "imputer", "fd"],
+            "feature_generators": ["llm_value", "llm_vicinity", "imputer", "fd", "domain"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -110,16 +110,6 @@ if __name__ == "__main__":
         },
         ranges={
             "dataset": ["beers", "flights", "hospital", "rayyan"],
-            "feature_generators": [
-                ["llm_vicinity", "imputer", "fd"],
-                ["llm_value", "imputer", "fd"],
-                ["llm_value", "llm_vicinity", "fd"],
-                ["llm_value", "llm_vicinity", "imputer"],
-                ["llm_value"],
-                ["llm_vicinity"],
-                ["imputer"],
-                ["fd"]
-            ],
         },
         runs=3,
         save_path=save_path,
@@ -129,19 +119,19 @@ if __name__ == "__main__":
 
     rsk_openml = Ruska(
         name=f"{experiment_name}-openml",
-        description="Clean all datasets with the exact FD imputer.",
-        commit="9dedb852c68a8b3f4adfd82e128fbf5dc0d1cd10",
+        description="Unsupervised benchmark.",
+        commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
             "error_fraction": 1,
-            "labeling_budget": 20,
+            "labeling_budget": 0,
             "synth_tuples": 100,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["llm_value", "llm_vicinity", "imputer", "fd"],
+            "feature_generators": ["llm_value", "llm_vicinity", "imputer", "fd", "domain"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -154,18 +144,8 @@ if __name__ == "__main__":
             "gpdep_threshold": 0.5,
         },
         ranges={
-            "dataset": ["6", "137", "184", "1481", "41027", "42493"],
+            "dataset": ["6", "137", "184", "1481", "41027"],
             "error_fraction": [1, 5],
-            "feature_generators": [
-                ["llm_vicinity", "imputer", "fd"],
-                ["llm_value", "imputer", "fd"],
-                ["llm_value", "llm_vicinity", "fd"],
-                ["llm_value", "llm_vicinity", "imputer"],
-                ["llm_value"],
-                ["llm_vicinity"],
-                ["imputer"],
-                ["fd"]
-            ],
         },
         runs=3,
         save_path=save_path,
@@ -175,19 +155,19 @@ if __name__ == "__main__":
 
     rsk_renuver = Ruska(
         name=f"{experiment_name}-renuver",
-        description="Clean all datasets with the exact FD imputer.",
+        description="Unsupervised benchmark.",
         commit="",
         config={
             "dataset": "1481",
             "error_class": "simple_mcar",
             "error_fraction": 1,
-            "labeling_budget": 20,
+            "labeling_budget": 0,
             "synth_tuples": 100,
             "synth_tuples_error_threshold": 0,
             "imputer_cache_model": False,
             "clean_with_user_input": True,
             "training_time_limit": 30,
-            "feature_generators": ["llm_value", "llm_vicinity", "imputer", "fd"],
+            "feature_generators": ["llm_value", "llm_vicinity", "imputer", "fd", "domain"],
             "classification_model": "ABC",
             "vicinity_orders": [1, 2],
             "vicinity_feature_generator": "pdep",
@@ -202,16 +182,6 @@ if __name__ == "__main__":
         ranges={
             'dataset': ['bridges', 'cars', 'glass', 'restaurant'],
             "error_fraction": [1, 3],
-            "feature_generators": [
-                ["llm_vicinity", "imputer", "fd"],
-                ["llm_value", "imputer", "fd"],
-                ["llm_value", "llm_vicinity", "fd"],
-                ["llm_value", "llm_vicinity", "imputer"],
-                ["llm_value"],
-                ["llm_vicinity"],
-                ["imputer"],
-                ["fd"]
-            ],
         },
         runs=3,
         save_path=save_path,
@@ -219,6 +189,6 @@ if __name__ == "__main__":
         token=os.environ["TELEGRAM_BOT_TOKEN"],
     )
 
-    rsk_baran.run(experiment=run_baran, parallel=True)
-    rsk_openml.run(experiment=run_baran, parallel=True)
-    rsk_renuver.run(experiment=run_baran, parallel=True)
+    rsk_baran.run(experiment=run_baran, parallel=False)
+    rsk_openml.run(experiment=run_baran, parallel=False)
+    rsk_renuver.run(experiment=run_baran, parallel=False)
