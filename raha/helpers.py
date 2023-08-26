@@ -170,7 +170,7 @@ def fetch_cached_llm(dataset: str,
                      error_class: Union[None, str] = None) -> Tuple[dict, dict, dict]:
     """
     Sending requests to LLMs is expensive (time & money). We use caching to mitigate that cost. As primary key for
-    a correction serves (dataset_name, error_cell, correction_model_name). This is imperfect, but a reasonable
+    a correction serves (dataset_name, error_cell, version, correction_model_name). This is imperfect, but a reasonable
     approximation: Since the prompt-generation itself as well as its dependencies are non-deterministic, the prompt
     cannot serve as part of the primary key.
 
@@ -179,6 +179,28 @@ def fetch_cached_llm(dataset: str,
     @param dataset: name of the dataset that is cleaned.
     @param error_cell: (row, column) position of the error.
     @param prompt: prompt that is sent to the LLM.
+    @param correction_model_name: "llm_vicinity" or "llm_value".
+    @param error_fraction: Fraction of errors in the dataset.
+    @param version: Version of the dataset. See dataset.py for details.
+    @param error_class: Class of the error, e.g. MCAR
+    @return: correction_tokens, token_logprobs, and top_logprobs.
+    """
+    cache = fetch_cache(dataset, error_cell, correction_model_name, error_fraction, version, error_class)
+    if cache is not None:
+        return cache[0], cache[1], cache[2]
+    else:
+        return fetch_llm(prompt, dataset, error_cell, correction_model_name, error_fraction, version, error_class)
+
+
+def fetch_cache(dataset: str,
+                error_cell: Tuple[int,int],
+                correction_model_name: str,
+                error_fraction: Union[None, int] = None,
+                version: Union[None, int] = None,
+                error_class: Union[None, str] = None) -> Union[None, Tuple[dict, dict, dict]]:
+    """
+    @param dataset: name of the dataset that is cleaned.
+    @param error_cell: (row, column) position of the error.
     @param correction_model_name: "llm_vicinity" or "llm_value".
     @param error_fraction: Fraction of errors in the dataset.
     @param version: Version of the dataset. See dataset.py for details.
@@ -224,8 +246,7 @@ def fetch_cached_llm(dataset: str,
     conn.close()
     if result is not None:
         return json.loads(result[0]), json.loads(result[1]), json.loads(result[2])  # access the correction
-    else:
-        return fetch_llm(prompt, dataset, error_cell, correction_model_name, error_fraction, version, error_class)
+    return None
 
 
 def fetch_llm(prompt: str,
@@ -308,7 +329,7 @@ def construct_llm_corrections(dictionaries: List[Dict[str, float]], current_sent
         return result
 
 
-def llm_response_to_corrections(correction_tokens: List[str], token_logprobs: dict, top_logprobs: List[Dict[str, float]]) -> Dict[str, float]:
+def llm_response_to_corrections(correction_tokens: dict, token_logprobs: dict, top_logprobs: dict) -> Dict[str, float]:
     # if len(correction_tokens) <= 7:
     #     corrections = construct_llm_corrections(top_logprobs)
     #     # filter out all corrections with pr < 1% <=> logprob > -4.60517.

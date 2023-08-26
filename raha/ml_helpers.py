@@ -66,8 +66,9 @@ def handle_edge_cases(x_train, x_test, y_train, labeled_tuples) -> Tuple[bool, L
     elif sum(y_train) == len(y_train):  # no incorrect suggestion was created for any of the error cells.
         return False, np.ones(len(x_test))
 
-    elif len(labeled_tuples) == 0:  # no training data is available because no user labels have been set.
-        return False, []
+    # That's the unsupervised case. Why would that be invalid?
+    # elif len(labeled_tuples) == 0:  # no training data is available because no user labels have been set.
+        # return False, []
 
     elif len(x_train) > 0 and len(x_test) == 0:  # len(x_test) == 0 because all rows have been labeled.
         return False, []  # trivial case - use manually corrected cells to correct all errors.

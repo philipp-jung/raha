@@ -418,7 +418,8 @@ def fd_based_corrector(
     # like this.
     for d in sorted_results:
         if highest_conditional_probabilities.get(d["correction"]) is None:
-            highest_conditional_probabilities[d["correction"]] = d["pr"]
+            # highest_conditional_probabilities[d["correction"]] = d["pr"]
+            highest_conditional_probabilities[d["correction"]] = d[feature]
 
     return highest_conditional_probabilities
 
