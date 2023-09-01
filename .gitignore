@@ -11,8 +11,5 @@ raha/__pycache__/
 */AutogluonModels
 **/.env
 
-# LLM sqlite-cache
-raha/cache.db
-
 # HyFDMirmir
 HyFDMimir/
