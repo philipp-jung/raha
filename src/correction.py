@@ -31,8 +31,6 @@ import pdep
 import hpo
 import helpers
 import ml_helpers
-import value_cleaning
-import value_helpers
 
 
 class Cleaning:
@@ -42,8 +40,8 @@ class Cleaning:
 
     def __init__(self, labeling_budget: int, classification_model: str, clean_with_user_input: bool, feature_generators: List[str],
                  vicinity_orders: List[int], vicinity_feature_generator: str, auto_instance_cache_model: bool,
-                 n_best_pdeps: int, training_time_limit: int, rule_based_value_cleaning: Union[str, bool],
-                 synth_tuples: int, synth_tuples_error_threshold: int, synth_cleaning_threshold: float,
+                 n_best_pdeps: int, training_time_limit: int,
+                 synth_tuples: int, synth_cleaning_threshold: float,
                  test_synth_data_direction: str, pdep_features: Tuple[str], gpdep_threshold: float):
         """
         Parameters of the cleaning experiment.
@@ -66,11 +64,7 @@ class Cleaning:
         measure. After ranking, the n_best_pdeps dependencies are used to provide cleaning suggestions. A good heuristic
         is to set this to 3.
         @param training_time_limit: Limit in seconds of how long the AutoGluon imputer model is trained.
-        @param rule_based_value_cleaning: Use rule based cleaning approach if 'V1' or 'V3'. Set to False to have value
-        cleaning be part of the meta learning, which is the Baran default. V1 uses rules from 2022W38, V3 from 2022W40.
         @param synth_tuples: maximum number of tuples to synthesize training data with.
-        @param synth_tuples_error_threshold: maximum number of errors in a row that is used to synthesize tuples.
-        noise in the training data.
         @param synth_cleaning_threshold: Threshold for column-cleaning to pass in order to leverage synth-data.
         Deactivates if set to -1.
         @param test_synth_data_direction: Direction in which the synth data's usefulness for cleaning is being tested.
@@ -85,7 +79,6 @@ class Cleaning:
 
         # Philipps changes
         self.SYNTH_TUPLES = synth_tuples
-        self.SYNTH_TUPLES_ERROR_THRESHOLD = synth_tuples_error_threshold
         self.CLEAN_WITH_USER_INPUT = clean_with_user_input
 
         self.FEATURE_GENERATORS = feature_generators
@@ -94,7 +87,6 @@ class Cleaning:
         self.AUTO_INSTANCE_CACHE_MODEL = auto_instance_cache_model
         self.N_BEST_PDEPS = n_best_pdeps
         self.TRAINING_TIME_LIMIT = training_time_limit
-        self.RULE_BASED_VALUE_CLEANING = rule_based_value_cleaning
         self.CLASSIFICATION_MODEL = classification_model
         self.SYNTH_CLEANING_THRESHOLD = synth_cleaning_threshold
         self.TEST_SYNTH_DATA_DIRECTION = test_synth_data_direction
@@ -113,16 +105,6 @@ class Cleaning:
         self.sampled_tuples = 0
 
     @staticmethod
-    def _value_encoder(value, encoding):
-        """
-        This method represents a value with a specified value abstraction encoding method.
-        """
-        if encoding == "identity":
-            return json.dumps(list(value))
-        if encoding == "unicode":
-            return json.dumps([unicodedata.category(c) for c in value])
-
-    @staticmethod
     def _to_model_adder(model, key, value):
         """
         This method incrementally adds a key-value into a dictionary-implemented model.
@@ -132,27 +114,6 @@ class Cleaning:
         if value not in model[key]:
             model[key][value] = 0.0
         model[key][value] += 1.0
-
-    @staticmethod
-    def _to_value_model_adder(value_model, enc_error_value, transformation, error_cell):
-        """
-        This method updates the value_model. It is different from _to_model_adder, since value_model contains
-        coordinates of the error_cell from which the transformation originates.
-        """
-        if enc_error_value not in value_model:
-            value_model[enc_error_value] = {}
-        if transformation not in value_model[enc_error_value]:
-            value_model[enc_error_value][transformation] = []
-        value_model[enc_error_value][transformation].append(error_cell)
-
-    def _value_based_models_updater(self, models, ud, cell):
-        """
-        This method updates the value-based error corrector models with a given update dictionary.
-        """
-        if (ud["new_value"] and len(ud["new_value"]) <= self.MAX_VALUE_LENGTH and
-                ud["old_value"] and len(ud["old_value"]) <= self.MAX_VALUE_LENGTH and
-                ud["old_value"] != ud["new_value"] and ud["old_value"].lower() != "n/a"):
-            models.update_rules(ud['old_value'], ud['new_value'], cell)
 
     def _domain_based_model_updater(self, model, ud):
         """
@@ -195,7 +156,7 @@ class Cleaning:
         """
         This method initializes the dataset.
         """
-        d.results_folder = os.path.join(os.path.dirname(d.path), "raha-baran-results-" + d.name)
+        d.results_folder = os.path.join(os.path.dirname(d.path), "mirmir-results-" + d.name)
         if self.SAVE_RESULTS and not os.path.exists(d.results_folder):
             os.mkdir(d.results_folder)
         d.labeled_tuples = {} if not hasattr(d, "labeled_tuples") else d.labeled_tuples
@@ -207,7 +168,6 @@ class Cleaning:
         """
         This method initializes the error corrector models.
         """
-        d.value_models = value_cleaning.ValueCleaning()
         d.domain_models = {}
 
         for row in d.dataframe.itertuples():
@@ -230,7 +190,6 @@ class Cleaning:
                     self._domain_based_model_updater(d.domain_models, update_dictionary)
 
         # BEGIN Philipp's changes
-        d.value_corrections = {}
 
         # Initialize LLM cache
         conn = helpers.connect_to_cache()
@@ -258,8 +217,7 @@ class Cleaning:
                     for o in self.VICINITY_ORDERS:
                         for lhs in combinations(range(cols), o):
                             corrections_features.append(f'vicinity_{o}_{str(lhs)}')
-            elif feature != 'value':
-                corrections_features.append(feature)
+            corrections_features.append(feature)
 
         d.corrections = helpers.Corrections(corrections_features)
         d.synth_corrections = helpers.Corrections(corrections_features)
@@ -370,8 +328,7 @@ class Cleaning:
 
             # if the value in that cell has been labelled an error
             if d.labeled_cells[cell][0] == 1:
-                # update value and vicinity models.
-                self._value_based_models_updater(d.value_models, update_dictionary, cell)
+                # update domain and vicinity models.
                 self._domain_based_model_updater(d.domain_models, update_dictionary)
                 update_dictionary["vicinity"] = [cv if column != cj else self.IGNORE_SIGN
                                                  for cj, cv in enumerate(cleaned_sampled_tuple)]
@@ -460,12 +417,6 @@ class Cleaning:
             else:
                 raise ValueError(f'Unknown VICINITY_FEATURE_GENERATOR '
                                  f'{self.VICINITY_FEATURE_GENERATOR}')
-
-        if "value" in self.FEATURE_GENERATORS and not is_synth:
-            error = error_dictionary['old_value']
-            value_corrections = d.value_models.cleaning_features(error, 'both')
-            if not is_synth:
-                d.value_corrections[error_cell] = value_corrections
 
         if 'llm_correction' in self.FEATURE_GENERATORS and not is_synth and len(d.labeled_tuples) == self.LABELING_BUDGET:
             """
@@ -635,9 +586,8 @@ class Cleaning:
         error_positions = helpers.ErrorPositions(d.detected_cells, d.dataframe.shape, d.labeled_cells)
         row_errors = error_positions.updated_row_errors()
 
-        # determine rows with least amount of erronous values to sample from.
-        candidate_rows = [(row, len(cells)) for row, cells in row_errors.items() if
-                                   len(cells) <= self.SYNTH_TUPLES_ERROR_THRESHOLD]
+        # determine error-free rows to sample from.
+        candidate_rows = [(row, len(cells)) for row, cells in row_errors.items() if len(cells) == 0]
         ranked_candidate_rows = sorted(candidate_rows, key=lambda x: x[1])
 
         if self.SYNTH_TUPLES > 0 and len(ranked_candidate_rows) > 0:
@@ -680,26 +630,6 @@ class Cleaning:
             if self.VERBOSE:
                 print(f"Synth features generated.")
 
-    def rule_based_value_cleaning(self, d):
-        """ Find value corrections with a conditional probability of 1.0 and use them as corrections."""
-        d.rule_based_value_corrections = {}
-
-        for cell, value_corrections in d.value_corrections.items():
-            rule_based_suggestion = None
-            if self.RULE_BASED_VALUE_CLEANING == 'V4' and len(value_corrections) > 0:
-                atomic_corrections, complex_corrections = value_corrections[:8], value_corrections[8]
-                value_suggestions = value_helpers.BothValueSuggestions(cell, atomic_corrections, complex_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion_v4()
-
-            if self.RULE_BASED_VALUE_CLEANING == 'V5' and len(value_corrections) > 0:
-                atomic_corrections, complex_corrections = value_corrections[:8], value_corrections[8]
-                value_suggestions = value_helpers.BothValueSuggestions(cell, atomic_corrections, complex_corrections)
-                rule_based_suggestion = value_suggestions.rule_based_suggestion_v4()
-
-            if rule_based_suggestion is not None:
-                d.rule_based_value_corrections[cell] = rule_based_suggestion
-        if self.VERBOSE:
-            print('Rule-based cleaning finished.')
 
     def binary_predict_corrections(self, d):
         """
@@ -816,16 +746,7 @@ class Cleaning:
             self.prepare_augmented_models(d)
             self.generate_features(d, synchronous=True)
             self.generate_synth_features(d, synchronous=True)
-            if self.RULE_BASED_VALUE_CLEANING:
-                self.rule_based_value_cleaning(d)
             self.binary_predict_corrections(d)
-            if self.RULE_BASED_VALUE_CLEANING:
-                # write the rule-based value corrections into the corrections dictionary. This overwrites
-                # results for domain_instance & vicinity features. The idea is that the rule-based value
-                # corrections are super precise and thus should be used if possible.
-                for cell, correction in d.rule_based_value_corrections.items():
-                    d.corrected_cells[cell] = correction
-
             self.clean_with_user_input(d)
             if self.VERBOSE:
                 p, r, f = d.get_data_cleaning_evaluation(d.corrected_cells)[-3:]
@@ -848,7 +769,6 @@ if __name__ == "__main__":
 
     labeling_budget = 20
     synth_tuples = 100
-    synth_tuples_error_threshold = 0
     synth_cleaning_threshold = 0.9
     auto_instance_cache_model = False
     clean_with_user_input = True  # Careful: If set to False, d.corrected_cells will remain empty.
@@ -859,7 +779,6 @@ if __name__ == "__main__":
     vicinity_orders = [1, 2]
     n_best_pdeps = 3
     n_rows = 1000
-    rule_based_value_cleaning = None
     vicinity_feature_generator = "pdep"
     # pdep_features = ('pr', 'vote', 'pdep', 'gpdep')
     pdep_features = ['pr']
@@ -871,7 +790,7 @@ if __name__ == "__main__":
 
     app = Cleaning(labeling_budget, classification_model, clean_with_user_input, feature_generators, vicinity_orders,
                      vicinity_feature_generator, auto_instance_cache_model, n_best_pdeps, training_time_limit,
-                     rule_based_value_cleaning, synth_tuples, synth_tuples_error_threshold, synth_cleaning_threshold,
+                     synth_tuples, synth_cleaning_threshold,
                      test_synth_data_direction, pdep_features, gpdep_threshold)
     app.VERBOSE = True
     seed = 0
