@@ -41,7 +41,7 @@ class Correction:
     The main class.
     """
 
-    def __init__(self):
+    def __init__(self, cripple):
         """
         The constructor.
         """
@@ -57,6 +57,7 @@ class Correction:
         self.MIN_CORRECTION_OCCURRENCE = 2
         self.MAX_VALUE_LENGTH = 50
         self.REVISION_WINDOW_SIZE = 5
+        self.CRIPPLE = cripple
 
     @staticmethod
     def _wikitext_segmenter(wikitext):
@@ -465,10 +466,22 @@ class Correction:
         """
         d, cell = args
         error_dictionary = {"column": cell[1], "old_value": d.dataframe.iloc[cell], "vicinity": list(d.dataframe.iloc[cell[0], :])}
-        value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
-        vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
-        domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
-        models_corrections = value_corrections + vicinity_corrections + domain_corrections
+
+        if self.CRIPPLE is None:
+            value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
+            vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
+            domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
+            models_corrections = value_corrections + vicinity_corrections + domain_corrections
+        elif self.CRIPPLE == 'value':
+            value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
+            models_corrections = value_corrections
+        elif self.CRIPPLE == 'vicinity':
+            vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
+            models_corrections = vicinity_corrections
+        elif self.CRIPPLE == 'domain':
+            domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
+            models_corrections = domain_corrections
+
         corrections_features = {}
         for mi, model in enumerate(models_corrections):
             for correction in model:
@@ -618,7 +631,7 @@ if __name__ == "__main__":
                                                error_class)
     data = raha.dataset.Dataset(dataset_dictionary)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
-    app = Correction()
+    app = Correction(cripple=None)
     app.VERBOSE = True
     p, r, f = app.run(data)
     print("Baran's performance on {}:\nPrecision = {:.2f}\nRecall = {:.2f}\nF1 = {:.2f}".format(data.name, p, r, f))

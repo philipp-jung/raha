@@ -25,7 +25,7 @@ def run_baran(i: int, c: dict):
     data = dataset.Dataset(data_dict)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
 
-    app = correction.Correction()
+    app = correction.Correction(cripple=c['cripple'])
     app.VERBOSE = False
     p, r, f = app.run(data)
     logger.info(f'Finished experiment {i}.')
@@ -66,6 +66,7 @@ if __name__ == "__main__":
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "n_rows": 1000,
+            "cripple": None
         },
         ranges={
             "dataset": [137, 1481, 184, 41027, 42493, 6],
