@@ -481,6 +481,8 @@ class Correction:
         elif self.CRIPPLE == 'domain':
             domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
             models_corrections = domain_corrections
+        else:
+            raise ValueError('Invalid crippling model')
 
         corrections_features = {}
         for mi, model in enumerate(models_corrections):
@@ -621,14 +623,16 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "137"
-    version = 2
-    error_fraction = 10
+    dataset_name = "32"
+    version = 1
+    error_fraction = 5
+    n_rows = 500
     error_class = 'simple_mcar'
     dataset_dictionary = helpers.get_data_dict(dataset_name,
                                                error_fraction,
                                                version,
                                                error_class)
+    dataset_dictionary = {**dataset_dictionary, 'n_rows': n_rows}
     data = raha.dataset.Dataset(dataset_dictionary)
     data.detected_cells = dict(data.get_actual_errors_dictionary())
     app = Correction(cripple=None)

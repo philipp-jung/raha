@@ -33,7 +33,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-11-03-validate-raha-cripple-to-value"
+    experiment_name = "2023-11-10-baseline-baran-vs-mirmir"
     save_path = "/root/measurements/"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -59,17 +59,17 @@ if __name__ == "__main__":
     rsk_baran = Ruska(
         name=experiment_name+'-baran',
         save_path=save_path,
-        description="Measure only with the value model.",
+        description="Make a baseline for baran vs mirmir",
         commit="",
         config={
             "dataset": "beers",
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "n_rows": None,
-            "cripple": 'value'
+            "cripple": None,
         },
         ranges={
-            "dataset": ['beers', 'hospital', 'flights', ],
+            "dataset": ['beers', 'hospital', 'flights', 'rayyan'],
         },
         runs=3,
         chat_id=os.environ['TELEGRAM_CHAT_ID'],
@@ -79,18 +79,18 @@ if __name__ == "__main__":
     rsk_renuver = Ruska(
         name=experiment_name+'-renuver',
         save_path=save_path,
-        description="Measure only with the value model.",
+        description="Make a baseline for baran vs mirmir",
         commit="",
         config={
             "dataset": "beers",
             "error_class": "simple_mcar",
             "error_fraction": 1,
-            "n_rows": 1000,
-            "cripple": 'value'
+            "n_rows": None,
+            "cripple": None,
         },
         ranges={
             "dataset": ['cars', 'glass', 'restaurant', 'bridges'],
-            "error_fraction": [1, 3, 5],
+            "error_fraction": [1, 3],
         },
         runs=3,
         chat_id=os.environ['TELEGRAM_CHAT_ID'],
@@ -100,19 +100,18 @@ if __name__ == "__main__":
     rsk_openml = Ruska(
         name=experiment_name+'-openml',
         save_path=save_path,
-        description="Measure only with the value model.",
+        description="Make a baseline for baran vs mirmir",
         commit="",
         config={
             "dataset": "beers",
             "error_class": "simple_mcar",
-            "error_fraction": 1,
+            "error_fraction": 5,
             "n_rows": 1000,
-            "cripple": 'value'
+            "cripple": None,
         },
         ranges={
             "dataset": [6, 137, 1481, 184, 41027, 43572],
             "error_class": ['imputer_simple_mcar', 'simple_mcar'],
-            "error_fraction": [1, 5],
         },
         runs=3,
         chat_id=os.environ['TELEGRAM_CHAT_ID'],
