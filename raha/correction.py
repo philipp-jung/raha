@@ -227,6 +227,7 @@ class Correction:
                 if replacer_transformation:
                     self._to_model_adder(models[2], encoded_old_value, json.dumps(replacer_transformation))
                 self._to_model_adder(models[3], encoded_old_value, ud["new_value"])
+        
 
     def pretrain_value_based_models(self, revision_data_folder):
         """
@@ -499,9 +500,13 @@ class Correction:
         d.pair_features = {}
         pairs_counter = 0
         process_args_list = [[d, cell] for cell in d.detected_cells]
-        pool = multiprocessing.Pool()
-        feature_generation_results = pool.map(self._feature_generator_process, process_args_list)
-        pool.close()
+        feature_generation_results = []
+        for p in process_args_list:
+            feature_generation_results.append(self._feature_generator_process(p))
+
+        # pool = multiprocessing.Pool()
+        # feature_generation_results = pool.map(self._feature_generator_process, process_args_list)
+        # pool.close()
         for ci, corrections_features in enumerate(feature_generation_results):
             cell = process_args_list[ci][1]
             d.pair_features[cell] = {}
@@ -623,7 +628,7 @@ class Correction:
 
 ########################################
 if __name__ == "__main__":
-    dataset_name = "32"
+    dataset_name = "beers"
     version = 1
     error_fraction = 5
     n_rows = 500

@@ -99,3 +99,8 @@ dataset_id,corruption_name,fraction,dataset_type
 40685,imputer_simple_mcar,0.1,multiclass classification
 40685,imputer_simple_mcar,0.3,multiclass classification
 40685,imputer_simple_mcar,0.5,multiclass classification
+43572,imputer_simple_mcar,0.01,multiclass classification
+43572,imputer_simple_mcar,0.05,multiclass classification
+43572,imputer_simple_mcar,0.1,multiclass classification
+43572,imputer_simple_mcar,0.3,multiclass classification
+43572,imputer_simple_mcar,0.5,multiclass classification

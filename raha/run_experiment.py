@@ -33,7 +33,7 @@ def run_baran(i: int, c: dict):
 
 
 if __name__ == "__main__":
-    experiment_name = "2023-11-10-baseline-baran-vs-mirmir"
+    experiment_name = "2023-12-01-cripple-baran-vicinity"
     save_path = "/root/measurements/"
 
     logging.root.handlers = []  # deletes the default StreamHandler to stderr.
@@ -59,14 +59,14 @@ if __name__ == "__main__":
     rsk_baran = Ruska(
         name=experiment_name+'-baran',
         save_path=save_path,
-        description="Make a baseline for baran vs mirmir",
+        description="Cripple baran to vicinity model to compare to mirmir phodi",
         commit="",
         config={
             "dataset": "beers",
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "n_rows": None,
-            "cripple": None,
+            "cripple": 'vicinity',
         },
         ranges={
             "dataset": ['beers', 'hospital', 'flights', 'rayyan'],
@@ -79,14 +79,14 @@ if __name__ == "__main__":
     rsk_renuver = Ruska(
         name=experiment_name+'-renuver',
         save_path=save_path,
-        description="Make a baseline for baran vs mirmir",
+        description="Cripple baran to vicinity model to compare to mirmir phodi",
         commit="",
         config={
             "dataset": "beers",
             "error_class": "simple_mcar",
             "error_fraction": 1,
             "n_rows": None,
-            "cripple": None,
+            "cripple": 'vicinity',
         },
         ranges={
             "dataset": ['cars', 'glass', 'restaurant', 'bridges'],
@@ -100,17 +100,17 @@ if __name__ == "__main__":
     rsk_openml = Ruska(
         name=experiment_name+'-openml',
         save_path=save_path,
-        description="Make a baseline for baran vs mirmir",
+        description="Cripple baran to vicinity model to compare to mirmir phodi",
         commit="",
         config={
             "dataset": "beers",
             "error_class": "simple_mcar",
             "error_fraction": 5,
             "n_rows": 1000,
-            "cripple": None,
+            "cripple": 'vicinity',
         },
         ranges={
-            "dataset": [6, 137, 1481, 184, 41027, 43572],
+            "dataset": [6, 137, 151, 184, 1481, 41027, 43572],
             "error_class": ['imputer_simple_mcar', 'simple_mcar'],
         },
         runs=3,
